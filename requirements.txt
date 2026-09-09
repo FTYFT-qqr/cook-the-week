@@ -1,0 +1,12 @@
+langgraph
+langchain-core
+openai
+pydantic
+python-dotenv
+langgraph-checkpoint
+langgraph-checkpoint-sqlite
+streamlit
+fastapi
+uvicorn
+langchain-openai
+langsmith

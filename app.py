@@ -11,6 +11,7 @@ from __future__ import annotations
 import streamlit as st
 
 from recipe_planner import profile as prof
+from recipe_planner.core import refresh_result, swap_dish
 from recipe_planner.db import load_db
 from recipe_planner.graph import run_pipeline
 from recipe_planner.models import (
@@ -75,6 +76,8 @@ SCENARIOS = {
 st.session_state.setdefault("plan_inputs", None)   # 已提交的约束快照（None = 还没生成过）
 st.session_state.setdefault("result", None)         # 缓存的排菜结果（页面始终显示它）
 st.session_state.setdefault("stale", False)         # 口味/约束变了 → 需要重排
+st.session_state.setdefault("notice", None)         # 上一步操作确认（rerun 后显示）
+st.session_state.setdefault("undo", None)           # 单步撤销快照
 
 for _k, _v in dict(
     people=2, days=3, spice="不辣", max_time=40, goal="随便", budget=0.0,
@@ -166,6 +169,8 @@ def render_planner() -> None:
             pantry_items=[p.strip() for p in pantry.replace("，", ",").split(",") if p.strip()],
         )
         st.session_state["stale"] = True
+        st.session_state["notice"] = None   # 新菜单：清掉上一条操作提示
+        st.session_state["undo"] = None
 
     inp = st.session_state["plan_inputs"]
     if inp is None:
@@ -208,12 +213,39 @@ def render_planner() -> None:
             f"<div class='pref-bar'>当前口味档案：❤️ {('、'.join(liked_now) or '—')}"
             f" ｜ 🚫 {('、'.join(hated_now) or '—')}</div>", unsafe_allow_html=True)
 
+    # ---- 上一步操作的确认（放在菜单附近，rerun 之后仍可见）+ 撤销
+    notice = st.session_state.get("notice")
+    if notice:
+        nc1, nc2 = st.columns([6, 1])
+        with nc1:
+            (st.success if notice.get("kind") in ("swap", "dislike", "like") else st.info)(notice["text"])
+        with nc2:
+            if st.session_state.get("undo") and st.button("↩️ 撤销", key="undo_btn",
+                                                          use_container_width=True,
+                                                          help="撤销刚才这次改动"):
+                undo = st.session_state.pop("undo")
+                result.days = undo["days"]
+                if undo.get("profile") is not None:
+                    prof.save_profile(undo["profile"])
+                refresh_result(result, db)
+                st.session_state["notice"] = {"kind": "undo", "text": "↩️ 已撤销上一步改动"}
+                st.session_state["stale"] = False
+                st.rerun()
+
     # ---- 每日菜单 + 逐道反馈
-    feedback = None
+    pending = None
     st.subheader("🗓️ 每日菜单")
-    st.caption("觉得哪道菜不错点 **❤️**；不合口味点 **🚫**（会立刻换掉并记住）。再点一次可取消。")
-    tabs = st.tabs([f"第 {i} 天" for i in range(1, len(result.days) + 1)])
-    for tab, plan in zip(tabs, result.days):
+    st.caption("**🔄 换一道** = 只换今晚这道（不动你的口味偏好）；**❤️ 喜欢** = 记住并以后多安排；"
+               "**🚫 不喜欢** = 换掉并记住，以后不再出现。")
+    labels = [f"第 {i} 天" for i in range(1, len(result.days) + 1)]
+    # 让「第几天」的选中态跨 rerun 保留（st.tabs 需 key + on_change 才注册为有状态控件）
+    _cur = st.session_state.get("day_tabs")
+    if _cur is not None and _cur not in labels:
+        st.session_state["day_tabs"] = labels[0]  # 天数变少导致越界 → 纠正到第 1 天
+    day_tabs = st.tabs(labels, key="day_tabs", on_change="rerun")
+    # 当前正在看的那一天（用于反馈后把客户留在原地）
+    _open_day = next((int(l.split()[1]) for l, t in zip(labels, day_tabs) if t.open), 1)
+    for tab, plan in zip(day_tabs, result.days):
         with tab:
             total_day = 0.0
             for dish in plan.dishes:
@@ -226,13 +258,13 @@ def render_planner() -> None:
                 chips = [f"<span class='chip'>{r.category}</span>",
                          f"<span class='chip'>{r.spice_level}</span>",
                          f"<span class='chip'>⏱ {r.time_min}min</span>",
-                         f"<span class='chip'>¥{r.cost_yuan}</span>"]
+                         f"<span class='chip'>¥{r.cost_yuan}/2人份</span>"]
                 chips += [f"<span class='chip chip-green'>{t}</span>" for t in r.goal_tags]
                 chips += [f"<span class='chip chip-red'>{a}</span>" for a in r.allergens]
                 if is_loved:
                     chips.insert(0, "<span class='chip chip-pink'>❤️ 已收藏</span>")
 
-                row = st.columns([4, 1, 1])
+                row = st.columns([3.4, 1, 1, 1])
                 with row[0]:
                     st.markdown(
                         f"<div class='dish-card{' loved' if is_loved else (' hated' if is_hated else '')}'>"
@@ -241,28 +273,62 @@ def render_planner() -> None:
                         f"<div class='dish-reason'>💡 {dish.reason or '—'}</div>"
                         f"</div>", unsafe_allow_html=True)
                 with row[1]:
+                    if st.button("🔄 换一道", key=f"swap_{plan.day}_{dish.recipe_id}",
+                                 use_container_width=True, help="只换今晚这道，不影响口味偏好"):
+                        pending = ("swap", plan.day, dish.recipe_id)
+                with row[2]:
                     if st.button("✅ 已喜欢" if is_loved else "❤️ 喜欢",
                                  key=f"like_{plan.day}_{dish.recipe_id}",
                                  use_container_width=True, help="合口味：以后多安排这道菜"):
-                        feedback = (r.name, "like")
-                with row[2]:
+                        pending = ("like", plan.day, dish.recipe_id)
+                with row[3]:
                     if st.button("⛔ 已排除" if is_hated else "🚫 不喜欢",
                                  key=f"hate_{plan.day}_{dish.recipe_id}",
                                  use_container_width=True, help="不合口味：换掉并记住"):
-                        feedback = (r.name, "dislike")
+                        pending = ("dislike", plan.day, dish.recipe_id)
             st.caption(f"本天预计花费 ¥{total_day:.0f}" +
                        (f" / 预算 ¥{c.budget_per_person_day * c.people:.0f}" if c.budget_per_person_day else ""))
 
-    # 处理反馈：先存档案再重排（菜单始终保留，不会出现空白页）
-    if feedback:
-        name, action = feedback
-        prof.set_feedback(name, action, KNOWN_NAMES)
-        st.session_state["stale"] = True
-        st.toast("❤️ 已记住：喜欢这道菜" if action == "like" else "🚫 已记住：这道菜不再出现")
+    # ---- 处理反馈：只动这一道菜，不整周重排（客户不会"点一道，全周都变"）
+    if pending:
+        kind, day_no, rid = pending
+        name = db.by_id(rid).name if db.by_id(rid) else rid
+        prev_days = [p.model_copy(deep=True) for p in result.days]
+        prev_profile = prof.load_profile()
+        undo_profile = None
+        text = ""
+
+        if kind == "swap":
+            new_days, rep = swap_dish(result.days, day_no, rid, db, c)
+            if rep:
+                result.days = new_days
+                refresh_result(result, db)
+                text = f"🔄 已把第 {day_no} 天的「{name}」换成「{rep.name}」（口味偏好未改动）"
+            else:
+                text = f"⚠️ 暂时没有可替换「{name}」的菜了（候选已用完），可放宽时长/预算或减少天数"
+        elif kind == "like":
+            prof.set_feedback(name, "like", KNOWN_NAMES)
+            undo_profile = prev_profile
+            text = f"❤️ 已记住你喜欢「{name}」，以后会优先安排（本次菜单不变）"
+        else:  # dislike
+            prof.set_feedback(name, "dislike", KNOWN_NAMES)
+            undo_profile = prev_profile
+            new_days, rep = swap_dish(result.days, day_no, rid, db, c)
+            if rep:
+                result.days = new_days
+                refresh_result(result, db)
+                text = f"🚫 已记住不喜欢「{name}」，第 {day_no} 天换成「{rep.name}」，以后不再出现"
+            else:
+                text = f"🚫 已记住不喜欢「{name}」（本次没有可替换的菜，其他天未改动）"
+
+        st.session_state["notice"] = {"kind": kind, "text": text}
+        st.session_state["undo"] = {"days": prev_days, "profile": undo_profile}
+        st.session_state["stale"] = False  # 不触发整周重排
         st.rerun()
 
     # ---- 买菜清单
     st.subheader("🛒 买菜清单")
+    st.caption(f"已按 **{c.people} 人**份量折算（菜谱为 2 人份基准）；🏠 标记的是家里已有、无需购买。")
     if result.shopping:
         need = [s for s in result.shopping if s.needed]
         have = [s for s in result.shopping if not s.needed]

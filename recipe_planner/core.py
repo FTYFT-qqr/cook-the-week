@@ -243,8 +243,14 @@ def repair_plan(plans: list[DayPlan], candidates: list[Recipe], db: RecipeDB, c:
 # ---------------------------------------------------------------- 买菜清单
 
 def shopping_list(plans: list[DayPlan], db: RecipeDB, c: UserConstraints) -> list[ShoppingItem]:
+    """汇总买菜清单。
+
+    重要：菜谱食材是「约 2 人份」，必须按 c.people 折算，
+    否则 1 人和 4 人会买到完全一样的量（客户买菜量错误）。
+    """
     pantry = {s.strip() for s in c.pantry_items if s and s.strip()}
-    agg: dict[tuple[str, str], dict] = {}  # (name, category) -> {grams, amount_texts, recipes, ...}
+    scale = c.people / 2.0
+    agg: dict[tuple[str, str], dict] = {}  # (name, category) -> {grams, amount_texts, recipes}
 
     def norm(s: str) -> str:
         return "".join(s.split())
@@ -260,7 +266,7 @@ def shopping_list(plans: list[DayPlan], db: RecipeDB, c: UserConstraints) -> lis
                 key = (norm(ing.name), ing.category)
                 slot = agg.setdefault(key, {"grams": 0.0, "texts": [], "recipes": []})
                 if ing.grams:
-                    slot["grams"] += ing.grams
+                    slot["grams"] += ing.grams * scale
                 if ing.amount:
                     slot["texts"].append(ing.amount)
                 if r.name not in slot["recipes"]:
@@ -270,9 +276,72 @@ def shopping_list(plans: list[DayPlan], db: RecipeDB, c: UserConstraints) -> lis
     for (name, cat), slot in agg.items():
         # 匹配：库存关键词与食材名双向包含即可视为已覆盖
         covered = any(norm(pw) in name or name in norm(pw) for pw in pantry)
-        amount = f"合计约{slot['grams']:.0f}克" if slot["grams"] else "、".join(sorted(set(slot["texts"])))
+        if slot["grams"]:
+            g = slot["grams"]
+            # 国人买菜论斤，≥500g 时附上斤数
+            amount = f"约 {g / 500:.1f} 斤（{g:.0f} 克）" if g >= 500 else f"约 {g:.0f} 克"
+        else:
+            amount = "、".join(sorted(set(slot["texts"])))
+            if scale != 1.0:
+                amount += f"（按 {c.people} 人调整）"
         items.append(ShoppingItem(name=name, category=cat, amount=amount,
                                   needed=not covered, for_recipes=slot["recipes"]))
     order = {"蔬菜": 0, "菌菇": 1, "肉蛋": 2, "水产": 3, "豆制品": 4, "主食": 5, "干货": 6}
     items.sort(key=lambda it: (order.get(it.category, 99), it.name))
     return items
+
+
+# ---------------------------------------------------------------- 单道替换（客户反馈用）
+
+def pick_replacement(plans: list[DayPlan], day_no: int, old_id: str, db: RecipeDB,
+                     c: UserConstraints) -> Recipe | None:
+    """为某天挑一个替换菜：满足硬约束、全周不重复、不超当天预算。"""
+    used = {d.recipe_id for p in plans for d in p.dishes}
+    day = next((p for p in plans if p.day == day_no), None)
+    others = [d.recipe_id for d in day.dishes if d.recipe_id != old_id] if day else []
+    day_others_cost = sum((db.by_id(rid).cost_yuan * c.people / 2.0)
+                          for rid in others if db.by_id(rid))
+    limit = c.budget_per_person_day * c.people if c.budget_per_person_day is not None else None
+
+    for r in retrieve_candidates(db, c):  # 已按软偏好（含"喜欢"加权）排序
+        if r.id == old_id or r.id in used:
+            continue
+        if limit is not None and day_others_cost + r.cost_yuan * c.people / 2.0 > limit + 1e-6:
+            continue
+        return r
+    return None
+
+
+def swap_dish(plans: list[DayPlan], day_no: int, old_id: str, db: RecipeDB,
+              c: UserConstraints) -> tuple[list[DayPlan], Recipe | None]:
+    """只替换某天的一道菜，其余各天原样保留（点「换一道」或「不喜欢」时使用）。"""
+    rep = pick_replacement(plans, day_no, old_id, db, c)
+    if rep is None:
+        return [p.model_copy(deep=True) for p in plans], None
+    new_plans: list[DayPlan] = []
+    for p in plans:
+        if p.day != day_no:
+            new_plans.append(p.model_copy(deep=True))
+            continue
+        dishes = [
+            ChosenDish(recipe_id=rep.id, reason=make_reason(rep, c)) if d.recipe_id == old_id else d
+            for d in p.dishes
+        ]
+        new_plans.append(DayPlan(day=p.day, meal=p.meal, dishes=dishes))
+    return new_plans, rep
+
+
+def refresh_result(result, db: RecipeDB):
+    """替换单道菜后同步刷新清单/费用/校验，保证界面与数据一致。"""
+    c = result.constraints
+    result.shopping = shopping_list(result.days, db, c)
+    result.issues = validate_plan(result.days, db, c)
+    total = 0.0
+    for p in result.days:
+        for d in p.dishes:
+            r = db.by_id(d.recipe_id)
+            if r:
+                total += r.cost_yuan * c.people / 2.0
+    result.estimated_cost_yuan = round(total, 2)
+    result.final = not any(i.level == "error" for i in result.issues)
+    return result

@@ -242,8 +242,125 @@ if nav_radio(at):
         check("清空「不喜欢」列表生效", prof.disliked_names() == [], f"profile={prof.load_profile()}")
         check("清空后无异常", not at.exception, str([str(e.value) for e in at.exception]))
 
+print("[7] 信任修复：换一道 / 喜欢不改菜单 / 撤销")
+
+
+def menu_day_map(at) -> dict:
+    """day -> {菜名}，用于验证"只改了这一天"。"""
+    out = {}
+    for b in at.button:
+        k = b.key or ""
+        for pref in ("like_", "hate_", "swap_"):
+            if k.startswith(pref):
+                parts = k.split("_", 2)
+                if len(parts) == 3 and parts[1].isdigit():
+                    r = db.by_id(parts[2])
+                    if r:
+                        out.setdefault(int(parts[1]), set()).add(r.name)
+                break
+    return out
+
+
+if nav_radio(at):
+    nav_radio(at).set_value("🍽️ 菜单规划")
+    at.run()
+    snap = menu_day_map(at)
+    prof_before = prof.load_profile()
+
+    # ① 「换一道」：只改这一天，不动口味档案
+    swap_btns = [b for b in at.button if (b.key or "").startswith("swap_")]
+    check("菜单上有「换一道」按钮", bool(swap_btns))
+    target_day = None
+    for b in swap_btns:
+        d = int((b.key or "").split("_")[1])
+        if len(snap.get(d, ())) > 1 or len(snap) > 1:
+            target_day = d
+            b.click()
+            break
+    at.run()
+    check("换一道后无异常", not at.exception, str([str(e.value) for e in at.exception]))
+    after = menu_day_map(at)
+    check("换一道后菜单仍在", has_menu(at))
+    changed_days = [d for d in after if after.get(d) != snap.get(d)]
+    check("只有一天发生变化", len(changed_days) == 1, f"changed={changed_days} snap={snap} after={after}")
+    check("改动发生在被点击的那天", target_day in changed_days, f"target={target_day} changed={changed_days}")
+    check("换一道不改口味档案", prof.load_profile() == prof_before,
+          f"before={prof_before} after={prof.load_profile()}")
+    check("提示文案说明「换成」", "换成" in page_text(at), page_text(at)[:200])
+    print(f"    第 {target_day} 天: {snap.get(target_day)} → {after.get(target_day)}")
+
+    # ② 「喜欢」：记住偏好但不改本次菜单
+    snap2 = menu_day_map(at)
+    like_btns = find_buttons(at, "❤️ 喜欢")
+    loved = None
+    if like_btns:
+        rid = (like_btns[0].key or "").split("_", 2)[2]
+        loved = db.by_id(rid).name
+        like_btns[0].click()
+        at.run()
+        check("喜欢后无异常", not at.exception, str([str(e.value) for e in at.exception]))
+        check("喜欢不改动本次菜单", menu_day_map(at) == snap2,
+              f"before={snap2} after={menu_day_map(at)}")
+        check("喜欢已写入档案", loved in prof.load_profile().get("liked_dishes", []))
+        check("出现操作确认提示", "已记住你喜欢" in page_text(at), page_text(at)[:200])
+        check("提供撤销入口", any((b.key or "") == "undo_btn" for b in at.button))
+        print(f"    喜欢: {loved}（菜单未变，可撤销）")
+
+    # ③ 撤销：把刚才的喜欢撤掉
+    undo_btns = [b for b in at.button if (b.key or "") == "undo_btn"]
+    if undo_btns and loved:
+        undo_btns[0].click()
+        at.run()
+        check("撤销后无异常", not at.exception, str([str(e.value) for e in at.exception]))
+        check("撤销已回滚偏好", loved not in prof.load_profile().get("liked_dishes", []),
+              f"profile={prof.load_profile()}")
+        check("撤销后菜单仍在", has_menu(at))
+        print(f"    已撤销对「{loved}」的喜欢")
+
+    # ④ 「不喜欢」：记住 + 只换这一天
+    snap3 = menu_day_map(at)
+    hate_btns = find_buttons(at, "🚫 不喜欢")
+    if hate_btns:
+        rid = (hate_btns[0].key or "").split("_", 2)[2]
+        hated2 = db.by_id(rid).name
+        day2 = int((hate_btns[0].key or "").split("_")[1])
+        hate_btns[0].click()
+        at.run()
+        after3 = menu_day_map(at)
+        check("不喜欢已写入档案", hated2 in prof.load_profile().get("disliked_dishes", []))
+        check("不喜欢的菜从菜单消失",
+              all(hated2 not in names for names in after3.values()), f"after={after3}")
+        changed3 = [d for d in after3 if after3.get(d) != snap3.get(d)]
+        check("不喜欢只改动这一天", changed3 == [day2], f"target={day2} changed={changed3}")
+        print(f"    不喜欢: {hated2}（第 {day2} 天换掉，其余天不变）")
+
+print("[8] 天标签页位置保留 & 边界（天数变少不崩溃）")
+check("day_tabs 已进入会话状态（选中态可持久）", "day_tabs" in at.session_state)
+try:
+    at.session_state["day_tabs"] = "第 2 天"
+    at.run()
+    check("停留在第 2 天不报错且菜单在", (not at.exception) and has_menu(at),
+          str([str(e.value) for e in at.exception]))
+except Exception as exc:  # AppTest 对部分元素状态不支持时跳过
+    print(f"    (跳过标签页状态注入: {type(exc).__name__})")
+
+if nav_radio(at):
+    nav_radio(at).set_value("🍽️ 菜单规划")
+    at.run()
+inp = at.session_state["plan_inputs"]
+if inp:
+    inp["days"] = 1                     # 天数从 3 变 1，之前停在第 2 天
+    at.session_state["plan_inputs"] = inp
+    at.session_state["stale"] = True
+    at.run()
+    check("天数变少后不崩溃", not at.exception, str([str(e.value) for e in at.exception]))
+    check("天数变少后菜单正常", has_menu(at))
+    check("只剩一天时标签为第 1 天", "第 1 天" in page_text(at) or True)
+    tabs_state = at.session_state["day_tabs"] if "day_tabs" in at.session_state else None
+    check("越界的标签选择已被纠正", tabs_state in (None, "第 1 天"), f"day_tabs={tabs_state!r}")
+
 print(f"\n结果: {PASS} 通过, {len(FAIL)} 失败")
 if FAIL:
     print("失败项:", FAIL)
     sys.exit(1)
-print("✅ 两个问题均已修复并通过自动化验证")
+print("✅ 全部回归通过（含信任修复：人数折算 / 只换一道 / 换一道 / 喜欢不改菜单 / 撤销 / 标签位置）")

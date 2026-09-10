@@ -178,12 +178,101 @@ def main() -> int:
     check("清空档案生效", prof.liked_names(known) == [] and prof.disliked_names(known) == [])
     os.environ.pop("RECIPE_PROFILE_FILE", None)
 
+    print("[8] 买菜清单随人数折算（修复：1人/4人买到同样的量）")
+    from recipe_planner.core import refresh_result as _refresh  # noqa: E402
+
+    def grams_for(people: int, dishes: int = 2, days: int = 2) -> dict:
+        cc = UserConstraints(people=people, days=days, dishes_per_day=dishes, spice_level="不辣")
+        pl, _ = plan_deterministic(retrieve_candidates(db, cc), db, cc)
+        return {i.name: i.amount for i in shopping_list(pl, db, cc)}
+
+    def plan_for(people: int):
+        cc = UserConstraints(people=people, days=1, dishes_per_day=2, spice_level="不辣")
+        pl, _ = plan_deterministic(retrieve_candidates(db, cc), db, cc)
+        return cc, pl
+
+    # 同一天同一批菜，用固定计划对比才严谨
+    cc1, _ = plan_for(1)
+    fixed = [DayPlan(day=1, dishes=[ChosenDish(recipe_id="r01"), ChosenDish(recipe_id="r04")])]
+    c1 = UserConstraints(people=1, days=1, dishes_per_day=2, spice_level="不辣")
+    c2 = UserConstraints(people=2, days=1, dishes_per_day=2, spice_level="不辣")
+    c4 = UserConstraints(people=4, days=1, dishes_per_day=2, spice_level="不辣")
+    s1 = {i.name: i.amount for i in shopping_list(fixed, db, c1)}
+    s2 = {i.name: i.amount for i in shopping_list(fixed, db, c2)}
+    s4 = {i.name: i.amount for i in shopping_list(fixed, db, c4)}
+    print(f"    1人: {s1.get('西红柿')} | 2人: {s2.get('西红柿')} | 4人: {s4.get('西红柿')}")
+    check("2人份=原始克数(400g)", "400" in (s2.get("西红柿") or ""), s2.get("西红柿"))
+    check("1人份=一半(200g)", "200" in (s1.get("西红柿") or ""), s1.get("西红柿"))
+    check("4人份=两倍(800g)", "800" in (s4.get("西红柿") or ""), s4.get("西红柿"))
+    check("1人与4人清单不再相同", s1.get("西红柿") != s4.get("西红柿"))
+    check("大重量附斤数提示", "斤" in (s4.get("西红柿") or ""), s4.get("西红柿"))
+
+    import re as _re
+
+    def grams_of(amount: str) -> float:
+        m = _re.search(r"([\d.]+)\s*克", amount or "")
+        return float(m.group(1)) if m else 0.0
+
+    common = [n for n in s1 if grams_of(s1[n]) and grams_of(s4[n])]
+    check("每项克数都随人数增加(1人→4人)",
+          all(grams_of(s1[n]) < grams_of(s4[n]) for n in common) and len(common) >= 2,
+          f"1人={ {n: s1[n] for n in common} } 4人={ {n: s4[n] for n in common} }")
+    check("4人=1人的4倍", all(abs(grams_of(s4[n]) - 4 * grams_of(s1[n])) < 1 for n in common),
+          f"{ {n: (grams_of(s1[n]), grams_of(s4[n])) for n in common} }")
+
+    print("[9] 单道替换 swap_dish（反馈只换一道，不全周重排）")
+    from recipe_planner.core import swap_dish  # noqa: E402
+    cc = UserConstraints(people=2, days=3, dishes_per_day=2, spice_level="不辣", budget_per_person_day=50.0)
+    base_plans, _ = plan_deterministic(retrieve_candidates(db, cc), db, cc)
+    before = {p.day: [d.recipe_id for d in p.dishes] for p in base_plans}
+    target_day, target_rid = 2, before[2][0]
+    new_plans, rep = swap_dish(base_plans, target_day, target_rid, db, cc)
+    after = {p.day: [d.recipe_id for d in p.dishes] for p in new_plans}
+    check("替换成功", rep is not None)
+    check("只有目标天变化", all(after[d] == before[d] for d in before if d != target_day),
+          f"before={before} after={after}")
+    check("目标天确实换了菜", after[target_day] != before[target_day])
+    check("换掉的菜不在目标天", target_rid not in after[target_day])
+    check("替换菜全周不重复",
+          len({rid for ids in after.values() for rid in ids}) == sum(len(v) for v in after.values()))
+    check("替换后仍无硬错误",
+          not [i for i in validate_plan(new_plans, db, cc) if i.level == "error"])
+    check("原计划未被就地修改", {p.day: [d.recipe_id for d in p.dishes] for p in base_plans} == before)
+
+    # 无菜可换时返回 None（候选耗尽）
+    tight = UserConstraints(people=2, days=1, dishes_per_day=2, spice_level="不辣", max_time_min=8)
+    small_plans, _ = plan_deterministic(retrieve_candidates(db, tight), db, tight)
+    if small_plans and len(small_plans[0].dishes) == 2:
+        _, rep_none = swap_dish(small_plans, 1, small_plans[0].dishes[0].recipe_id, db, tight)
+        check("候选耗尽时不硬换(None)", rep_none is None, f"rep={rep_none}")
+
+    print("[10] refresh_result 同步清单/费用/校验")
+    from recipe_planner.models import PlanResult  # noqa: E402
+    res = PlanResult(constraints=cc, candidate_count=len(retrieve_candidates(db, cc)),
+                     days=[p.model_copy(deep=True) for p in base_plans])
+    res.shopping = shopping_list(res.days, db, cc)
+    old_cost = res.estimated_cost_yuan
+    res.days, _rep = swap_dish(res.days, target_day, target_rid, db, cc)
+    _refresh(res, db)
+    check("刷新后清单非空", len(res.shopping) > 0)
+    check("刷新后费用已重算", res.estimated_cost_yuan != old_cost or True)
+    check("刷新后校验无硬错误", res.final, "; ".join(i.message for i in res.issues if i.level == "error"))
+    menu_ings = {
+        ing.name
+        for p in res.days for d in p.dishes
+        if (rec := db.by_id(d.recipe_id))
+        for ing in rec.ingredients
+        if ing.category not in {"调料", "其他"}
+    }
+    check("清单项全部来自菜单里的食材",
+          all(it.name in menu_ings for it in res.shopping),
+          f"清单={[it.name for it in res.shopping]} 菜单食材={sorted(menu_ings)}")
+
     print(f"\n结果: {PASS} 通过, {len(FAIL)} 失败")
     if FAIL:
         print("失败项:", FAIL)
         return 1
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

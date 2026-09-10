@@ -29,6 +29,7 @@ def init_defaults() -> None:
         "relax": None,            # 排不出来时待展示的放宽选项
         "check_epoch": 0,         # 清单勾选代次（换一版清单就作废旧的勾选）
         "mobile_view": False,
+        "page": None,             # 当前任务栏页面：demand / menu / shopping / profile
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)

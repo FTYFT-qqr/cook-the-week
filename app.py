@@ -78,6 +78,12 @@ st.markdown(
     .day-row .day-meta { font-size:0.78rem; color:#6b7280; }
     /* 手机视图：把手持场景要点的东西做大 */
     div[data-testid="stButton"] button { min-height:2.4rem; font-size:0.95rem; }
+    /* 左栏任务栏：整行大按钮，当前页高亮（不再用单选圆圈） */
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button {
+        min-height:3.2rem; font-size:1.02rem; font-weight:600; justify-content:flex-start;
+        padding-left:0.9rem; border-radius:10px;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] { margin-bottom:2px; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -184,10 +190,47 @@ if st.session_state["plan_inputs"] is None and st.session_state["result"] is Non
 if st.session_state.get("pending_sync"):
     _sync_widgets_from_inputs(st.session_state.pop("pending_sync"))
 
+# ---------------------------------------------------------------- 任务栏导航
+# 客户反馈：左栏的界面选项太小、还是单选圈圈。改成整行大按钮的任务栏。
+NAV_ITEMS = [
+    ("demand", "📝 需求 & 生成"),
+    ("menu", "🍽️ 本周菜单"),
+    ("shopping", "🛒 买菜清单"),
+    ("profile", "❤️ 口味档案"),
+]
+NAV_LABEL = dict(NAV_ITEMS)
+if st.session_state.get("page") is None:
+    # 有存档就直接落在「本周菜单」；没有就先让客户填需求
+    st.session_state["page"] = "menu" if st.session_state.get("result") is not None else "demand"
+
+
+def goto(key: str) -> None:
+    st.session_state["page"] = key
+    st.rerun()
+
+
+def nav_button(key: str, prefix: str) -> bool:
+    return st.button(NAV_LABEL[key], key=f"{prefix}{key}", use_container_width=True,
+                     type="primary" if key == st.session_state["page"] else "secondary")
+
+
+def nav_taskbar(prefix: str = "nav_", horizontal: bool = False) -> None:
+    """任务栏式导航：整行大按钮，当前所在页高亮。"""
+    if horizontal:
+        for col, (key, _label) in zip(st.columns(len(NAV_ITEMS)), NAV_ITEMS):
+            with col:
+                if nav_button(key, prefix):
+                    goto(key)
+    else:
+        for key, _label in NAV_ITEMS:
+            if nav_button(key, prefix):
+                goto(key)
+
+
 # ---------------------------------------------------------------- 侧边栏
 with st.sidebar:
     st.title("🍳 食谱规划 Agent")
-    page = st.radio("导航", ["🍽️ 菜单规划", "❤️ 我的口味档案"], key="nav_page")
+    nav_taskbar("nav_")
     st.divider()
     _liked = prof.liked_names(KNOWN_NAMES)
     _disliked = prof.disliked_names(KNOWN_NAMES)
@@ -211,12 +254,13 @@ with st.sidebar:
 
 MOBILE = bool(st.session_state.get("mobile_view"))
 if MOBILE:
-    # 手机上一只手拿菜一只手划屏幕：按钮做大一点
+    # 手机上一只手拿菜一只手划屏幕：按钮做大一点；侧栏要点汉堡才出来，所以在正文顶部再放一条任务栏
     st.markdown(
         "<style>div[data-testid='stButton'] button{min-height:3.1rem;font-size:1.03rem;}"
         "div[data-testid='stCheckbox'] label p{font-size:1rem;}</style>",
         unsafe_allow_html=True,
     )
+    nav_taskbar("navm_", horizontal=True)
 
 
 # ================================================================ 页面 1：菜单规划
@@ -307,73 +351,67 @@ def _drop_a_dish(day_no: int) -> None:
     ui.push_history(f"🍽️ 第 {day_no} 天去掉「{dropped}」")
 
 
-def render_planner() -> None:
-    st.title("🍽️ 一周晚餐规划")
-    st.caption("填需求 → 生成菜单。**拿到菜单后再点 ❤️/🚫 反馈**都行，随时可改，菜单不会丢。")
+def _empty_state(msg: str, key: str) -> None:
+    st.info(msg)
+    if st.button("📝 去填需求", key=key, type="primary"):
+        goto("demand")
 
-    inp = st.session_state["plan_inputs"]
-    has_plan = st.session_state["result"] is not None
 
-    # ---- 回访：打开就是「你有一份 8/12–8/18 的菜单」
-    if st.session_state.get("revisit"):
-        rec = store.get_record(st.session_state["revisit"])
-        if rec is not None:
-            st.info(f"📌 你有一份 **{rec.label}** 的晚餐菜单（{rec.created_at} 生成），已经帮你打开了。")
-            b1, b2, _ = st.columns([1, 1, 2])
-            with b1:
-                if st.button("👍 就用这份", use_container_width=True):
-                    st.session_state["revisit"] = None
-                    st.rerun()
-            with b2:
-                if st.button("🔁 重新排一份", use_container_width=True):
-                    st.session_state["revisit"] = None
-                    st.session_state["form_open"] = True
-                    st.rerun()
+# ================================================================ 页面 1：需求 & 生成
+def render_demand() -> None:
+    st.title("📝 需求 & 生成")
+    st.caption("填完点最下面的「🍽️ 生成菜单」。排好后会自动跳到「🍽️ 本周菜单」，"
+               "买菜清单在「🛒 买菜清单」页。")
 
-    # ---- 需求表单（有菜单时收进折叠区，不再拿空表单糊客户的脸）
-    form_open = bool(st.session_state["form_open"]) or not has_plan
-    with st.expander(
-        "🔁 重新排一份（当前菜单会保留，可随时回到上一版）" if has_plan
-        else "📋 填一下需求（填好点最下面的按钮生成）",
-        expanded=form_open,
-    ):
-        s1, s2 = st.columns([3, 1])
-        with s1:
-            sc = st.selectbox("选择场景后点右侧按钮自动填入表单", list(SCENARIOS),
-                              label_visibility="collapsed", key="scenario_pick")
-        with s2:
-            if st.button("✨ 填入该场景", use_container_width=True):
-                for k, v in SCENARIOS[sc].items():
-                    st.session_state[k] = v
-                st.session_state["dishes_per_day"] = 2
-                st.rerun()
+    if st.session_state["result"] is not None:
+        rec = store.get_record(st.session_state.get("record_id"))
+        cur_label = store.week_label(st.session_state.get("plan_start") or st.session_state["start_date"])
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            st.info(f"📌 当前已有方案：**{cur_label}**"
+                    + (f"（{rec.created_at} 生成）" if rec is not None else "")
+                    + "。改完需求再生成会另存为新的一版，旧版可以在菜单页一键找回。")
+        with c2:
+            if st.button("🍽️ 去看本周菜单", use_container_width=True):
+                goto("menu")
 
-        with st.form("planner_form"):
-            st.subheader("📋 我的需求")
-            col_a, col_b, col_c = st.columns(3)
-            with col_a:
-                people = st.number_input("👨‍👩‍👧 几人吃", 1, 10, key="people")
-                days = st.slider("📅 排几天（每天 1 顿%s）" % MEAL, 1, 7, key="days")
-            with col_b:
-                spice = st.radio("🌶️ 能接受的辣度", SPICE_LEVELS, horizontal=True, key="spice")
-                max_time = st.slider("⏱️ 单菜耗时上限（分钟）", 10, 90, key="max_time")
-            with col_c:
-                goal = st.selectbox("🎯 目标", GOALS, key="goal")
-                budget = st.number_input("💰 预算（元/人/天，0=不限）", 0.0, 200.0, step=5.0, key="budget")
+    s1, s2 = st.columns([3, 1])
+    with s1:
+        sc = st.selectbox("选择场景后点右侧按钮自动填入表单", list(SCENARIOS),
+                          label_visibility="collapsed", key="scenario_pick")
+    with s2:
+        if st.button("✨ 填入该场景", use_container_width=True):
+            for k, v in SCENARIOS[sc].items():
+                st.session_state[k] = v
+            st.session_state["dishes_per_day"] = 2
+            st.rerun()
 
-            col_d, col_e, col_f = st.columns(3)
-            with col_d:
-                allergens = st.multiselect("🚫 过敏原 / 忌口（硬排除）", ALLERGENS, key="allergens")
-            with col_e:
-                taste = st.multiselect("😋 口味偏好（尽量满足）", TASTE_TAGS, key="taste")
-            with col_f:
-                start_date_pick = st.date_input("📅 这一周从哪天开始（默认下周一）", key="start_date")
+    with st.form("planner_form"):
+        st.subheader("📋 我的需求")
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            people = st.number_input("👨‍👩‍👧 几人吃", 1, 10, key="people")
+            days = st.slider("📅 排几天（每天 1 顿%s）" % MEAL, 1, 7, key="days")
+        with col_b:
+            spice = st.radio("🌶️ 能接受的辣度", SPICE_LEVELS, horizontal=True, key="spice")
+            max_time = st.slider("⏱️ 单菜耗时上限（分钟）", 10, 90, key="max_time")
+        with col_c:
+            goal = st.selectbox("🎯 目标", GOALS, key="goal")
+            budget = st.number_input("💰 预算（元/人/天，0=不限）", 0.0, 200.0, step=5.0, key="budget")
 
-            pantry = st.text_input("🧺 家里已有食材（逗号分隔，会从买菜清单里扣除）",
-                                   placeholder="例如：鸡蛋, 土豆, 西红柿, 葱姜蒜", key="pantry")
-            dishes_per_day = st.select_slider("🍽️ 每顿想几个菜", [1, 2, 3], key="dishes_per_day")
-            submitted = st.form_submit_button("🍽️ 生成菜单（不喜欢可逐道反馈）", type="primary",
-                                              use_container_width=True)
+        col_d, col_e, col_f = st.columns(3)
+        with col_d:
+            allergens = st.multiselect("🚫 过敏原 / 忌口（硬排除）", ALLERGENS, key="allergens")
+        with col_e:
+            taste = st.multiselect("😋 口味偏好（尽量满足）", TASTE_TAGS, key="taste")
+        with col_f:
+            start_date_pick = st.date_input("📅 这一周从哪天开始（默认下周一）", key="start_date")
+
+        pantry = st.text_input("🧺 家里已有食材（逗号分隔，会从买菜清单里扣除）",
+                               placeholder="例如：鸡蛋, 土豆, 西红柿, 葱姜蒜", key="pantry")
+        dishes_per_day = st.select_slider("🍽️ 每顿想几个菜", [1, 2, 3], key="dishes_per_day")
+        submitted = st.form_submit_button("🍽️ 生成菜单（不喜欢可逐道反馈）", type="primary",
+                                          use_container_width=True)
 
     if submitted:
         st.session_state["plan_inputs"] = dict(
@@ -389,56 +427,91 @@ def render_planner() -> None:
         st.session_state["relax"] = None
         st.session_state["notice"] = None
         st.session_state["form_open"] = False
+        st.session_state["page"] = "menu"     # 生成后自动去看菜单
+        st.rerun()
 
+    st.caption("💡 喜欢 / 不喜欢的菜在「❤️ 口味档案」里随时能改，排菜时会自动优先或排除。")
+
+
+# ================================================================ 页面 2：本周菜单
+def _ensure_plan():
+    """按需重排（首次 / 需求变了 / 口味变了 / 放宽了条件）；等待过程有阶段反馈、可停止。"""
     inp = st.session_state["plan_inputs"]
     if inp is None:
-        st.info("👆 填好需求点「生成菜单」。也可以先点上面的场景按钮一键体验。")
+        return None
+    if st.session_state["result"] is not None and not st.session_state["stale"]:
+        return st.session_state["result"]
+
+    job = st.session_state.get("job")
+    if job is None:
+        job = PlanJob(build_constraints(inp), db).start()
+        st.session_state["job"] = job
+    if not job.done:
+        with st.status(job.stage, expanded=True):
+            st.write("顺序是：**挑菜谱 → 搭配一周 → 校验忌口/预算/时间 → 汇总清单**，"
+                     "通常 3–5 秒。")
+            st.progress(job.progress)
+            if st.button("⏹️ 停止，我要改一下需求", key="cancel_job", use_container_width=True):
+                job.cancel()
+                st.session_state["job"] = None
+                st.session_state["stale"] = False
+                ui.set_notice("info", "⏹️ 已停止这次生成。需求都还在，改完再点「生成菜单」就行。")
+                goto("demand")
+        time.sleep(0.35)
+        st.rerun()
+
+    st.session_state["job"] = None
+    if job.result is None:
+        st.error("⚠️ 这次没能排出菜单（已经试过确定性兜底）。下面点一下放宽条件再试：")
+        _relax_options(build_constraints(inp), [], swap_failed=True)
+        st.session_state["stale"] = False
+        st.stop()
+
+    prev_rec = store.latest_record()
+    result = job.result
+    st.session_state["result"] = result
+    st.session_state["stale"] = False
+    st.session_state["check_epoch"] += 1
+    rec = store.save_plan(result, start_date=inp.get("start_date"),
+                          change_note="重新排了一版" if prev_rec else "首次生成")
+    st.session_state["record_id"] = rec.id
+    st.session_state["plan_start"] = rec.start_date
+    st.session_state["revisit"] = None
+    text = f"✅ 菜单已保存为「{rec.label}」，关掉页面明天再打开还在。"
+    if prev_rec is not None:
+        text += f" 上一版「{prev_rec.label}」可以用下面的「↩️ 回到上一版」找回。"
+    ui.set_notice("save", text)
+    ui.push_history(f"🆕 生成了「{rec.label}」的菜单")
+    return result
+
+
+def render_menu() -> None:
+    st.title("🍽️ 本周菜单")
+    if st.session_state["plan_inputs"] is None:
+        _empty_state("还没有菜单。先去填一下需求（大约 20 秒），我会排出这一周并给出买菜清单。",
+                     "goto_demand_m")
         return
 
-    # ---- 需要重排：后台跑，前台显示阶段，可随时停
-    if st.session_state["result"] is None or st.session_state["stale"]:
-        job = st.session_state.get("job")
-        if job is None:
-            job = PlanJob(build_constraints(inp), db).start()
-            st.session_state["job"] = job
-        if not job.done:
-            with st.status(job.stage, expanded=True):
-                st.write("顺序是：**挑菜谱 → 搭配一周 → 校验忌口/预算/时间 → 汇总清单**，"
-                         "通常 3–5 秒。")
-                st.progress(job.progress)
-                if st.button("⏹️ 停止，我要改一下需求", key="cancel_job", use_container_width=True):
-                    job.cancel()
-                    st.session_state["job"] = None
-                    st.session_state["stale"] = False
-                    ui.set_notice("info", "⏹️ 已停止这次生成。需求还在，改完再点「生成菜单」就行。")
+    # ---- 回访：打开就是「你有一份 8/12–8/18 的菜单」
+    if st.session_state.get("revisit"):
+        rec = store.get_record(st.session_state["revisit"])
+        if rec is not None:
+            st.info(f"📌 你有一份 **{rec.label}** 的晚餐菜单（{rec.created_at} 生成），已经帮你打开了。")
+            b1, b2, _ = st.columns([1, 1, 2])
+            with b1:
+                if st.button("👍 就用这份", use_container_width=True):
+                    st.session_state["revisit"] = None
                     st.rerun()
-            time.sleep(0.35)
-            st.rerun()
+            with b2:
+                if st.button("🔁 重新排一份", use_container_width=True):
+                    st.session_state["revisit"] = None
+                    goto("demand")
 
-        st.session_state["job"] = None
-        if job.result is None:
-            st.error("⚠️ 这次没能排出菜单（已经试过确定性兜底）。下面点一下放宽条件再试：")
-            _relax_options(build_constraints(inp), [], swap_failed=True)
-            st.session_state["stale"] = False
-            st.stop()
+    result = _ensure_plan()
+    if result is None:
+        _empty_state("还没有菜单。先去填一下需求。", "goto_demand_m2")
+        return
 
-        prev_rec = store.latest_record()
-        result = job.result
-        st.session_state["result"] = result
-        st.session_state["stale"] = False
-        st.session_state["check_epoch"] += 1
-        rec = store.save_plan(result, start_date=inp.get("start_date"),
-                              change_note="重新排了一版" if prev_rec else "首次生成")
-        st.session_state["record_id"] = rec.id
-        st.session_state["plan_start"] = rec.start_date
-        st.session_state["revisit"] = None
-        text = f"✅ 菜单已保存为「{rec.label}」，关掉页面明天再打开还在。"
-        if prev_rec is not None:
-            text += f" 上一版「{prev_rec.label}」可以用下面的「↩️ 回到上一版」找回。"
-        ui.set_notice("save", text)
-        ui.push_history(f"🆕 生成了「{rec.label}」的菜单")
-
-    result = st.session_state["result"]
     c = result.constraints
     start_date = st.session_state.get("plan_start") or st.session_state["start_date"]
     summary = rep.plan_summary(result, db, start_date)
@@ -660,18 +733,65 @@ def render_planner() -> None:
     if st.session_state.get("relax"):
         _relax_options(c, result.issues, swap_failed=True)
 
-    # ---- 买菜清单：能打勾、能带走
-    st.subheader("🛒 买菜清单")
-    st.caption(f"已按 **{c.people} 人**份量折算（菜谱为 2 人份基准）；🏠 标记的是家里已有、无需购买。"
-               "　买一样勾一样，剩下的最后汇总。")
+    # 买菜清单已独立成页（到店后的场景），见 render_shopping()
+    st.caption("🛒 买菜清单在左侧「🛒 买菜清单」页：可以打勾、导出 CSV、复制文本、打印。")
+
+    # ---- 开发者视角：工程指标收进折叠区（想给面试官看随时展开）
+    with st.expander("🔧 开发者视角（候选数 / 修正轮数 / LLM / 耗时 / 执行轨迹）"):
+        meta = st.columns(5)
+        meta[0].metric("候选菜谱", f"{result.candidate_count} 道")
+        meta[1].metric("修正轮数", f"{result.repairs_used} 次")
+        meta[2].metric("LLM 排菜", "✅ 是" if result.llm_used else "⬜ 否(兜底)")
+        meta[3].metric("耗时", f"{result.latency_sec:.1f}s")
+        meta[4].metric("❤️ 命中", f"{summary.liked_hit} 道")
+        if result.llm_error:
+            st.caption(f"LLM 未启用原因：{result.llm_error}")
+        st.markdown("**确定性校验报告**")
+        if result.issues:
+            for i in result.issues:
+                st.markdown(f"- {'❌' if i.level == 'error' else '⚠️'} {i.message}")
+        else:
+            st.success("无任何校验问题 ✅")
+        st.markdown("**执行轨迹**")
+        for t in result.trace:
+            st.markdown(f"- `{t}`")
+        st.caption(f"覆盖菜谱 {result.candidate_count} 道 · 单次耗时 {result.latency_sec:.1f}s · "
+                   f"存档 id {st.session_state.get('record_id')}")
+        if not result.llm_used and result.llm_error:
+            st.caption("提示：智能排菜没启用时会自动改用确定性排菜，忌口与预算一样会被校验。")
+
+    if liked_now or hated_now:
+        st.markdown(
+            f"<div class='pref-bar'>当前口味档案：❤️ {('、'.join(liked_now) or '—')}"
+            f" ｜ 🚫 {('、'.join(hated_now) or '—')}</div>", unsafe_allow_html=True)
+
+
+# ================================================================ 页面 3：买菜清单
+def render_shopping() -> None:
+    """到店后的场景：一屏一类、点一下打勾、能带走。"""
+    st.title("🛒 买菜清单")
+    if st.session_state["plan_inputs"] is None:
+        _empty_state("还没有菜单，所以也还没有清单。先去填一下需求生成一份。", "goto_demand_s")
+        return
+
+    result = _ensure_plan()
+    if result is None:
+        _empty_state("还没有菜单，所以也还没有清单。先去填一下需求。", "goto_demand_s2")
+        return
+
+    c = result.constraints
+    start_date = st.session_state.get("plan_start") or st.session_state["start_date"]
+    label = store.week_label(start_date)
+    st.caption(f"{label} 这一周要买的东西 · 已按 **{c.people} 人**份量折算（菜谱为 2 人份基准）；"
+               "🏠 标记的是家里已有、无需购买。　**买一样勾一样，剩下的最后汇总。**")
+
     need = [s for s in result.shopping if s.needed]
     have = [s for s in result.shopping if not s.needed]
     epoch = st.session_state["check_epoch"]
     checked: list[str] = []
 
     def shop_row(it) -> None:
-        label = f"{it.name}　**{it.amount}**"
-        if st.checkbox(label, key=f"chk_{epoch}_{it.name}"):
+        if st.checkbox(f"{it.name}　**{it.amount}**", key=f"chk_{epoch}_{it.name}"):
             checked.append(it.name)
         st.caption(f"　↳ 用于：{'、'.join(it.for_recipes[:3])}")
 
@@ -718,35 +838,7 @@ def render_planner() -> None:
 
     if have:
         st.caption("🏠 已有库存覆盖： " + "、".join(s.name for s in have[:20]))
-
-    # ---- 开发者视角：工程指标收进折叠区（想给面试官看随时展开）
-    with st.expander("🔧 开发者视角（候选数 / 修正轮数 / LLM / 耗时 / 执行轨迹）"):
-        meta = st.columns(5)
-        meta[0].metric("候选菜谱", f"{result.candidate_count} 道")
-        meta[1].metric("修正轮数", f"{result.repairs_used} 次")
-        meta[2].metric("LLM 排菜", "✅ 是" if result.llm_used else "⬜ 否(兜底)")
-        meta[3].metric("耗时", f"{result.latency_sec:.1f}s")
-        meta[4].metric("❤️ 命中", f"{summary.liked_hit} 道")
-        if result.llm_error:
-            st.caption(f"LLM 未启用原因：{result.llm_error}")
-        st.markdown("**确定性校验报告**")
-        if result.issues:
-            for i in result.issues:
-                st.markdown(f"- {'❌' if i.level == 'error' else '⚠️'} {i.message}")
-        else:
-            st.success("无任何校验问题 ✅")
-        st.markdown("**执行轨迹**")
-        for t in result.trace:
-            st.markdown(f"- `{t}`")
-        st.caption(f"覆盖菜谱 {result.candidate_count} 道 · 单次耗时 {result.latency_sec:.1f}s · "
-                   f"存档 id {st.session_state.get('record_id')}")
-        if not result.llm_used and result.llm_error:
-            st.caption("提示：智能排菜没启用时会自动改用确定性排菜，忌口与预算一样会被校验。")
-
-    if liked_now or hated_now:
-        st.markdown(
-            f"<div class='pref-bar'>当前口味档案：❤️ {('、'.join(liked_now) or '—')}"
-            f" ｜ 🚫 {('、'.join(hated_now) or '—')}</div>", unsafe_allow_html=True)
+    st.caption("💡 想换某道菜或反馈口味 → 去「🍽️ 本周菜单」；想改需求或改人数 → 去「📝 需求 & 生成」。")
 
 
 # ================================================================ 页面 2：口味档案
@@ -974,8 +1066,11 @@ def render_profile() -> None:
             st.rerun()
 
 
-# ================================================================ 路由
-if page.startswith("🍽️"):
-    render_planner()
-else:
-    render_profile()
+# ================================================================ 路由（任务栏）
+_PAGE_RENDERERS = {
+    "demand": render_demand,
+    "menu": render_menu,
+    "shopping": render_shopping,
+    "profile": render_profile,
+}
+_PAGE_RENDERERS.get(st.session_state["page"], render_menu)()

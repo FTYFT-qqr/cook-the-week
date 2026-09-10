@@ -45,6 +45,35 @@ def find_buttons(at, label_prefix):
     return [b for b in at.button if (b.label or "").startswith(label_prefix)]
 
 
+def nav_to(at, key: str) -> bool:
+    """点左栏任务栏按钮切页。
+
+    注意：AppTest 的元素引用在 rerun 后会失效，所以每次都要重新取。
+    """
+    found = [b for b in at.button if (b.key or "") == f"nav_{key}"]
+    if not found:
+        return False
+    found[0].click()
+    at.run()
+    return True
+
+
+def current_page(at):
+    return at.session_state["page"] if "page" in at.session_state else None
+
+
+def nav_exists(at) -> bool:
+    return any((b.key or "").startswith("nav_") for b in at.button)
+
+
+def _btn_type(b):
+    """AppTest 里按钮的 type 是字符串（primary / secondary）。"""
+    try:
+        return str(b.proto.type)
+    except Exception:
+        return None
+
+
 def page_text(at) -> str:
     parts = [m.value for m in at.markdown]
     parts += [f.value for f in at.success] + [w.value for w in at.warning]
@@ -76,6 +105,7 @@ print("[1] 首次加载 & 生成菜单")
 at = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=90)
 at.run()
 check("首屏无异常", not at.exception, str([str(e.value) for e in at.exception]))
+check("没有方案时默认落在「📝 需求 & 生成」页", current_page(at) == "demand", current_page(at))
 
 fill = find_buttons(at, "✨ 填入该场景")
 check("有场景填入按钮", bool(fill))
@@ -91,6 +121,7 @@ if run_btn:
     at.run()
 check("生成菜单后无异常", not at.exception, str([str(e.value) for e in at.exception]))
 check("菜单已渲染", has_menu(at))
+check("生成后自动跳到「🍽️ 本周菜单」", current_page(at) == "menu", current_page(at))
 print(f"    菜单上可反馈的菜: {len(find_buttons(at, '❤️ 喜欢'))} 道")
 
 print("[2] 点击 🚫 不喜欢 → 菜单不消失 + 反馈被记录（问题1）")
@@ -126,18 +157,10 @@ if like_btns:
     check("已喜欢状态回显在菜单上", bool(find_buttons(at, "✅ 已喜欢")))
     print(f"    收藏的菜: {loved_dish}")
 
-def nav_radio(at):
-    """每次重新获取导航控件（AppTest 元素引用在 rerun 后失效，不能复用）。"""
-    rs = [r for r in at.radio if r.key == "nav_page"]
-    return rs[0] if rs else None
-
-
 print("[4] 独立「我的口味档案」页面（问题2）")
-check("存在页面导航", nav_radio(at) is not None)
+check("任务栏导航存在（不再是单选圆圈）", nav_exists(at))
 target_name = None
-if nav_radio(at):
-    nav_radio(at).set_value("❤️ 我的口味档案")
-    at.run()
+if nav_to(at, "profile"):
     check("切到档案页无异常", not at.exception, str([str(e.value) for e in at.exception]))
     txt = page_text(at)
     check("档案页标题正确", "我的口味档案" in txt)
@@ -165,9 +188,7 @@ if nav_radio(at):
         print(f"    档案页新增喜欢: {target_name}")
 
 print("[5] 回到菜单页：自动按新口味重排")
-if nav_radio(at):
-    nav_radio(at).set_value("🍽️ 菜单规划")
-    at.run()
+if nav_to(at, "menu"):
     check("回菜单页无异常", not at.exception, str([str(e.value) for e in at.exception]))
     check("菜单仍渲染", has_menu(at), f"titles={[t.value for t in at.title]}")
     check("被排除的菜仍未出现在菜单",
@@ -184,9 +205,7 @@ def btns(at, prefix):
     return [b for b in at.button if (b.key or "").startswith(prefix)]
 
 
-if nav_radio(at):
-    nav_radio(at).set_value("❤️ 我的口味档案")
-    at.run()
+if nav_to(at, "profile"):
     check("切到档案页无异常", not at.exception, str([str(e.value) for e in at.exception]))
     check("存在「移出喜欢」按钮", len(btns(at, "mv2hate_")) > 0 or len(btns(at, "rm_from_like_")) > 0,
           f"liked={prof.liked_names()}")
@@ -275,9 +294,7 @@ def menu_day_map(at) -> dict:
     return out
 
 
-if nav_radio(at):
-    nav_radio(at).set_value("🍽️ 菜单规划")
-    at.run()
+if nav_to(at, "menu"):
     snap = menu_day_map(at)
     prof_before = prof.load_profile()
 
@@ -358,9 +375,7 @@ try:
 except Exception as exc:  # AppTest 对部分元素状态不支持时跳过
     print(f"    (跳过标签页状态注入: {type(exc).__name__})")
 
-if nav_radio(at):
-    nav_radio(at).set_value("🍽️ 菜单规划")
-    at.run()
+nav_to(at, "menu")
 inp = at.session_state["plan_inputs"]
 if inp:
     inp["days"] = 1                     # 天数从 3 变 1，之前停在第 2 天
@@ -415,7 +430,10 @@ if restore and prev_rec is not None:
           f"now={at.session_state['record_id'] if 'record_id' in at.session_state else None} want={prev_rec.id}")
     check("切版后菜单仍在", has_menu(at))
 
-print("[11] F2/F3 买菜清单：可打勾、可带走")
+print("[11] F2/F3 买菜清单：可打勾、可带走（独立成页）")
+nav_to(at, "shopping")
+check("买菜清单是独立一页", bool([b for b in at.button if (b.key or "") == "clear_checks"]))
+check("清单页不再挤着每日菜单详情", not has_menu(at))
 cur = at.session_state["result"]
 need_n = len([s for s in cur.shopping if s.needed]) if cur else 0
 check("清单项已渲染成可勾选的条目", len(at.checkbox) >= max(need_n, 1),
@@ -449,6 +467,7 @@ else:
     print("    (AppTest 未暴露 code 元素，复制/打印内容交由 self_check 断言)")
 
 print("[12] D1/D2 人话指标 + 整周总览 + 开发者视角")
+nav_to(at, "menu")
 txt = page_text(at)
 check("前排显示「这一周大概花」", "这一周大概花" in txt)
 check("前排显示「最费时的一天」", "最费时的一天" in txt)
@@ -460,9 +479,7 @@ check("技术指标不再占据前排", "候选菜谱" not in txt)
 check("花费口径有说明（不让人拿去对账）", "实际以当地物价为准" in txt)
 
 print("[13] E3 破坏性操作二次确认 + 多步撤销")
-if nav_radio(at):
-    nav_radio(at).set_value("❤️ 我的口味档案")
-    at.run()
+if nav_to(at, "profile"):
     pf_hate = btns(at, "pf_hate_")
     if pf_hate:
         pf_hate[0].click()
@@ -490,9 +507,7 @@ if nav_radio(at):
                       f"{prof.disliked_names()} vs {before_dislike}")
 
 print("[14] G1 手机视图")
-if nav_radio(at):
-    nav_radio(at).set_value("🍽️ 菜单规划")
-    at.run()
+nav_to(at, "menu")
 toggles = _elems(at, "toggle")  # 注意：rerun 之后旧的元素引用会失效，必须重新取
 if toggles:
     toggles[0].set_value(True)
@@ -529,6 +544,45 @@ if rt:
           at.session_state["plan_inputs"].get("max_time_min") == old_max + 20,
           f"{at.session_state['plan_inputs'].get('max_time_min')} vs {old_max + 20}")
     check("放宽后自动重排出了新菜单", has_menu(at))
+
+print("[16] 页面结构：需求 / 菜单 / 买菜清单 三页分开 + 任务栏高亮")
+nav_to(at, "demand")
+check("需求页有生成表单", bool(find_buttons(at, "🍽️ 生成菜单")))
+check("需求页不再堆菜单详情", not has_menu(at))
+check("需求页有去看菜单的入口", bool([b for b in at.button if (b.label or "").startswith("🍽️ 去看本周菜单")]))
+nav_to(at, "menu")
+check("菜单页没有需求表单（不再和表单挤一起）",
+      not find_buttons(at, "🍽️ 生成菜单"))
+check("菜单页有菜单", has_menu(at))
+nav_to(at, "shopping")
+check("清单页有打勾与导出", bool([b for b in at.button if (b.key or "") == "clear_checks"]))
+nav_items = [b for b in at.button if (b.key or "").startswith("nav_")]
+check("任务栏共 4 项（需求/菜单/清单/口味档案）", len(nav_items) == 4,
+      [b.key for b in nav_items])
+active = [b for b in at.button if (b.key or "") == "nav_shopping"]
+other = [b for b in at.button if (b.key or "") == "nav_menu"]
+if active and other:
+    ta, to = _btn_type(active[0]), _btn_type(other[0])
+    check("当前所在页在任务栏上高亮", ta is not None and to is not None and ta != to,
+          f"active={ta} other={to}")
+print(f"    任务栏: {[b.label for b in nav_items]}")
+
+print("[17] 空状态：没有菜单时进「本周菜单」会被引导去填需求")
+EMPTY_PLANS = os.path.join(ROOT, ".tmp", "test_plans_empty.json")
+if os.path.exists(EMPTY_PLANS):
+    os.remove(EMPTY_PLANS)
+os.environ["RECIPE_PLAN_FILE"] = EMPTY_PLANS
+at3 = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=90)
+at3.run()
+check("全新客户默认落在需求页", current_page(at3) == "demand", current_page(at3))
+nav_to(at3, "menu")
+check("空状态给出人话引导", "还没有菜单" in page_text(at3), page_text(at3)[:120])
+go = [b for b in at3.button if (b.label or "").startswith("📝 去填需求")]
+check("空状态有「去填需求」按钮", bool(go))
+if go:
+    go[0].click()
+    at3.run()
+    check("点引导能回到需求页", current_page(at3) == "demand", current_page(at3))
 
 print(f"\n结果: {PASS} 通过, {len(FAIL)} 失败")
 if FAIL:

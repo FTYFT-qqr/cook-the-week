@@ -57,7 +57,14 @@ def disliked_names(known: set[str] | None = None) -> list[str]:
 
 
 def set_feedback(name: str, action: str, known: set[str] | None = None) -> dict:
-    """写入一条反馈。action: like / dislike / clear_like / clear_dislike。
+    """写入一条反馈。
+
+    action:
+      like          → 加入「喜欢」（若已喜欢则取消）
+      dislike       → 加入「不喜欢」（若已不喜欢则取消）
+      remove        → 从两个列表中都移除（取消表态）
+      clear_like    → 清空「喜欢」
+      clear_dislike → 清空「不喜欢」
 
     互斥：同一道菜不会同时在喜欢与不喜欢里（后写的生效）。
     """
@@ -78,12 +85,44 @@ def set_feedback(name: str, action: str, known: set[str] | None = None) -> dict:
         else:
             disliked.append(name)
             liked = [n for n in liked if n != name]
+    elif action == "remove":
+        liked = [n for n in liked if n != name]
+        disliked = [n for n in disliked if n != name]
     elif action == "clear_like":
         liked = []
     elif action == "clear_dislike":
         disliked = []
     else:
         raise ValueError(f"未知 action: {action}")
+
+    p["liked_dishes"] = liked
+    p["disliked_dishes"] = disliked
+    p.setdefault("customer_name", "默认客户")
+    save_profile(p)
+    return p
+
+
+def bulk_feedback(names: list[str], action: str, known: set[str] | None = None) -> dict:
+    """批量写入（一次落盘），用于「快速添加」多选场景。"""
+    p = load_profile()
+    known = known or set()
+    liked = _clean(p.get("liked_dishes", []), known) if known else list(dict.fromkeys(p.get("liked_dishes", [])))
+    disliked = _clean(p.get("disliked_dishes", []), known) if known else list(dict.fromkeys(p.get("disliked_dishes", [])))
+
+    for name in names:
+        if action == "like":
+            if name not in liked:
+                liked.append(name)
+            disliked = [n for n in disliked if n != name]
+        elif action == "dislike":
+            if name not in disliked:
+                disliked.append(name)
+            liked = [n for n in liked if n != name]
+        elif action == "remove":
+            liked = [n for n in liked if n != name]
+            disliked = [n for n in disliked if n != name]
+        else:
+            raise ValueError(f"bulk_feedback 不支持的 action: {action}")
 
     p["liked_dishes"] = liked
     p["disliked_dishes"] = disliked

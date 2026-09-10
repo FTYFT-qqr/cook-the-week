@@ -171,6 +171,77 @@ if nav_radio(at):
           (target_name is None) or (target_name in menu_dish_names(at)),
           f"menu={sorted(menu_dish_names(at))}")
 
+print("[6] 「我的喜好列表」：独立列表可增 / 移 / 删")
+
+
+def btns(at, prefix):
+    return [b for b in at.button if (b.key or "").startswith(prefix)]
+
+
+if nav_radio(at):
+    nav_radio(at).set_value("❤️ 我的口味档案")
+    at.run()
+    check("切到档案页无异常", not at.exception, str([str(e.value) for e in at.exception]))
+    check("存在「移出喜欢」按钮", len(btns(at, "mv2hate_")) > 0 or len(btns(at, "rm_from_like_")) > 0,
+          f"liked={prof.liked_names()}")
+
+    # ① 快速添加：多选后加入「不喜欢」
+    quick = [m for m in at.multiselect if m.key == "pf_quick"]
+    check("有快速添加控件", bool(quick))
+    if quick:
+        unrated = [r.name for r in db.recipes
+                   if r.name not in prof.liked_names() and r.name not in prof.disliked_names()]
+        pick = unrated[:2]
+        quick[0].set_value(pick)
+        at.run()
+        add_hate = [b for b in at.button if (b.label or "").startswith("🚫 加入不喜欢")]
+        check("快速添加按钮可用", bool(add_hate))
+        if add_hate:
+            add_hate[0].click()
+            at.run()
+            p = prof.load_profile()
+            check("快捷批量加入「不喜欢」生效", all(n in p.get("disliked_dishes", []) for n in pick),
+                  f"profile={p}")
+            print(f"    快速加入不喜欢: {pick}")
+
+    # ② 列表内「移到喜欢」：把刚加入的一道从不喜欢移到喜欢
+    mv_like = btns(at, "mv2like_")
+    check("存在「移到喜欢」按钮", bool(mv_like))
+    moved_name = None
+    if mv_like:
+        rid = (mv_like[0].key or "").split("mv2like_")[1]
+        moved_name = db.by_id(rid).name
+        mv_like[0].click()
+        at.run()
+        check("移到喜欢后无异常", not at.exception, str([str(e.value) for e in at.exception]))
+        p = prof.load_profile()
+        check("已从「不喜欢」移到「喜欢」",
+              moved_name in p.get("liked_dishes", []) and moved_name not in p.get("disliked_dishes", []),
+              f"profile={p}")
+        print(f"    移到喜欢: {moved_name}")
+
+    # ③ 列表内「移除」：从喜欢列表移除（恢复未表态）
+    rm_like = btns(at, "rm_from_like_")
+    check("存在「从喜欢移除」按钮", bool(rm_like))
+    if rm_like:
+        rid = (rm_like[0].key or "").split("rm_from_like_")[1]
+        removed_name = db.by_id(rid).name
+        rm_like[0].click()
+        at.run()
+        p = prof.load_profile()
+        check("移除后不在任何列表",
+              removed_name not in p.get("liked_dishes", []) and removed_name not in p.get("disliked_dishes", []),
+              f"profile={p}")
+        print(f"    移除表态: {removed_name}")
+
+    # ④ 清空「不喜欢」列表
+    clr = btns(at, "clr_hate_btn")
+    if clr and prof.disliked_names():
+        clr[0].click()
+        at.run()
+        check("清空「不喜欢」列表生效", prof.disliked_names() == [], f"profile={prof.load_profile()}")
+        check("清空后无异常", not at.exception, str([str(e.value) for e in at.exception]))
+
 print(f"\n结果: {PASS} 通过, {len(FAIL)} 失败")
 if FAIL:
     print("失败项:", FAIL)

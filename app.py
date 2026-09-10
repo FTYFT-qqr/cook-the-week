@@ -305,21 +305,115 @@ def render_planner() -> None:
 # ================================================================ 页面 2：口味档案
 def render_profile() -> None:
     st.title("❤️ 我的口味档案")
-    st.caption("不知道自己喜欢什么很正常 —— 这里可以从整个菜谱库里慢慢挑；"
-               "也可以先去「🍽️ 菜单规划」生成一版，边看具体菜边点 ❤️/🚫。")
+    st.caption("喜欢和不喜欢的菜各有一个独立列表，随时能加、能移、能删。"
+               "改动后菜单页会自动按新口味重排。")
 
     liked = prof.liked_names(KNOWN_NAMES)
     disliked = prof.disliked_names(KNOWN_NAMES)
+    unrated = [r for r in db.recipes if r.name not in liked and r.name not in disliked]
 
     m = st.columns(4)
     m[0].metric("菜谱库", f"{len(db.recipes)} 道")
     m[1].metric("❤️ 喜欢", f"{len(liked)} 道")
     m[2].metric("🚫 不喜欢", f"{len(disliked)} 道")
-    m[3].metric("未表态", f"{len(db.recipes) - len(liked) - len(disliked)} 道")
+    m[3].metric("未表态", f"{len(unrated)} 道")
 
-    tab1, tab2 = st.tabs(["📝 逐道挑选", "👀 查看我现有的档案"])
+    def chips_html(r) -> str:
+        if r is None:
+            return ""
+        return (f"<span class='chip'>{r.category}</span><span class='chip'>{r.spice_level}</span>"
+                f"<span class='chip'>⏱ {r.time_min}min</span><span class='chip'>¥{r.cost_yuan}</span>")
 
-    with tab1:
+    def recipe_of(name: str):
+        rid = NAME2ID.get(name)
+        return db.by_id(rid) if rid else None
+
+    tab_lists, tab_browse = st.tabs(["📋 我的喜好列表", "📝 全部菜品挑选"])
+
+    # ---------------- 列表页：两个独立、可编辑的列表 ----------------
+    with tab_lists:
+        action = None
+        col_l, col_h = st.columns(2)
+
+        with col_l:
+            st.markdown(f"#### ❤️ 喜欢的菜（{len(liked)}）")
+            st.caption("排菜时优先安排，并尽量分散到不同天")
+            if not liked:
+                st.info("列表为空。可以从右侧「移到喜欢」，或用下方「快速添加」。")
+            for name in liked:
+                r = recipe_of(name)
+                rid = NAME2ID.get(name, name)
+                row = st.columns([3, 1, 1])
+                with row[0]:
+                    st.markdown(f"**{name}**　{chips_html(r)}", unsafe_allow_html=True)
+                with row[1]:
+                    if st.button("→ 🚫", key=f"mv2hate_{rid}", help="移到「不喜欢」列表",
+                                 use_container_width=True):
+                        action = (name, "dislike")
+                with row[2]:
+                    if st.button("✖ 移除", key=f"rm_from_like_{rid}", help="从列表移除（恢复未表态）",
+                                 use_container_width=True):
+                        action = (name, "remove")
+            if liked and st.button("🧹 清空「喜欢」列表", key="clr_like_btn", use_container_width=True):
+                action = ("", "clear_like")
+
+        with col_h:
+            st.markdown(f"#### 🚫 不喜欢的菜（{len(disliked)}）")
+            st.caption("这些菜绝不会出现在菜单里")
+            if not disliked:
+                st.info("列表为空。菜单里点 🚫 的菜会自动进到这里。")
+            for name in disliked:
+                r = recipe_of(name)
+                rid = NAME2ID.get(name, name)
+                row = st.columns([3, 1, 1])
+                with row[0]:
+                    st.markdown(f"**{name}**　{chips_html(r)}", unsafe_allow_html=True)
+                with row[1]:
+                    if st.button("→ ❤️", key=f"mv2like_{rid}", help="移到「喜欢」列表",
+                                 use_container_width=True):
+                        action = (name, "like")
+                with row[2]:
+                    if st.button("✖ 移除", key=f"rm_from_hate_{rid}", help="从列表移除（恢复未表态）",
+                                 use_container_width=True):
+                        action = (name, "remove")
+            if disliked and st.button("🧹 清空「不喜欢」列表", key="clr_hate_btn", use_container_width=True):
+                action = ("", "clear_dislike")
+
+        if action:
+            name, act = action
+            prof.set_feedback(name, act, KNOWN_NAMES)
+            st.session_state["stale"] = True
+            st.toast("口味档案已更新")
+            st.rerun()
+
+        st.divider()
+        st.markdown(f"**➕ 快速添加**（从 {len(unrated)} 道未表态的菜里多选，一次加入某个列表）")
+        q1, q2, q3 = st.columns([3, 1, 1])
+        with q1:
+            picks = st.multiselect("选择菜品", [r.name for r in unrated], key="pf_quick",
+                                   placeholder="输入菜名搜索，可多选", label_visibility="collapsed")
+        with q2:
+            add_like = st.button("❤️ 加入喜欢", use_container_width=True, disabled=not picks)
+        with q3:
+            add_hate = st.button("🚫 加入不喜欢", use_container_width=True, disabled=not picks)
+        if picks and (add_like or add_hate):
+            act = "like" if add_like else "dislike"
+            prof.bulk_feedback(picks, act, KNOWN_NAMES)
+            st.session_state["stale"] = True
+            st.toast(f"已加入「{'喜欢' if add_like else '不喜欢'}」：{'、'.join(picks)}")
+            st.rerun()
+
+        st.divider()
+        c1, _ = st.columns([1, 3])
+        with c1:
+            if st.button("🗑️ 清空全部档案", use_container_width=True):
+                prof.clear_all()
+                st.session_state["stale"] = True
+                st.rerun()
+        st.caption(f"档案文件：`{prof.profile_path()}`")
+
+    # ---------------- 挑选页：浏览全库并逐道标记 ----------------
+    with tab_browse:
         st.markdown("**按分类浏览，直接标记喜欢 / 不喜欢**")
         col_f1, col_f2 = st.columns(2)
         with col_f1:
@@ -349,11 +443,7 @@ def render_profile() -> None:
                 st.markdown(
                     f"<div class='dish-card{' loved' if is_loved else (' hated' if is_hated else '')}'>"
                     f"<div class='dish-name'>{r.name}</div>"
-                    f"<div class='dish-meta'><span class='chip'>{r.category}</span>"
-                    f"<span class='chip'>{r.spice_level}</span>"
-                    f"<span class='chip'>⏱ {r.time_min}min</span>"
-                    f"<span class='chip'>¥{r.cost_yuan}</span>"
-                    f"<span class='chip'>{state}</span></div>"
+                    f"<div class='dish-meta'>{chips_html(r)}<span class='chip'>{state}</span></div>"
                     f"<div class='dish-reason'>主料：{'、'.join(i.name for i in r.ingredients[:5])}</div>"
                     f"</div>", unsafe_allow_html=True)
             with row[1]:
@@ -371,34 +461,6 @@ def render_profile() -> None:
             st.session_state["stale"] = True
             st.toast("已更新口味档案")
             st.rerun()
-
-    with tab2:
-        if not liked and not disliked:
-            st.info("档案还是空的。去「📝 逐道挑选」看看，或先在菜单页生成一版再逐道反馈。")
-        if liked:
-            st.markdown(f"**❤️ 喜欢的菜（{len(liked)} 道）**")
-            st.markdown("　".join(f"`{n}`" for n in liked))
-        if disliked:
-            st.markdown(f"**🚫 不喜欢的菜（{len(disliked)} 道）**")
-            st.markdown("　".join(f"`{n}`" for n in disliked))
-        st.divider()
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            if st.button("🧹 清空「喜欢」", use_container_width=True):
-                prof.set_feedback("", "clear_like", KNOWN_NAMES)
-                st.session_state["stale"] = True
-                st.rerun()
-        with c2:
-            if st.button("🧹 清空「不喜欢」", use_container_width=True):
-                prof.set_feedback("", "clear_dislike", KNOWN_NAMES)
-                st.session_state["stale"] = True
-                st.rerun()
-        with c3:
-            if st.button("🗑️ 清空全部档案", use_container_width=True):
-                prof.clear_all()
-                st.session_state["stale"] = True
-                st.rerun()
-        st.caption(f"档案文件：`{prof.profile_path()}`")
 
 
 # ================================================================ 路由

@@ -1,20 +1,16 @@
-"""Recipe-Planner · Streamlit Demo（前端可读性优先）
+"""Recipe-Planner · Streamlit Demo
+
+两个界面：
+1) 🍽️ 菜单规划：填约束 → 生成每日菜单 → 在每道菜上点 ❤️/🚫 直接反馈
+2) ❤️ 我的口味档案：单独管理喜欢的菜 / 不喜欢的菜（客户可能不知道自己喜欢什么，这里可以慢慢挑）
 
 运行：streamlit run app.py
-
-交互流程：
-1) 先填约束（或选示例场景）点「先生成一版菜单」→ 得到每日菜单；
-2) 客户可能不知道自己喜欢什么 —— 直接在生成的菜单上对每道菜点 ❤️ 喜欢 / 🚫 不喜欢；
-3) 点击后立即按新偏好重新规划，并把偏好写入客户档案（data/customer_profile.json），
-   下次打开自动带入 —— “越用越懂你”。
 """
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 import streamlit as st
 
+from recipe_planner import profile as prof
 from recipe_planner.db import load_db
 from recipe_planner.graph import run_pipeline
 from recipe_planner.models import (
@@ -46,299 +42,367 @@ st.markdown(
     .chip-red { background:#fee2e2; color:#b91c1c; }
     .chip-green { background:#dcfce7; color:#15803d; }
     .chip-pink { background:#fce7f3; color:#be185d; }
+    .pref-bar { background:#fff7ed; border:1px solid #fed7aa; border-radius:8px;
+                padding:8px 12px; color:#9a3412; font-size:0.88rem; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# ---------------------------------------------------------------- 数据 & 档案
 db = load_db()
+KNOWN_NAMES = {r.name for r in db.recipes}
+NAME2ID = {r.name: r.id for r in db.recipes}
 ID2NAME = {r.id: r.name for r in db.recipes}
-PROFILE_FILE = Path(__file__).resolve().parent / "data" / "customer_profile.json"
-
-
-def load_profile() -> dict:
-    if PROFILE_FILE.exists():
-        try:
-            return json.loads(PROFILE_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
-    return {}
-
-
-def save_profile(profile: dict) -> None:
-    PROFILE_FILE.write_text(json.dumps(profile, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def liked_names() -> list[str]:
-    p = load_profile()
-    known = set(ID2NAME.values())
-    return [n for n in p.get("liked_dishes", []) if n in known]
-
-
-def disliked_names() -> list[str]:
-    p = load_profile()
-    known = set(ID2NAME.values())
-    return [n for n in p.get("disliked_dishes", []) if n in known]
-
-
-def toggle_feedback(recipe_id: str, action: str) -> None:
-    """把对某道菜的反馈写入客户档案（名字存储，互斥：like 与 dislike 不同时存在）。"""
-    p = load_profile()
-    name = ID2NAME.get(recipe_id, recipe_id)
-    liked = [n for n in p.get("liked_dishes", []) if n in set(ID2NAME.values())]
-    disliked = [n for n in p.get("disliked_dishes", []) if n in set(ID2NAME.values())]
-    if action == "like":
-        if name in liked:
-            liked.remove(name)          # 再点一次 = 取消喜欢
-        else:
-            liked.append(name)
-            disliked = [n for n in disliked if n != name]
-    elif action == "dislike":
-        if name in disliked:
-            disliked.remove(name)       # 再点一次 = 取消不喜欢
-        else:
-            disliked.append(name)
-            liked = [n for n in liked if n != name]
-    p["liked_dishes"] = liked
-    p["disliked_dishes"] = disliked
-    p["customer_name"] = p.get("customer_name", "默认客户")
-    save_profile(p)
-
 
 # ---------------------------------------------------------------- 示例场景
 SCENARIOS = {
     "🍃 清淡减脂 3 天（默认示例）": dict(
         people=2, days=3, spice="不辣", goal="减脂", taste=["清淡"],
-        max_time=40, budget=45.0, allergens=[], pantry=["鸡蛋", "西红柿"]),
+        max_time=40, budget=45.0, allergens=[], pantry="鸡蛋, 西红柿"),
     "🦐 海鲜过敏 + 控糖": dict(
         people=3, days=4, spice="不辣", goal="控糖", taste=["清淡"],
-        max_time=35, budget=40.0, allergens=["海鲜"], pantry=[]),
+        max_time=35, budget=40.0, allergens=["海鲜"], pantry=""),
     "🌶️ 无辣不欢 · 省钱 5 天": dict(
         people=2, days=5, spice="辣", goal="省钱", taste=["下饭"],
-        max_time=30, budget=25.0, allergens=[], pantry=["土豆"]),
+        max_time=30, budget=25.0, allergens=[], pantry="土豆"),
     "🥚 蛋过敏高蛋白 3 天": dict(
         people=1, days=3, spice="不辣", goal="高蛋白", taste=["咸鲜"],
-        max_time=50, budget=50.0, allergens=["蛋"], pantry=[]),
+        max_time=50, budget=50.0, allergens=[], pantry=""),
 }
 
 
-def apply_scenario(s: dict) -> None:
-    for k, v in s.items():
-        st.session_state[k] = v
-    # pantry 在表单里是文本框（字符串），场景里给的是列表 → 转成逗号串
-    st.session_state["pantry"] = ", ".join(s.get("pantry", []))
-    st.session_state["dishes_per_day"] = 2
+# 会话状态
+st.session_state.setdefault("plan_inputs", None)   # 已提交的约束快照（None = 还没生成过）
+st.session_state.setdefault("result", None)         # 缓存的排菜结果（页面始终显示它）
+st.session_state.setdefault("stale", False)         # 口味/约束变了 → 需要重排
 
-
-def default_inputs() -> dict:
-    s = SCENARIOS["🍃 清淡减脂 3 天（默认示例）"]
-    return dict(
-        people=s["people"], days=s["days"], dishes_per_day=2,
-        allergens=s["allergens"], spice=s["spice"], taste_tags=s["taste"], goal=s["goal"],
-        max_time_min=s["max_time"], budget_per_person_day=s["budget"],
-        pantry_items=s["pantry"],
-    )
-
-
-if "plan_inputs" not in st.session_state:
-    st.session_state["plan_inputs"] = default_inputs()
-
-# ---------------------------------------------------------------- 顶栏
-st.title("🍳 一周食谱规划 Agent")
-st.caption("先填几口人、忌口、预算 → 生成一周晚餐。**看完菜单再说喜欢什么**："
-           "每道菜上点 ❤️ 或 🚫，系统立刻记住并按你的口味重新安排 —— 越用越懂你。")
-
-col_hero = st.columns([3, 1])
-with col_hero[0]:
-    sc = st.selectbox("🎯 快速体验一个场景（点击后自动填入下方表单）：", list(SCENARIOS))
-with col_hero[1]:
-    st.write("")
-    st.write("")
-    if st.button("✨ 填入该场景", type="secondary", use_container_width=True):
-        apply_scenario(SCENARIOS[sc])
-        st.rerun()
-
-st.divider()
-
-# ---------------------------------------------------------------- 输入表单
-# 统一 widget 初值：key 只在 Session State 中初始化，widget 不再传默认值参数
 for _k, _v in dict(
     people=2, days=3, spice="不辣", max_time=40, goal="随便", budget=0.0,
     allergens=[], taste=[], pantry="", dishes_per_day=2,
 ).items():
     st.session_state.setdefault(_k, _v)
 
-with st.form("planner_form"):
-    st.subheader("📋 告诉我你的需求")
-    col_a, col_b, col_c = st.columns(3)
-    with col_a:
-        people = st.number_input("👨‍👩‍👧 几人吃", 1, 10, key="people")
-        days = st.slider("📅 排几天（每天 1 顿%s）" % MEAL, 1, 7, key="days")
-    with col_b:
-        spice = st.radio("🌶️ 能接受的辣度", SPICE_LEVELS, horizontal=True, key="spice")
-        max_time = st.slider("⏱️ 单菜耗时上限（分钟）", 10, 90, key="max_time")
-    with col_c:
-        goal = st.selectbox("🎯 目标", GOALS, key="goal")
-        budget = st.number_input("💰 预算（元/人/天，0=不限）", 0.0, 200.0, step=5.0, key="budget")
 
-    col_d, col_e = st.columns(2)
-    with col_d:
-        allergens = st.multiselect("🚫 过敏原 / 忌口（硬排除）", ALLERGENS, key="allergens")
-    with col_e:
-        taste = st.multiselect("😋 口味偏好（尽量满足）", TASTE_TAGS, key="taste")
-
-    pantry = st.text_input("🧺 家里已有食材（逗号分隔，会从买菜清单里扣除）",
-                           placeholder="例如：鸡蛋, 土豆, 西红柿, 葱姜蒜", key="pantry")
-    dishes_per_day = st.select_slider("🍽️ 每顿想几个菜", [1, 2, 3], key="dishes_per_day")
-    submitted = st.form_submit_button("🍽️ 先生成一版菜单（不合口味再点菜调整）",
-                                      type="primary", use_container_width=True)
-
-if submitted:
-    st.session_state["plan_inputs"] = dict(
-        people=int(people), days=int(days), dishes_per_day=int(dishes_per_day),
-        allergens=list(allergens), spice=spice, taste_tags=list(taste), goal=goal,
-        max_time_min=int(max_time),
-        budget_per_person_day=budget if budget and budget > 0 else None,
-        pantry_items=[p.strip() for p in pantry.replace("，", ",").split(",") if p.strip()],
+def build_constraints(inp: dict) -> UserConstraints:
+    liked = prof.liked_names(KNOWN_NAMES)
+    disliked = prof.disliked_names(KNOWN_NAMES)
+    return UserConstraints(
+        people=inp["people"], days=inp["days"], dishes_per_day=inp["dishes_per_day"],
+        allergens=inp.get("allergens", []), spice_level=inp.get("spice", "不辣"),
+        taste_tags=inp.get("taste_tags", []), goal=inp.get("goal", "随便"),
+        max_time_min=inp.get("max_time_min", 40),
+        budget_per_person_day=inp.get("budget_per_person_day"),
+        pantry_items=inp.get("pantry_items", []),
+        liked_dishes=[NAME2ID[n] for n in liked if n in NAME2ID],
+        disliked_dishes=[NAME2ID[n] for n in disliked if n in NAME2ID],
     )
 
-_feedback_rerun = st.session_state.pop("feedback_rerun", False)
-if not (submitted or _feedback_rerun):
-    st.info("👆 填好需求，点「先生成一版菜单」。拿到菜单后如果哪道菜不合口味，"
-            "直接在那道菜上点 🚫 —— 不用事先想好自己喜欢什么，边看边告诉我就行。")
-    st.stop()
 
-# ---------------------------------------------------------------- 组装约束（融合客户档案喜好）
-inputs = dict(st.session_state["plan_inputs"])
-liked_ids = liked_names()
-disliked_ids = disliked_names()
-# 名称→id 映射（约束用 id）
-name2id = {r.name: r.id for r in db.recipes}
-c = UserConstraints(
-    people=inputs["people"], days=inputs["days"], dishes_per_day=inputs["dishes_per_day"],
-    allergens=inputs.get("allergens", []), spice_level=inputs.get("spice", "不辣"),
-    taste_tags=inputs.get("taste_tags", []), goal=inputs.get("goal", "随便"),
-    max_time_min=inputs.get("max_time_min", 40),
-    budget_per_person_day=inputs.get("budget_per_person_day"),
-    pantry_items=inputs.get("pantry_items", []),
-    liked_dishes=[name2id[n] for n in liked_ids if n in name2id],
-    disliked_dishes=[name2id[n] for n in disliked_ids if n in name2id],
-)
+# ---------------------------------------------------------------- 侧边栏导航
+with st.sidebar:
+    st.title("🍳 食谱规划 Agent")
+    page = st.radio("导航", ["🍽️ 菜单规划", "❤️ 我的口味档案"], key="nav_page")
+    st.divider()
+    _liked = prof.liked_names(KNOWN_NAMES)
+    _disliked = prof.disliked_names(KNOWN_NAMES)
+    st.metric("❤️ 喜欢的菜", f"{len(_liked)} 道")
+    st.metric("🚫 不喜欢的菜", f"{len(_disliked)} 道")
+    if _liked:
+        st.caption("❤️ " + "、".join(_liked[:6]) + ("…" if len(_liked) > 6 else ""))
+    if _disliked:
+        st.caption("🚫 " + "、".join(_disliked[:6]) + ("…" if len(_disliked) > 6 else ""))
+    st.divider()
+    st.caption("口味档案保存在 data/customer_profile.json，下次打开自动带入。")
 
-with st.spinner("🤔 正在检索菜谱、按你的喜好排菜、校验与修正…"):
-    result = run_pipeline(c, db)
 
-# ---------------------------------------------------------------- 结果概览
-st.divider()
-ok = result.final and not any(i.level == "error" for i in result.issues)
-if ok:
-    st.success(f"✅ 排菜完成！共 {sum(len(d.dishes) for d in result.days)} 道菜 / {len(result.days)} 天 · "
-               f"预计总花费约 ¥{result.estimated_cost_yuan:.0f}"
-               + (" · ✨ LLM 智能排菜" if result.llm_used else " · ⚙️ 确定性排菜"))
-elif not result.final:
-    st.error("⚠️ 部分约束无法同时满足（候选太少或预算过低），已按可行方案输出并给出提示。")
-else:
-    st.warning("已输出方案，但有软性问题（见下方提示），可接受或调整约束再试。")
+# ================================================================ 页面 1：菜单规划
+def render_planner() -> None:
+    st.title("🍽️ 一周晚餐规划")
+    st.caption("填需求 → 生成菜单。**拿到菜单后再点 ❤️/🚫 反馈**都行，随时可改，菜单不会丢。")
 
-meta = st.columns(6)
-meta[0].metric("候选菜谱", f"{result.candidate_count} 道")
-meta[1].metric("排了几天", f"{len(result.days)} 天")
-meta[2].metric("修正轮数", f"{result.repairs_used} 次")
-meta[3].metric("LLM 排菜", "✅ 是" if result.llm_used else "⬜ 否(兜底)")
-meta[4].metric("耗时", f"{result.latency_sec:.1f}s")
-meta[5].metric("❤️ 喜欢命中", f"{sum(1 for p in result.days for d in p.dishes if d.recipe_id in set(name2id[n] for n in liked_ids if n in name2id))} 道")
-if result.llm_error:
-    st.caption(f"ℹ️ LLM 状态：{result.llm_error}（已自动切换到确定性排菜，结果仍可用）")
-st.caption("💬 觉得哪道菜不错？点它右边的 **❤️**（以后会多安排）；不喜欢就点 **🚫**（立即换掉）。"
-           "系统会记住你的口味，下次打开自动带入。")
+    with st.expander("🎯 快速体验一个场景", expanded=st.session_state["plan_inputs"] is None):
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            sc = st.selectbox("选择场景后点右侧按钮自动填入表单", list(SCENARIOS),
+                              label_visibility="collapsed")
+        with c2:
+            if st.button("✨ 填入该场景", use_container_width=True):
+                for k, v in SCENARIOS[sc].items():
+                    st.session_state[k] = v
+                st.session_state["dishes_per_day"] = 2
+                st.rerun()
 
-# ---------------------------------------------------------------- 每日菜单 + 反馈按钮
-feedback_clicked = None  # (recipe_id, action)
-st.subheader("🗓️ 每日菜单")
-tabs = st.tabs([f"第 {i} 天" for i in range(1, len(result.days) + 1)])
-for tab, plan in zip(tabs, result.days):
-    with tab:
-        total_day = 0.0
-        for dish in plan.dishes:
-            r = db.by_id(dish.recipe_id)
-            if r is None:
+    with st.form("planner_form"):
+        st.subheader("📋 我的需求")
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            people = st.number_input("👨‍👩‍👧 几人吃", 1, 10, key="people")
+            days = st.slider("📅 排几天（每天 1 顿%s）" % MEAL, 1, 7, key="days")
+        with col_b:
+            spice = st.radio("🌶️ 能接受的辣度", SPICE_LEVELS, horizontal=True, key="spice")
+            max_time = st.slider("⏱️ 单菜耗时上限（分钟）", 10, 90, key="max_time")
+        with col_c:
+            goal = st.selectbox("🎯 目标", GOALS, key="goal")
+            budget = st.number_input("💰 预算（元/人/天，0=不限）", 0.0, 200.0, step=5.0, key="budget")
+
+        col_d, col_e = st.columns(2)
+        with col_d:
+            allergens = st.multiselect("🚫 过敏原 / 忌口（硬排除）", ALLERGENS, key="allergens")
+        with col_e:
+            taste = st.multiselect("😋 口味偏好（尽量满足）", TASTE_TAGS, key="taste")
+
+        pantry = st.text_input("🧺 家里已有食材（逗号分隔，会从买菜清单里扣除）",
+                               placeholder="例如：鸡蛋, 土豆, 西红柿, 葱姜蒜", key="pantry")
+        dishes_per_day = st.select_slider("🍽️ 每顿想几个菜", [1, 2, 3], key="dishes_per_day")
+        submitted = st.form_submit_button("🍽️ 生成菜单（不喜欢可逐道反馈）", type="primary",
+                                          use_container_width=True)
+
+    if submitted:
+        st.session_state["plan_inputs"] = dict(
+            people=int(people), days=int(days), dishes_per_day=int(dishes_per_day),
+            allergens=list(allergens), spice=spice, taste_tags=list(taste), goal=goal,
+            max_time_min=int(max_time),
+            budget_per_person_day=budget if budget and budget > 0 else None,
+            pantry_items=[p.strip() for p in pantry.replace("，", ",").split(",") if p.strip()],
+        )
+        st.session_state["stale"] = True
+
+    inp = st.session_state["plan_inputs"]
+    if inp is None:
+        st.info("👆 填好需求点「生成菜单」。也可以先点上面的场景按钮一键体验。")
+        return
+
+    # 需要重排（首次 / 约束变了 / 口味变了）
+    if st.session_state["result"] is None or st.session_state["stale"]:
+        c = build_constraints(inp)
+        with st.spinner("🤔 正在检索菜谱、按你的口味排菜、校验与修正…"):
+            st.session_state["result"] = run_pipeline(c, db)
+        st.session_state["stale"] = False
+    result = st.session_state["result"]
+    c = result.constraints
+
+    liked_now = prof.liked_names(KNOWN_NAMES)
+    hated_now = prof.disliked_names(KNOWN_NAMES)
+    liked_ids = {NAME2ID[n] for n in liked_now if n in NAME2ID}
+
+    # ---- 概览
+    st.divider()
+    if result.final:
+        st.success(f"✅ 菜单就绪：共 {sum(len(d.dishes) for d in result.days)} 道菜 / {len(result.days)} 天 · "
+                   f"预计总花费约 ¥{result.estimated_cost_yuan:.0f}"
+                   + (" · ✨ LLM 智能排菜" if result.llm_used else " · ⚙️ 确定性排菜"))
+    else:
+        st.warning("⚠️ 部分约束无法同时满足（候选太少或预算过低），已给出可行方案。")
+
+    meta = st.columns(5)
+    meta[0].metric("候选菜谱", f"{result.candidate_count} 道")
+    meta[1].metric("修正轮数", f"{result.repairs_used} 次")
+    meta[2].metric("LLM 排菜", "✅ 是" if result.llm_used else "⬜ 否(兜底)")
+    meta[3].metric("耗时", f"{result.latency_sec:.1f}s")
+    meta[4].metric("❤️ 命中", f"{sum(1 for p in result.days for d in p.dishes if d.recipe_id in liked_ids)} 道")
+    if result.llm_error:
+        st.caption(f"ℹ️ {result.llm_error}（已自动切换确定性排菜，结果仍可用）")
+
+    if liked_now or hated_now:
+        st.markdown(
+            f"<div class='pref-bar'>当前口味档案：❤️ {('、'.join(liked_now) or '—')}"
+            f" ｜ 🚫 {('、'.join(hated_now) or '—')}</div>", unsafe_allow_html=True)
+
+    # ---- 每日菜单 + 逐道反馈
+    feedback = None
+    st.subheader("🗓️ 每日菜单")
+    st.caption("觉得哪道菜不错点 **❤️**；不合口味点 **🚫**（会立刻换掉并记住）。再点一次可取消。")
+    tabs = st.tabs([f"第 {i} 天" for i in range(1, len(result.days) + 1)])
+    for tab, plan in zip(tabs, result.days):
+        with tab:
+            total_day = 0.0
+            for dish in plan.dishes:
+                r = db.by_id(dish.recipe_id)
+                if r is None:
+                    continue
+                total_day += r.cost_yuan * c.people / 2.0
+                is_loved = r.name in liked_now
+                is_hated = r.name in hated_now
+                chips = [f"<span class='chip'>{r.category}</span>",
+                         f"<span class='chip'>{r.spice_level}</span>",
+                         f"<span class='chip'>⏱ {r.time_min}min</span>",
+                         f"<span class='chip'>¥{r.cost_yuan}</span>"]
+                chips += [f"<span class='chip chip-green'>{t}</span>" for t in r.goal_tags]
+                chips += [f"<span class='chip chip-red'>{a}</span>" for a in r.allergens]
+                if is_loved:
+                    chips.insert(0, "<span class='chip chip-pink'>❤️ 已收藏</span>")
+
+                row = st.columns([4, 1, 1])
+                with row[0]:
+                    st.markdown(
+                        f"<div class='dish-card{' loved' if is_loved else (' hated' if is_hated else '')}'>"
+                        f"<div class='dish-name'>{r.name}</div>"
+                        f"<div class='dish-meta'>{''.join(chips)}</div>"
+                        f"<div class='dish-reason'>💡 {dish.reason or '—'}</div>"
+                        f"</div>", unsafe_allow_html=True)
+                with row[1]:
+                    if st.button("✅ 已喜欢" if is_loved else "❤️ 喜欢",
+                                 key=f"like_{plan.day}_{dish.recipe_id}",
+                                 use_container_width=True, help="合口味：以后多安排这道菜"):
+                        feedback = (r.name, "like")
+                with row[2]:
+                    if st.button("⛔ 已排除" if is_hated else "🚫 不喜欢",
+                                 key=f"hate_{plan.day}_{dish.recipe_id}",
+                                 use_container_width=True, help="不合口味：换掉并记住"):
+                        feedback = (r.name, "dislike")
+            st.caption(f"本天预计花费 ¥{total_day:.0f}" +
+                       (f" / 预算 ¥{c.budget_per_person_day * c.people:.0f}" if c.budget_per_person_day else ""))
+
+    # 处理反馈：先存档案再重排（菜单始终保留，不会出现空白页）
+    if feedback:
+        name, action = feedback
+        prof.set_feedback(name, action, KNOWN_NAMES)
+        st.session_state["stale"] = True
+        st.toast("❤️ 已记住：喜欢这道菜" if action == "like" else "🚫 已记住：这道菜不再出现")
+        st.rerun()
+
+    # ---- 买菜清单
+    st.subheader("🛒 买菜清单")
+    if result.shopping:
+        need = [s for s in result.shopping if s.needed]
+        have = [s for s in result.shopping if not s.needed]
+        cols = st.columns(3)
+        for idx, cat in enumerate(DISPLAY_CATEGORIES):
+            items = [s for s in need if s.category == cat]
+            if not items:
                 continue
-            total_day += r.cost_yuan * c.people / 2.0
-            rname = r.name
-            is_loved = rname in liked_ids
-            is_hated = rname in disliked_ids
-            chips = [f"<span class='chip'>{r.category}</span>",
-                     f"<span class='chip'>{r.spice_level}</span>",
-                     f"<span class='chip'>⏱ {r.time_min}min</span>",
-                     f"<span class='chip'>¥{r.cost_yuan}</span>"]
-            chips += [f"<span class='chip chip-green'>{t}</span>" for t in r.goal_tags]
-            chips += [f"<span class='chip chip-red'>{a}</span>" for a in r.allergens]
-            if is_loved:
-                chips.insert(0, "<span class='chip chip-pink'>❤️ 已收藏</span>")
+            with cols[idx % 3]:
+                st.markdown(f"**{cat}**")
+                for it in items:
+                    st.markdown(f"- ✅ {it.name}（{it.amount}）")
+                    st.caption(f"  ↳ 用于：{'、'.join(it.for_recipes[:3])}")
+        if have:
+            st.caption("🏠 已有库存覆盖： " + "、".join(s.name for s in have[:20]))
+    else:
+        st.warning("暂无需要采购的食材。")
 
+    # ---- 校验与过程
+    with st.expander("🔍 确定性校验报告与执行轨迹"):
+        if result.issues:
+            for i in result.issues:
+                st.markdown(f"- {'❌' if i.level == 'error' else '⚠️'} {i.message}")
+        else:
+            st.success("无任何校验问题 ✅")
+        for t in result.trace:
+            st.markdown(f"- `{t}`")
+        st.caption(f"约束命中率 100%（硬约束）· 单次耗时 {result.latency_sec:.1f}s · "
+                   f"覆盖菜谱 {result.candidate_count} 道")
+
+    c1, c2 = st.columns([1, 3])
+    with c1:
+        if st.button("🔄 按当前口味重新排一版", use_container_width=True):
+            st.session_state["stale"] = True
+            st.rerun()
+    with c2:
+        st.caption("口味档案有改动时菜单会自动更新；也可以去「❤️ 我的口味档案」页统一管理。")
+
+
+# ================================================================ 页面 2：口味档案
+def render_profile() -> None:
+    st.title("❤️ 我的口味档案")
+    st.caption("不知道自己喜欢什么很正常 —— 这里可以从整个菜谱库里慢慢挑；"
+               "也可以先去「🍽️ 菜单规划」生成一版，边看具体菜边点 ❤️/🚫。")
+
+    liked = prof.liked_names(KNOWN_NAMES)
+    disliked = prof.disliked_names(KNOWN_NAMES)
+
+    m = st.columns(4)
+    m[0].metric("菜谱库", f"{len(db.recipes)} 道")
+    m[1].metric("❤️ 喜欢", f"{len(liked)} 道")
+    m[2].metric("🚫 不喜欢", f"{len(disliked)} 道")
+    m[3].metric("未表态", f"{len(db.recipes) - len(liked) - len(disliked)} 道")
+
+    tab1, tab2 = st.tabs(["📝 逐道挑选", "👀 查看我现有的档案"])
+
+    with tab1:
+        st.markdown("**按分类浏览，直接标记喜欢 / 不喜欢**")
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            kw = st.text_input("🔍 搜索菜名/主料", placeholder="例如：鸡、豆腐、西兰花", key="pf_search")
+        with col_f2:
+            cats = ["全部"] + sorted({r.category for r in db.recipes})
+            cat = st.selectbox("📂 分类筛选", cats, key="pf_cat")
+
+        def match(r) -> bool:
+            if cat != "全部" and r.category != cat:
+                return False
+            if not kw:
+                return True
+            text = r.name + "".join(i.name for i in r.ingredients)
+            return kw.strip() in text
+
+        shown = [r for r in db.recipes if match(r)]
+        st.caption(f"匹配 {len(shown)} 道菜")
+
+        pf_feedback = None
+        for r in shown:
+            is_loved = r.name in liked
+            is_hated = r.name in disliked
             row = st.columns([4, 1, 1])
             with row[0]:
+                state = "❤️ 喜欢" if is_loved else ("🚫 不喜欢" if is_hated else "未表态")
                 st.markdown(
                     f"<div class='dish-card{' loved' if is_loved else (' hated' if is_hated else '')}'>"
-                    f"<div class='dish-name'>{rname}</div>"
-                    f"<div class='dish-meta'>{''.join(chips)}</div>"
-                    f"<div class='dish-reason'>💡 {dish.reason or '—'}</div>"
+                    f"<div class='dish-name'>{r.name}</div>"
+                    f"<div class='dish-meta'><span class='chip'>{r.category}</span>"
+                    f"<span class='chip'>{r.spice_level}</span>"
+                    f"<span class='chip'>⏱ {r.time_min}min</span>"
+                    f"<span class='chip'>¥{r.cost_yuan}</span>"
+                    f"<span class='chip'>{state}</span></div>"
+                    f"<div class='dish-reason'>主料：{'、'.join(i.name for i in r.ingredients[:5])}</div>"
                     f"</div>", unsafe_allow_html=True)
             with row[1]:
-                if st.button("❤️ 喜欢" if not is_loved else "✅ 已喜欢",
-                             key=f"like_{plan.day}_{dish.recipe_id}",
-                             type="secondary", use_container_width=True,
-                             help="合口味：以后多安排这道菜/这类菜"):
-                    feedback_clicked = (dish.recipe_id, "like")
+                if st.button("✅ 已喜欢" if is_loved else "❤️ 喜欢", key=f"pf_like_{r.id}",
+                             use_container_width=True):
+                    pf_feedback = (r.name, "like")
             with row[2]:
-                if st.button("🚫 不喜欢" if not is_hated else "⛔ 已排除",
-                             key=f"hate_{plan.day}_{dish.recipe_id}",
-                             type="secondary", use_container_width=True,
-                             help="不合口味：立即换掉并记住"):
-                    feedback_clicked = (dish.recipe_id, "dislike")
-        st.caption(f"本天预计花费 ¥{total_day:.0f}" +
-                   (f" / 预算 ¥{c.budget_per_person_day * c.people:.0f}" if c.budget_per_person_day else ""))
+                if st.button("⛔ 已排除" if is_hated else "🚫 不喜欢", key=f"pf_hate_{r.id}",
+                             use_container_width=True):
+                    pf_feedback = (r.name, "dislike")
 
-# ---------------------------------------------------------------- 反馈后立即重排
-if feedback_clicked:
-    rid, action = feedback_clicked
-    toggle_feedback(rid, action)
-    msg = "❤️ 已记住：你喜欢这道菜，正在按新口味重新安排…" if action == "like" else \
-          "🚫 已记住：这道菜不会再出现，正在重新安排…"
-    st.toast(msg)
-    st.session_state["feedback_rerun"] = True
-    st.rerun()
+        if pf_feedback:
+            name, action = pf_feedback
+            prof.set_feedback(name, action, KNOWN_NAMES)
+            st.session_state["stale"] = True
+            st.toast("已更新口味档案")
+            st.rerun()
 
-# ---------------------------------------------------------------- 买菜清单
-st.subheader("🛒 买菜清单")
-if result.shopping:
-    need = [s for s in result.shopping if s.needed]
-    have = [s for s in result.shopping if not s.needed]
-    cols = st.columns(3)
-    for idx, cat in enumerate(DISPLAY_CATEGORIES):
-        items = [s for s in need if s.category == cat]
-        if not items:
-            continue
-        with cols[idx % 3]:
-            st.markdown(f"**{cat}**")
-            for it in items:
-                st.markdown(f"- ✅ {it.name}（{it.amount}）")
-                st.caption(f"  ↳ 用于：{'、'.join(it.for_recipes[:3])}")
-    if have:
-        st.caption("🏠 已有库存覆盖（无需购买）：" + "、".join(s.name for s in have[:20]))
+    with tab2:
+        if not liked and not disliked:
+            st.info("档案还是空的。去「📝 逐道挑选」看看，或先在菜单页生成一版再逐道反馈。")
+        if liked:
+            st.markdown(f"**❤️ 喜欢的菜（{len(liked)} 道）**")
+            st.markdown("　".join(f"`{n}`" for n in liked))
+        if disliked:
+            st.markdown(f"**🚫 不喜欢的菜（{len(disliked)} 道）**")
+            st.markdown("　".join(f"`{n}`" for n in disliked))
+        st.divider()
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            if st.button("🧹 清空「喜欢」", use_container_width=True):
+                prof.set_feedback("", "clear_like", KNOWN_NAMES)
+                st.session_state["stale"] = True
+                st.rerun()
+        with c2:
+            if st.button("🧹 清空「不喜欢」", use_container_width=True):
+                prof.set_feedback("", "clear_dislike", KNOWN_NAMES)
+                st.session_state["stale"] = True
+                st.rerun()
+        with c3:
+            if st.button("🗑️ 清空全部档案", use_container_width=True):
+                prof.clear_all()
+                st.session_state["stale"] = True
+                st.rerun()
+        st.caption(f"档案文件：`{prof.profile_path()}`")
+
+
+# ================================================================ 路由
+if page.startswith("🍽️"):
+    render_planner()
 else:
-    st.warning("暂无需要采购的食材（可能库存已覆盖或未排出菜）。")
-
-# ---------------------------------------------------------------- 校验报告 & 过程
-with st.expander("🔍 查看确定性校验报告与修正过程"):
-    if result.issues:
-        for i in result.issues:
-            icon = "❌" if i.level == "error" else "⚠️"
-            st.markdown(f"- {icon} {i.message}")
-    else:
-        st.success("无任何校验问题 ✅")
-    st.markdown("**LangGraph 执行轨迹**")
-    for t in result.trace:
-        st.markdown(f"- `{t}`")
-    st.markdown(f"**客户档案**（data/customer_profile.json）：喜欢 {liked_ids or '—'} ｜ 不喜欢 {disliked_ids or '—'}")
+    render_profile()

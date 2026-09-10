@@ -133,6 +133,36 @@ def main() -> int:
     for t in res.trace:
         print(f"      - {t}")
 
+    print("[7] 客户口味档案（独立模块 + 互斥规则）")
+    from pathlib import Path as _Path
+    _root = _Path(__file__).resolve().parent.parent
+    tmp_dir = _root / ".tmp" / "self_check_profile"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    tmp_profile = tmp_dir / "profile.json"
+    if tmp_profile.exists():
+        tmp_profile.unlink()
+    os.environ["RECIPE_PROFILE_FILE"] = str(tmp_profile)
+    from recipe_planner import profile as prof
+    known = {r.name for r in db.recipes}
+    check("初始档案为空", prof.liked_names(known) == [] and prof.disliked_names(known) == [])
+    prof.set_feedback("宫保鸡丁", "like", known)
+    check("like 写入成功", prof.liked_names(known) == ["宫保鸡丁"])
+    prof.set_feedback("宫保鸡丁", "dislike", known)
+    check("like→dislike 互斥", prof.liked_names(known) == [] and prof.disliked_names(known) == ["宫保鸡丁"])
+    prof.set_feedback("宫保鸡丁", "dislike", known)
+    check("再点 dislike = 取消", prof.disliked_names(known) == [])
+    prof.set_feedback("不存在的一道菜", "like", known)
+    check("未知菜名被过滤", prof.liked_names(known) == [])
+    prof.set_feedback("麻婆豆腐", "like", known)
+    sig1 = prof.profile_signature()
+    prof.set_feedback("", "clear_like", known)
+    check("clear_like 生效", prof.liked_names(known) == [])
+    prof.set_feedback("麻婆豆腐", "dislike", known)
+    check("档案指纹随偏好变化", sig1 != prof.profile_signature())
+    prof.clear_all()
+    check("清空档案生效", prof.liked_names(known) == [] and prof.disliked_names(known) == [])
+    os.environ.pop("RECIPE_PROFILE_FILE", None)
+
     print(f"\n结果: {PASS} 通过, {len(FAIL)} 失败")
     if FAIL:
         print("失败项:", FAIL)

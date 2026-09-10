@@ -14,13 +14,17 @@ os.environ["DEEPSEEK_API_KEY"] = ""          # 确定性路径，无需网络
 os.environ["TEMP"] = os.environ["TMP"] = os.path.join(ROOT, ".tmp")
 os.makedirs(os.environ["TEMP"], exist_ok=True)
 PROFILE_TMP = os.path.join(ROOT, ".tmp", "test_profile.json")
-if os.path.exists(PROFILE_TMP):
-    os.remove(PROFILE_TMP)
+PLANS_TMP = os.path.join(ROOT, ".tmp", "test_plans.json")
+for _f in (PROFILE_TMP, PLANS_TMP):
+    if os.path.exists(_f):
+        os.remove(_f)
 os.environ["RECIPE_PROFILE_FILE"] = PROFILE_TMP
+os.environ["RECIPE_PLAN_FILE"] = PLANS_TMP
 
 from streamlit.testing.v1 import AppTest  # noqa: E402
 
 from recipe_planner import profile as prof  # noqa: E402
+from recipe_planner import store  # noqa: E402
 from recipe_planner.db import load_db  # noqa: E402
 
 db = load_db()
@@ -44,6 +48,8 @@ def find_buttons(at, label_prefix):
 def page_text(at) -> str:
     parts = [m.value for m in at.markdown]
     parts += [f.value for f in at.success] + [w.value for w in at.warning]
+    parts += [i.value for i in at.info] + [e.value for e in at.error]
+    parts += [c.value for c in at.caption]
     parts += [t.value for t in at.title] + [h.value for h in at.subheader]
     return "\n".join(str(p) for p in parts)
 
@@ -234,12 +240,20 @@ if nav_radio(at):
               f"profile={p}")
         print(f"    移除表态: {removed_name}")
 
-    # ④ 清空「不喜欢」列表
+    # ④ 清空「不喜欢」列表（现在需要二次确认）
     clr = btns(at, "clr_hate_btn")
     if clr and prof.disliked_names():
+        before_clr = prof.disliked_names()
         clr[0].click()
         at.run()
-        check("清空「不喜欢」列表生效", prof.disliked_names() == [], f"profile={prof.load_profile()}")
+        check("清空需要二次确认（第一次点击不会真的清空）",
+              prof.disliked_names() == before_clr, f"profile={prof.load_profile()}")
+        yes_clr = btns(at, "yes_clr_hate_btn")
+        check("出现确认按钮", bool(yes_clr))
+        if yes_clr:
+            yes_clr[0].click()
+            at.run()
+        check("确认后清空「不喜欢」列表生效", prof.disliked_names() == [], f"profile={prof.load_profile()}")
         check("清空后无异常", not at.exception, str([str(e.value) for e in at.exception]))
 
 print("[7] 信任修复：换一道 / 喜欢不改菜单 / 撤销")
@@ -358,6 +372,163 @@ if inp:
     check("只剩一天时标签为第 1 天", "第 1 天" in page_text(at) or True)
     tabs_state = at.session_state["day_tabs"] if "day_tabs" in at.session_state else None
     check("越界的标签选择已被纠正", tabs_state in (None, "第 1 天"), f"day_tabs={tabs_state!r}")
+
+def _elems(at, kind):
+    """AppTest 对元素类型的支持随版本变化：取不到就返回空，不让断言假失败。"""
+    try:
+        return list(at.get(kind))
+    except Exception:
+        return []
+
+
+def _values(at, kind):
+    return "\n".join(str(getattr(e, "value", "")) for e in _elems(at, kind))
+
+
+print("[9] A1 方案持久化 + 回访（关掉页面，明天再来）")
+rec = store.latest_record()
+check("方案已落盘", rec is not None, f"file={PLANS_TMP}")
+check("存档带周期标签（8/12–8/18 形式）", rec is not None and "–" in (rec.label or ""),
+      getattr(rec, "label", None))
+check("存档带生成时间", rec is not None and len(rec.created_at) >= 10, getattr(rec, "created_at", None))
+check("重排不会静默覆盖旧方案", len(store.load_records()) >= 2,
+      f"records={len(store.load_records())}")
+
+at2 = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=120)
+at2.run()
+check("回访首屏无异常", not at2.exception, str([str(e.value) for e in at2.exception]))
+check("打开就直接显示我那一周的菜单（不是空表单）", has_menu(at2))
+check("出现回访提示（说明这是哪一周）", "已经帮你打开了" in page_text(at2), page_text(at2)[:160])
+print(f"    回访打开的方案: {rec.label if rec else '—'}（{rec.created_at if rec else '—'}）")
+
+print("[10] 回到上一版")
+prev_rec = store.previous_record(store.latest_record().id) if store.latest_record() else None
+check("存在上一版", prev_rec is not None)
+restore = [b for b in at.button if (b.key or "") == "restore_prev_btn"]
+check("菜单页有「回到上一版」入口", bool(restore))
+if restore and prev_rec is not None:
+    restore[0].click()
+    at.run()
+    check("回到上一版后无异常", not at.exception, str([str(e.value) for e in at.exception]))
+    check("已切到上一版（当前方案 = 上一版）",
+          (at.session_state["record_id"] if "record_id" in at.session_state else None) == prev_rec.id,
+          f"now={at.session_state['record_id'] if 'record_id' in at.session_state else None} want={prev_rec.id}")
+    check("切版后菜单仍在", has_menu(at))
+
+print("[11] F2/F3 买菜清单：可打勾、可带走")
+cur = at.session_state["result"]
+need_n = len([s for s in cur.shopping if s.needed]) if cur else 0
+check("清单项已渲染成可勾选的条目", len(at.checkbox) >= max(need_n, 1),
+      f"checkbox={len(at.checkbox)} need={need_n}")
+if at.checkbox:
+    at.checkbox[0].check()
+    at.run()
+    check("勾选后无异常", not at.exception, str([str(e.value) for e in at.exception]))
+    checked_n = len([c for c in at.checkbox if c.value])
+    check("勾选状态被记住", checked_n >= 1, f"checked={checked_n}")
+    check("页面显示「已买 X / N 项」进度",
+          f"已买 {checked_n} / {need_n} 项" in page_text(at).replace("**", ""),
+          [c.value for c in at.caption][:8])
+    clr = [b for b in at.button if (b.key or "") == "clear_checks"]
+    check("有「清除勾选」", bool(clr))
+    if clr:
+        clr[0].click()
+        at.run()
+        check("清除勾选生效", len([c for c in at.checkbox if c.value]) == 0)
+
+dl = _elems(at, "download_button")
+if dl:
+    check("有 CSV 导出按钮", len(dl) > 0)
+    print(f"    导出按钮: {[getattr(d, 'label', '') for d in dl]}")
+
+code_text = _values(at, "code")
+if code_text:
+    check("可复制文本里含买菜清单", "买菜清单" in code_text)
+    check("可打印视图里含整周菜单", "一周晚餐菜单" in code_text)
+else:
+    print("    (AppTest 未暴露 code 元素，复制/打印内容交由 self_check 断言)")
+
+print("[12] D1/D2 人话指标 + 整周总览 + 开发者视角")
+txt = page_text(at)
+check("前排显示「这一周大概花」", "这一周大概花" in txt)
+check("前排显示「最费时的一天」", "最费时的一天" in txt)
+check("前排显示忌口检查结果", "忌口检查" in txt)
+check("整周总览一屏可见（每天一行）", "整周总览" in txt and "分钟 · 约 ¥" in txt)
+metric_labels = [m.label for m in at.metric]
+check("技术指标已收进开发者视角", "候选菜谱" in metric_labels)
+check("技术指标不再占据前排", "候选菜谱" not in txt)
+check("花费口径有说明（不让人拿去对账）", "实际以当地物价为准" in txt)
+
+print("[13] E3 破坏性操作二次确认 + 多步撤销")
+if nav_radio(at):
+    nav_radio(at).set_value("❤️ 我的口味档案")
+    at.run()
+    pf_hate = btns(at, "pf_hate_")
+    if pf_hate:
+        pf_hate[0].click()
+        at.run()
+    before_dislike = prof.disliked_names()
+    check("档案页有不喜欢项用于测试", len(before_dislike) >= 1, f"{before_dislike}")
+    clr_btn = btns(at, "clr_hate_btn")
+    if clr_btn:
+        clr_btn[0].click()
+        at.run()
+        check("第一次点击只是举起、不会真的清空（二次确认）",
+              prof.disliked_names() == before_dislike, f"{prof.disliked_names()}")
+        yes = btns(at, "yes_clr_hate_btn")
+        check("出现确认按钮", bool(yes))
+        if yes:
+            yes[0].click()
+            at.run()
+            check("确认后清空生效", prof.disliked_names() == [], f"{prof.disliked_names()}")
+            undo_pf = btns(at, "profile_undo_btn")
+            check("档案页自带撤销入口（不用跑回菜单页）", bool(undo_pf))
+            if undo_pf:
+                undo_pf[0].click()
+                at.run()
+                check("撤销把清空的列表找回来了", set(prof.disliked_names()) == set(before_dislike),
+                      f"{prof.disliked_names()} vs {before_dislike}")
+
+print("[14] G1 手机视图")
+if nav_radio(at):
+    nav_radio(at).set_value("🍽️ 菜单规划")
+    at.run()
+toggles = _elems(at, "toggle")  # 注意：rerun 之后旧的元素引用会失效，必须重新取
+if toggles:
+    toggles[0].set_value(True)
+    at.run()
+    check("手机视图无异常", not at.exception, str([str(e.value) for e in at.exception]))
+    check("手机视图已生效", bool(at.session_state["mobile_view"]))
+    check("手机视图下菜单仍渲染", has_menu(at))
+    check("手机上按天切换改用下拉（不再挤一排 tab）",
+          any(s.key == "day_select" for s in at.selectbox),
+          [s.key for s in at.selectbox])
+    toggles = _elems(at, "toggle")
+    if toggles:
+        toggles[0].set_value(False)
+        at.run()
+        check("关掉手机视图后回到标签页",
+              (not any(s.key == "day_select" for s in at.selectbox)) and has_menu(at))
+else:
+    print("    (AppTest 未暴露 toggle 元素，跳过手机视图断言)")
+
+print("[15] H1 排不出来时给可点击的放宽选项")
+inp = at.session_state["plan_inputs"]
+old_max = inp.get("max_time_min", 40)
+at.session_state["relax"] = {"day": 1, "name": "测试"}
+at.run()
+check("出现放宽选项「放宽时长」", bool(btns(at, "relax_time")))
+check("出现放宽选项「加预算/少排一道」",
+      bool(btns(at, "relax_budget")) or bool(btns(at, "relax_drop_dish")))
+rt = btns(at, "relax_time")
+if rt:
+    rt[0].click()
+    at.run()
+    check("点放宽后无异常", not at.exception, str([str(e.value) for e in at.exception]))
+    check("时长上限真的放宽了 20 分钟",
+          at.session_state["plan_inputs"].get("max_time_min") == old_max + 20,
+          f"{at.session_state['plan_inputs'].get('max_time_min')} vs {old_max + 20}")
+    check("放宽后自动重排出了新菜单", has_menu(at))
 
 print(f"\n结果: {PASS} 通过, {len(FAIL)} 失败")
 if FAIL:

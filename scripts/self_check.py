@@ -268,6 +268,141 @@ def main() -> int:
           all(it.name in menu_ings for it in res.shopping),
           f"清单={[it.name for it in res.shopping]} 菜单食材={sorted(menu_ings)}")
 
+    print("[11] 方案存档 store（关掉页面明天再来，这周还是我的那一周）")
+    from datetime import date as _date  # noqa: E402
+    from recipe_planner import store  # noqa: E402
+    plan_dir = _root / ".tmp" / "self_check_plans"
+    plan_dir.mkdir(parents=True, exist_ok=True)
+    tmp_plans = plan_dir / "plans.json"
+    if tmp_plans.exists():
+        tmp_plans.unlink()
+    os.environ["RECIPE_PLAN_FILE"] = str(tmp_plans)
+
+    check("初始状态无存档", store.latest_record() is None)
+    cc_s = UserConstraints(people=2, days=3, dishes_per_day=2, spice_level="不辣")
+    res_s = run_pipeline(cc_s, db)
+    r1 = store.save_plan(res_s, start_date="2026-08-12", change_note="首次生成")
+    got = store.latest_record()
+    check("落盘后能读回来", got is not None and got.id == r1.id)
+    check("周期标签为 8/12–8/18", r1.label == "8/12–8/18", r1.label)
+    check("存档里带着完整菜单（3 天）", got is not None and len(got.result.days) == 3)
+    check("存档里带着买菜清单", got is not None and len(got.result.shopping) > 0)
+
+    r2 = store.save_plan(res_s, start_date="2026-08-19", change_note="重新排了一版")
+    check("重排是追加而不是覆盖", len(store.load_records()) == 2)
+    check("最近一条是最新那版", store.latest_record().id == r2.id)
+    check("能取到上一版", (store.previous_record(r2.id) or r2).id == r1.id)
+    check("最新一版没有更早的版本", store.previous_record(r1.id) is None)
+
+    upd = res_s.model_copy(deep=True)
+    upd.days[0].dishes = upd.days[0].dishes[:-1]
+    store.update_result(r2.id, upd, "换了一道菜")
+    check("就地更新写回存档（换一道后刷新不丢）",
+          len(store.get_record(r2.id).result.days[0].dishes) == len(res_s.days[0].dishes) - 1)
+    check("更新不会连累其他版本",
+          len(store.get_record(r1.id).result.days[0].dishes) == len(res_s.days[0].dishes))
+
+    store.save_plan(res_s, start_date="2026-08-26")
+    store.save_plan(res_s, start_date="2026-09-02")
+    check(f"存档只保留最近 {store.MAX_PLANS} 份", len(store.load_records()) == store.MAX_PLANS)
+    check("存档文件写在指定路径", tmp_plans.exists() and tmp_plans.stat().st_size > 100)
+
+    tmp_plans.write_text("{ 这不是合法 json", encoding="utf-8")
+    check("坏掉的存档文件不会让页面崩", store.load_records() == [])
+    tmp_plans.write_text('{"version":1,"plans":[{"id":"x"}]}', encoding="utf-8")
+    check("缺字段的单条被跳过而不是整体崩", store.load_records() == [])
+    os.environ.pop("RECIPE_PLAN_FILE", None)
+
+    check("周期标签能跨月", store.week_label("2026-08-31") == "8/31–9/6", store.week_label("2026-08-31"))
+    check("默认从下周一开始（周六生成→下周一）",
+          store.next_monday(_date(2026, 8, 8)).isoformat() == "2026-08-10")
+    check("默认从下周一开始（周一生成→下周一，不排今天）",
+          store.next_monday(_date(2026, 8, 10)).isoformat() == "2026-08-17")
+    back = store.inputs_from_constraints(res_s.constraints, "2026-08-12")
+    check("回访能还原需求（人数/天数/开始日期）",
+          back["people"] == 2 and back["days"] == 3 and back["start_date"] == "2026-08-12", str(back))
+
+    print("[12] 报告：人话摘要 + 清单导出 / 可打印")
+    from recipe_planner import reporting as rep  # noqa: E402
+    cc_r = UserConstraints(people=4, days=2, dishes_per_day=2, spice_level="不辣",
+                           budget_per_person_day=30.0, goal="减脂",
+                           pantry_items=["鸡蛋"], liked_dishes=["r01"])
+    res_r = run_pipeline(cc_r, db)
+    sm = rep.plan_summary(res_r, db, "2026-08-12")
+    check("摘要：天数与菜数正确",
+          sm.days == 2 and sm.dishes == sum(len(p.dishes) for p in res_r.days))
+    check("摘要：总花费与菜单一致", abs(sm.total_cost - res_r.estimated_cost_yuan) < 0.01,
+          f"{sm.total_cost} vs {res_r.estimated_cost_yuan}")
+    check("摘要：周预算=每人每天×人数×天数", sm.budget_total == 30.0 * 4 * 2, str(sm.budget_total))
+    check("摘要：最费时的一天确实是天数里最长的",
+          sm.hardest_minutes == max(rep.day_minutes(p, db) for p in res_r.days),
+          f"{sm.hardest_minutes}")
+    check("摘要：收藏命中数正确",
+          sm.liked_hit == sum(1 for p in res_r.days for d in p.dishes
+                              if d.recipe_id in set(cc_r.liked_dishes)))
+    check("摘要：给出每天的日期与星期（便于贴冰箱）",
+          len(sm.rows) == 2 and sm.rows[0].weekday == "周三" and sm.rows[0].date_label == "8/12",
+          f"{sm.rows[0].weekday if sm.rows else None}")
+
+    soup = next(r for r in db.recipes if r.category == "汤")
+    cold = next(r for r in db.recipes if r.category == "凉菜")
+    quick = next(r for r in db.recipes if r.category == "热菜" and r.time_min <= 20)
+    order_plan = DayPlan(day=1, dishes=[ChosenDish(recipe_id=quick.id),
+                                        ChosenDish(recipe_id=cold.id),
+                                        ChosenDish(recipe_id=soup.id)])
+    lines, has_slow = rep.cook_order(order_plan, db)
+    check("下锅顺序：汤/炖菜先上火", len(lines) == 3 and soup.name in lines[0], str(lines))
+    check("下锅顺序：凉菜最后拌", cold.name in lines[-1], str(lines))
+    check("有汤时说明可以并行（不只报一个总数）", has_slow is True)
+
+    rows = rep.shopping_rows(res_r)
+    csv_text = rep.shopping_csv(res_r)
+    check("CSV 带 BOM（Excel 打开不乱码）", csv_text.startswith("\ufeff"))
+    check("CSV 表头正确", csv_text.splitlines()[0].lstrip("\ufeff") == "分类,食材,数量,是否已买,用于",
+          csv_text.splitlines()[0])
+    check("CSV 行数=采购项数", len(csv_text.strip().splitlines()) == len(rows) + 1)
+    check("库存已覆盖的食材不进采购清单",
+          all(not any(s.name == r["食材"] and not s.needed for s in res_r.shopping) for r in rows))
+    if rows:
+        check("勾选后 CSV 会标注已买",
+              "✅ 已买" in rep.shopping_csv(res_r, {rows[0]["食材"]}))
+    check("复制文本里带勾选框（可发微信）",
+          "[ ]" in rep.shopping_text(res_r) and "买菜清单" in rep.shopping_text(res_r))
+    ptxt = rep.printable_text(res_r, db, "2026-08-12")
+    check("打印视图含整周菜单", "一周晚餐菜单（8/12–8/18）" in ptxt, ptxt[:40])
+    check("打印视图每天一行", "第 1 天" in ptxt and "第 2 天" in ptxt)
+    check("打印视图含买菜清单", "买菜清单" in ptxt)
+    check("花费口径写在付钱的地方", "实际以当地物价为准" in ptxt)
+
+    print("[13] 生成过程：阶段反馈 + 可真的取消")
+    import time as _time  # noqa: E402
+    from recipe_planner.progress import PlanJob  # noqa: E402
+    job = PlanJob(UserConstraints(people=2, days=2, dishes_per_day=2, spice_level="不辣"), db).start()
+    check("后台任务能跑完", job.wait(60) and job.done)
+    check("后台任务产出结果", job.result is not None)
+    check("阶段反馈覆盖了挑菜/搭配/校验/清单",
+          {"retrieve", "plan", "validate", "shopping", "answer"} <= set(job.stages_seen),
+          str(job.stages_seen))
+    check("结束时给出完成文案", job.stage.startswith("✅"), job.stage)
+
+    class _SlowGraph:
+        """假图：让每个阶段慢一点，用来验证「停止」真的能停下来。"""
+
+        def stream(self, init, stream_mode="updates"):
+            for node in ["retrieve", "plan", "validate", "repair", "shopping"]:
+                _time.sleep(0.15)
+                yield {node: {}}
+
+    job2 = PlanJob(UserConstraints(people=2, days=1), db,
+                   graph_factory=lambda _db: _SlowGraph()).start()
+    _time.sleep(0.3)
+    job2.cancel()
+    job2.wait(10)
+    check("取消后任务会停下来", job2.done)
+    check("取消后不产出结果", job2.cancelled and job2.result is None,
+          f"cancelled={job2.cancelled} result={job2.result}")
+    check("取消后文案是「已停止」", job2.stage.startswith("⏹️"), job2.stage)
+
     print(f"\n结果: {PASS} 通过, {len(FAIL)} 失败")
     if FAIL:
         print("失败项:", FAIL)

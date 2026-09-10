@@ -4,6 +4,9 @@
 # 客户个人档案（含喜好，不入库）
 data/customer_profile.json
 
+# 客户方案存档（这一周的菜单，不入库）
+data/saved_plans.json
+
 # python
 __pycache__/
 *.pyc

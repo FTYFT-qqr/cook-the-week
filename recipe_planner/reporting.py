@@ -212,3 +212,70 @@ def printable_text(result: PlanResult, db: RecipeDB, start_date=None,
         shopping_text(result, checked, label),
     ]
     return "\n".join(lines)
+
+
+def structure_line(result: PlanResult, db: RecipeDB) -> str:
+    """E-06：一句话说清这一周的结构（几荤几素几汤），不用客户自己数。"""
+    meat = veg = soup = 0
+    for p in result.days:
+        for d in p.dishes:
+            r = db.by_id(d.recipe_id)
+            if r is None:
+                continue
+            if r.category == "汤":
+                soup += 1
+            elif r.category in {"肉蛋", "水产", "豆制品"} or any(
+                i.category in {"肉蛋", "水产", "豆制品"} for i in r.ingredients
+            ):
+                meat += 1
+            else:
+                veg += 1
+    parts = []
+    if meat:
+        parts.append(f"{meat} 道荤")
+    if veg:
+        parts.append(f"{veg} 道素")
+    if soup:
+        parts.append(f"{soup} 道汤")
+    return "、".join(parts) if parts else "—"
+
+
+def printable_html(result: PlanResult, db: RecipeDB, start_date=None,
+                   checked: set[str] | None = None) -> str:
+    """A4 单页打印版式（第二篇 4.9 / V-12）：上半周菜单表格，下半两栏带方框清单。
+
+    黑白友好：不靠颜色，靠边框与方框。样式类（.a4-*）定义在 app.py 的样式表里。
+    """
+    summary = plan_summary(result, db, start_date)
+    c = result.constraints
+    label = store.week_label(start_date)
+    rows = "".join(
+        f"<tr><td>{r.weekday}</td><td>{r.date_label}</td>"
+        f"<td>{'、'.join(r.dishes) or '—'}</td>"
+        f"<td class='a4-n'>{r.minutes} 分钟</td><td class='a4-n'>¥{r.cost:.0f}</td></tr>"
+        for r in summary.rows
+    )
+    items = shopping_rows(result, checked)
+    boxes = "".join(
+        f"<div class='a4-item'>{'☑' if row['是否已买'] else '□'} {row['食材']}"
+        f"<span class='a4-amt'>{row['数量']}</span></div>"
+        for row in items
+    ) or "<div class='a4-item'>（这一周无需采购）</div>"
+    budget = f"预算 ¥{summary.budget_total:.0f}" if summary.budget_total else "未设预算"
+    return (
+        "<div class='a4'>"
+        "<div class='a4-title'>本周晚餐菜单</div>"
+        f"<div class='a4-sub'>{label}　{c.people} 人　每顿 {c.dishes_per_day} 道菜　"
+        f"共 {summary.dishes} 道</div>"
+        "<table class='a4-table'>"
+        "<thead><tr><th>周几</th><th>日期</th><th>菜名</th><th>用时</th><th>金额</th></tr></thead>"
+        f"<tbody>{rows}</tbody>"
+        "<tfoot><tr><td colspan='4'>合计</td>"
+        f"<td class='a4-n'>¥{summary.total_cost:.0f}</td></tr></tfoot>"
+        "</table>"
+        "<div class='a4-title2'>买菜清单（买一样划一样）</div>"
+        f"<div class='a4-cols'>{boxes}</div>"
+        f"<div class='a4-foot'>本周预计 ¥{summary.total_cost:.0f}　{budget}　·　"
+        "按菜谱 2 人份单价折算，实际以当地物价为准</div>"
+        "</div>"
+    )

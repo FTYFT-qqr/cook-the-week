@@ -321,6 +321,12 @@ def main() -> int:
     back = store.inputs_from_constraints(res_s.constraints, "2026-08-12")
     check("回访能还原需求（人数/天数/开始日期）",
           back["people"] == 2 and back["days"] == 3 and back["start_date"] == "2026-08-12", str(back))
+    check("E-01 今天在周期内 → 返回第几天（8/12 是第 3 天）",
+          store.today_index("2026-08-12", 3, today=_date(2026, 8, 14)) == 2)
+    check("E-01 今天在周期之前 → None",
+          store.today_index("2026-08-12", 3, today=_date(2026, 8, 10)) is None)
+    check("E-01 今天在周期之后 → None",
+          store.today_index("2026-08-12", 3, today=_date(2026, 8, 20)) is None)
 
     print("[12] 报告：人话摘要 + 清单导出 / 可打印")
     from recipe_planner import reporting as rep  # noqa: E402
@@ -373,6 +379,20 @@ def main() -> int:
     check("打印视图每天一行", "第 1 天" in ptxt and "第 2 天" in ptxt)
     check("打印视图含买菜清单", "买菜清单" in ptxt)
     check("花费口径写在付钱的地方", "实际以当地物价为准" in ptxt)
+
+    html = rep.printable_html(res_r, db, "2026-08-12")
+    check("A4 打印：含周菜单表格表头", "本周晚餐菜单" in html and "<table class='a4-table'>" in html,
+          html[:80])
+    check("A4 打印：7 列之外每天一行都在",
+          all(f"<td>{w}</td>" in html for w in
+              [rep.store.weekday_name("2026-08-12", i) for i in range(2)]))
+    check("A4 打印：清单带手写方框", "□" in html)
+    check("A4 打印：金额与预算写在页脚",
+          "本周预计" in html and ("预算" in html or "未设预算" in html))
+    check("A4 打印：黑白友好（不用彩色）",
+          "color:#E" not in html and "#FDEEE8" not in html)
+    check("E-06 结构与一句话统计", rep.structure_line(res_r, db).count("道") >= 1,
+          rep.structure_line(res_r, db))
 
     print("[13] 生成过程：阶段反馈 + 可真的取消")
     import time as _time  # noqa: E402

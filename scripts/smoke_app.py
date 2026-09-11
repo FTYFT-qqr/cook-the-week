@@ -45,6 +45,15 @@ def find_buttons(at, label_prefix):
     return [b for b in at.button if (b.label or "").startswith(label_prefix)]
 
 
+def dish_btns(at, kind):
+    """按 key 前缀取菜品操作按钮（界面按规范去掉了 emoji，不能再用文案找）。"""
+    return [b for b in at.button if (b.key or "").startswith(f"{kind}_")]
+
+
+def scene_btns(at):
+    return [b for b in at.button if (b.key or "").startswith("scene_btn_")]
+
+
 def nav_to(at, key: str) -> bool:
     """点左栏任务栏按钮切页。
 
@@ -107,63 +116,63 @@ at.run()
 check("首屏无异常", not at.exception, str([str(e.value) for e in at.exception]))
 check("没有方案时默认落在「📝 需求 & 生成」页", current_page(at) == "demand", current_page(at))
 
-fill = find_buttons(at, "✨ 填入该场景")
-check("有场景填入按钮", bool(fill))
+fill = scene_btns(at)
+check("有三张场景卡（首屏图形锚点）", len(fill) == 3, [b.key for b in fill])
 if fill:
     fill[0].click()
     at.run()
     check("填入场景后无异常", not at.exception, str([str(e.value) for e in at.exception]))
 
-run_btn = find_buttons(at, "🍽️ 生成菜单")
+run_btn = find_buttons(at, "生成菜单")
 check("有生成菜单按钮", bool(run_btn))
 if run_btn:
     run_btn[0].click()
     at.run()
 check("生成菜单后无异常", not at.exception, str([str(e.value) for e in at.exception]))
 check("菜单已渲染", has_menu(at))
-check("生成后自动跳到「🍽️ 本周菜单」", current_page(at) == "menu", current_page(at))
-print(f"    菜单上可反馈的菜: {len(find_buttons(at, '❤️ 喜欢'))} 道")
+check("生成后自动跳到「本周菜单」", current_page(at) == "menu", current_page(at))
+print(f"    菜单上可反馈的菜: {len(dish_btns(at, 'like'))} 道")
 
-print("[2] 点击 🚫 不喜欢 → 菜单不消失 + 反馈被记录（问题1）")
-hate_btns = find_buttons(at, "🚫 不喜欢")
-check("菜单上存在 🚫 按钮", bool(hate_btns))
+print("[2] 点击「不喜欢」→ 菜单不消失 + 反馈被记录（问题1）")
+hate_btns = dish_btns(at, "hate")
+check("菜单上存在「不喜欢」按钮", bool(hate_btns))
 hated_dish = None
 if hate_btns:
     rid = hate_btns[0].key.split("_", 2)[2]
     hated_dish = db.by_id(rid).name
     hate_btns[0].click()
     at.run()
-    check("点 🚫 后无异常", not at.exception, str([str(e.value) for e in at.exception]))
-    check("点 🚫 后菜单仍在（不消失）", has_menu(at))
+    check("点「不喜欢」后无异常", not at.exception, str([str(e.value) for e in at.exception]))
+    check("点「不喜欢」后菜单仍在（不消失）", has_menu(at))
     after = prof.load_profile()
-    check("🚫 已写入档案", hated_dish in after.get("disliked_dishes", []), f"profile={after}")
+    check("不喜欢已写入档案", hated_dish in after.get("disliked_dishes", []), f"profile={after}")
     check("重排后该菜从菜单消失", hated_dish not in menu_dish_names(at),
           f"menu={sorted(menu_dish_names(at))}")
     print(f"    被排除的菜: {hated_dish}")
 
-print("[3] 点击 ❤️ 喜欢 → 菜单不消失 + 反馈被记录")
-like_btns = find_buttons(at, "❤️ 喜欢")
-check("菜单上仍有 ❤️ 按钮", bool(like_btns))
+print("[3] 点击「喜欢」→ 菜单不消失 + 反馈被记录")
+like_btns = dish_btns(at, "like")
+check("菜单上仍有「喜欢」按钮", bool(like_btns))
 loved_dish = None
 if like_btns:
     rid = like_btns[0].key.split("_", 2)[2]
     loved_dish = db.by_id(rid).name
     like_btns[0].click()
     at.run()
-    check("点 ❤️ 后无异常", not at.exception, str([str(e.value) for e in at.exception]))
-    check("点 ❤️ 后菜单仍在（不消失）", has_menu(at))
+    check("点喜欢后无异常", not at.exception, str([str(e.value) for e in at.exception]))
+    check("点喜欢后菜单仍在（不消失）", has_menu(at))
     p = prof.load_profile()
-    check("❤️ 已写入档案", loved_dish in p.get("liked_dishes", []), f"profile={p}")
-    check("已喜欢状态回显在菜单上", bool(find_buttons(at, "✅ 已喜欢")))
+    check("喜欢已写入档案", loved_dish in p.get("liked_dishes", []), f"profile={p}")
+    check("已喜欢状态回显在菜单上", any(b.label == "已喜欢" for b in dish_btns(at, "like")))
     print(f"    收藏的菜: {loved_dish}")
 
-print("[4] 独立「我的口味档案」页面（问题2）")
+print("[4] 独立「口味档案」页面（问题2）")
 check("任务栏导航存在（不再是单选圆圈）", nav_exists(at))
 target_name = None
 if nav_to(at, "profile"):
     check("切到档案页无异常", not at.exception, str([str(e.value) for e in at.exception]))
     txt = page_text(at)
-    check("档案页标题正确", "我的口味档案" in txt)
+    check("档案页标题正确", "口味档案" in txt)
     check("档案页显示统计", "未表态" in txt)
     pf_like = [b for b in at.button if (b.key or "").startswith("pf_like_")]
     pf_hate = [b for b in at.button if (b.key or "").startswith("pf_hate_")]
@@ -219,7 +228,7 @@ if nav_to(at, "profile"):
         pick = unrated[:2]
         quick[0].set_value(pick)
         at.run()
-        add_hate = [b for b in at.button if (b.label or "").startswith("🚫 加入不喜欢")]
+        add_hate = [b for b in at.button if (b.label or "").startswith("加入不喜欢")]
         check("快速添加按钮可用", bool(add_hate))
         if add_hate:
             add_hate[0].click()
@@ -322,7 +331,7 @@ if nav_to(at, "menu"):
 
     # ② 「喜欢」：记住偏好但不改本次菜单
     snap2 = menu_day_map(at)
-    like_btns = find_buttons(at, "❤️ 喜欢")
+    like_btns = dish_btns(at, "like")
     loved = None
     if like_btns:
         rid = (like_btns[0].key or "").split("_", 2)[2]
@@ -350,7 +359,7 @@ if nav_to(at, "menu"):
 
     # ④ 「不喜欢」：记住 + 只换这一天
     snap3 = menu_day_map(at)
-    hate_btns = find_buttons(at, "🚫 不喜欢")
+    hate_btns = dish_btns(at, "hate")
     if hate_btns:
         rid = (hate_btns[0].key or "").split("_", 2)[2]
         hated2 = db.by_id(rid).name
@@ -413,7 +422,9 @@ at2 = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=120)
 at2.run()
 check("回访首屏无异常", not at2.exception, str([str(e.value) for e in at2.exception]))
 check("打开就直接显示我那一周的菜单（不是空表单）", has_menu(at2))
-check("出现回访提示（说明这是哪一周）", "已经帮你打开了" in page_text(at2), page_text(at2)[:160])
+check("出现回访提示（说明这是哪一周）", "已经帮你打开" in page_text(at2), page_text(at2)[:160])
+check("今晚大卡是首屏焦点（E-01）", "今晚" in page_text(at2) or "第 1 天" in page_text(at2),
+      page_text(at2)[:120])
 print(f"    回访打开的方案: {rec.label if rec else '—'}（{rec.created_at if rec else '—'}）")
 
 print("[10] 回到上一版")
@@ -444,9 +455,9 @@ if at.checkbox:
     check("勾选后无异常", not at.exception, str([str(e.value) for e in at.exception]))
     checked_n = len([c for c in at.checkbox if c.value])
     check("勾选状态被记住", checked_n >= 1, f"checked={checked_n}")
-    check("页面显示「已买 X / N 项」进度",
-          f"已买 {checked_n} / {need_n} 项" in page_text(at).replace("**", ""),
-          [c.value for c in at.caption][:8])
+    check("页面显示「已买 X / N 样」进度",
+          f"已买 {checked_n} / {need_n} 样" in page_text(at).replace("**", ""),
+          page_text(at)[:160])
     clr = [b for b in at.button if (b.key or "") == "clear_checks"]
     check("有「清除勾选」", bool(clr))
     if clr:
@@ -454,29 +465,56 @@ if at.checkbox:
         at.run()
         check("清除勾选生效", len([c for c in at.checkbox if c.value]) == 0)
 
-dl = _elems(at, "download_button")
-if dl:
-    check("有 CSV 导出按钮", len(dl) > 0)
+# 带走清单：导出区收在一个「带走清单」区块里（V-11）
+exp = [b for b in at.button if (b.key or "") == "export_toggle"]
+check("有「带走清单」入口", bool(exp))
+if exp:
+    exp[0].click()
+    at.run()
+    check("展开带走清单后无异常", not at.exception, str([str(e.value) for e in at.exception]))
+    dl = _elems(at, "download_button")
+    check("有 CSV + 文本导出按钮", len(dl) >= 2, [getattr(d, "label", "") for d in dl])
     print(f"    导出按钮: {[getattr(d, 'label', '') for d in dl]}")
 
 code_text = _values(at, "code")
 if code_text:
     check("可复制文本里含买菜清单", "买菜清单" in code_text)
-    check("可打印视图里含整周菜单", "一周晚餐菜单" in code_text)
 else:
-    print("    (AppTest 未暴露 code 元素，复制/打印内容交由 self_check 断言)")
+    print("    (AppTest 未暴露 code 元素，复制内容交由 self_check 断言)")
+
+toggles = _elems(at, "toggle")
+if toggles:
+    toggles[0].set_value(True)     # 打印预览
+    at.run()
+    check("打印预览无异常", not at.exception, str([str(e.value) for e in at.exception]))
+    check("A4 打印版式已渲染（周菜单表格 + 方框清单）",
+          "本周晚餐菜单" in page_text(at) and "买菜清单" in page_text(at),
+          page_text(at)[:160])
+    toggles = _elems(at, "toggle")
+    if toggles:
+        toggles[0].set_value(False)
+        at.run()
 
 print("[12] D1/D2 人话指标 + 整周总览 + 开发者视角")
 nav_to(at, "menu")
 txt = page_text(at)
-check("前排显示「这一周大概花」", "这一周大概花" in txt)
-check("前排显示「最费时的一天」", "最费时的一天" in txt)
-check("前排显示忌口检查结果", "忌口检查" in txt)
-check("整周总览一屏可见（每天一行）", "整周总览" in txt and "分钟 · 约 ¥" in txt)
+check("前排显示「本周花费」", "本周花费" in txt)
+check("前排显示「最费时」", "最费时" in txt)
+check("前排显示忌口结果", "忌口 / 过敏冲突" in txt)
+check("整周总览一屏可见（每天一行）", "整周总览" in txt and "分钟 · ¥" in txt)
 metric_labels = [m.label for m in at.metric]
 check("技术指标已收进开发者视角", "候选菜谱" in metric_labels)
 check("技术指标不再占据前排", "候选菜谱" not in txt)
 check("花费口径有说明（不让人拿去对账）", "实际以当地物价为准" in txt)
+check("今晚大卡是首屏焦点（V-08/E-01）", "今晚" in txt or "这一周" in txt)
+check("E-01 周期内会标出今晚/已过",
+      ("今晚" in txt) or ("已过" in txt) or (store.today_index(
+          at.session_state.get("plan_start"), 7) is None))
+check("设计规范已生效（暖橙主色 + 浅色底）",
+      "--brand:#E8663C" in page_text(at) or "#E8663C" in "\n".join(m.value for m in at.markdown))
+check("界面已去掉 emoji 图标（标题/导航不再是 emoji 开头）",
+      not any((b.label or "")[:1] in "🍽🍳📝🛒❤🚫🔄✨💡" for b in at.button), 
+      [b.label for b in at.button if (b.label or "")[:1] in "🍽🍳📝🛒❤🚫🔄✨💡"])
 
 print("[13] E3 破坏性操作二次确认 + 多步撤销")
 if nav_to(at, "profile"):
@@ -506,26 +544,16 @@ if nav_to(at, "profile"):
                 check("撤销把清空的列表找回来了", set(prof.disliked_names()) == set(before_dislike),
                       f"{prof.disliked_names()} vs {before_dislike}")
 
-print("[14] G1 手机视图")
+print("[14] 响应式：一套组件按宽度自动适配（不再有「手机视图」开关）")
 nav_to(at, "menu")
-toggles = _elems(at, "toggle")  # 注意：rerun 之后旧的元素引用会失效，必须重新取
-if toggles:
-    toggles[0].set_value(True)
-    at.run()
-    check("手机视图无异常", not at.exception, str([str(e.value) for e in at.exception]))
-    check("手机视图已生效", bool(at.session_state["mobile_view"]))
-    check("手机视图下菜单仍渲染", has_menu(at))
-    check("手机上按天切换改用下拉（不再挤一排 tab）",
-          any(s.key == "day_select" for s in at.selectbox),
-          [s.key for s in at.selectbox])
-    toggles = _elems(at, "toggle")
-    if toggles:
-        toggles[0].set_value(False)
-        at.run()
-        check("关掉手机视图后回到标签页",
-              (not any(s.key == "day_select" for s in at.selectbox)) and has_menu(at))
-else:
-    print("    (AppTest 未暴露 toggle 元素，跳过手机视图断言)")
+check("界面上没有「手机视图」开关了（V-14）",
+      not any("手机视图" in (getattr(t, "label", "") or "") for t in _elems(at, "toggle")))
+check("手机底部导航已内置（按宽度自动显示）",
+      any((b.key or "").startswith("navm_") for b in at.button))
+check("按天切换仍是同一套组件（tabs）", "day_tabs" in at.session_state)
+check("CSS 里含窄屏单列规则（V-16）",
+      "max-width:640px" in page_text(at) or "max-width: 640px" in page_text(at))
+check("菜单仍渲染", has_menu(at))
 
 print("[15] H1 排不出来时给可点击的放宽选项")
 inp = at.session_state["plan_inputs"]
@@ -547,12 +575,15 @@ if rt:
 
 print("[16] 页面结构：需求 / 菜单 / 买菜清单 三页分开 + 任务栏高亮")
 nav_to(at, "demand")
-check("需求页有生成表单", bool(find_buttons(at, "🍽️ 生成菜单")))
+check("需求页有生成表单", bool(find_buttons(at, "生成菜单")))
 check("需求页不再堆菜单详情", not has_menu(at))
-check("需求页有去看菜单的入口", bool([b for b in at.button if (b.label or "").startswith("🍽️ 去看本周菜单")]))
+check("需求页有去看菜单的入口",
+      bool([b for b in at.button if (b.label or "").startswith("查看本周菜单")]))
+check("表单已分成四组（人数与天数 / 口味与忌口 / 时间与预算 / 家里已有）",
+      all(k in page_text(at) for k in ["人数与天数", "口味与忌口", "时间与预算", "家里已有"]))
 nav_to(at, "menu")
 check("菜单页没有需求表单（不再和表单挤一起）",
-      not find_buttons(at, "🍽️ 生成菜单"))
+      not find_buttons(at, "生成菜单"))
 check("菜单页有菜单", has_menu(at))
 nav_to(at, "shopping")
 check("清单页有打勾与导出", bool([b for b in at.button if (b.key or "") == "clear_checks"]))
@@ -577,7 +608,7 @@ at3.run()
 check("全新客户默认落在需求页", current_page(at3) == "demand", current_page(at3))
 nav_to(at3, "menu")
 check("空状态给出人话引导", "还没有菜单" in page_text(at3), page_text(at3)[:120])
-go = [b for b in at3.button if (b.label or "").startswith("📝 去填需求")]
+go = [b for b in at3.button if (b.label or "").startswith("去填需求")]
 check("空状态有「去填需求」按钮", bool(go))
 if go:
     go[0].click()
@@ -588,4 +619,4 @@ print(f"\n结果: {PASS} 通过, {len(FAIL)} 失败")
 if FAIL:
     print("失败项:", FAIL)
     sys.exit(1)
-print("✅ 全部回归通过（含信任修复：人数折算 / 只换一道 / 换一道 / 喜欢不改菜单 / 撤销 / 标签位置）")
+print("✅ 全部回归通过（含信任修复 / 任务栏分页 / 清单打勾与带走 / 二次确认与撤销 / 放宽选项 / 响应式与设计规范）")

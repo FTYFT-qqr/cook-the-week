@@ -5,3 +5,24 @@ address = "127.0.0.1"
 
 [browser]
 gatherUsageStats = false
+
+[client]
+# 隐藏 Deploy / 汉堡等框架痕迹（第三篇 P-01）
+toolbarMode = "minimal"
+showErrorDetails = "none"
+
+# 设计基调（第二篇 4.1–4.3 / 第三篇 P-10、P-12）
+# 锁定浅色 + 一支暖橙主色 + 暖白底：框架默认红 (#FF4B4B) 从此只用于"危险/错误"
+[theme]
+base = "light"
+primaryColor = "#E8663C"
+backgroundColor = "#FAF8F5"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#1F2937"
+font = "sans serif"
+
+[theme.sidebar]
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F5F1EA"
+textColor = "#1F2937"
+primaryColor = "#E8663C"

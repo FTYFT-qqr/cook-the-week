@@ -181,6 +181,17 @@ def day_date_label(start: Any, day_index: int) -> str:
     return f"{s.month}/{s.day}"
 
 
+def today_index(start: Any, days: int, today: Optional[date] = None) -> Optional[int]:
+    """今天是这一周的第几天（从 0 起）；不在这一周范围内返回 None。
+
+    客户的原话：「我周三打开它，它给我的是第 1 天、第 2 天……没有『今晚轮到第几天』。」
+    """
+    s = normalize_start(start)
+    today = today or date.today()
+    delta = (today - s).days
+    return delta if 0 <= delta < max(days, 0) else None
+
+
 # ---------------------------------------------------------------- 表单回填
 
 def inputs_from_constraints(c: UserConstraints, start_date: Any = None) -> dict:

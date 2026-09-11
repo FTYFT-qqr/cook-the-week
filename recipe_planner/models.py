@@ -107,6 +107,11 @@ class DayPlan(BaseModel):
     day: int
     meal: str = MEAL
     dishes: list[ChosenDish] = []
+    skipped: bool = False  # 客户说「这天不做饭」（E-03）：不排菜、不计花费、不进清单
+    people: Optional[int] = None  # 这一天的临时人数（「来客人了」只改今晚份量，05 M1）
+
+    def recipe_ids(self) -> list[str]:
+        return [d.recipe_id for d in self.dishes]
 
     def recipe_ids(self) -> list[str]:
         return [d.recipe_id for d in self.dishes]

@@ -32,6 +32,8 @@ class PlanRecord(BaseModel):
     start_date: str = ""      # ISO 日期，这一周的第一天（周一）
     label: str = ""           # "8/12–8/18"
     change_note: str = ""     # 最近一次改动的说明
+    done_days: list[int] = []        # 已经做过饭的日子（M1 状态③ / R8 状态可见）
+    checked_items: list[str] = []    # 买菜清单的勾选（M4：关掉浏览器再打开还在）
     result: PlanResult
 
     def constraints(self) -> UserConstraints:
@@ -136,6 +138,34 @@ def delete_record(record_id: str) -> None:
     _write([r for r in load_records() if r.id != record_id])
 
 
+def set_done(record_id: Optional[str], day: int, done: bool = True) -> Optional[PlanRecord]:
+    """标记/取消「这天已经做过了」（M1 状态③）。"""
+    if not record_id:
+        return None
+    recs = load_records()
+    for i, r in enumerate(recs):
+        if r.id == record_id:
+            days = set(r.done_days)
+            days.add(day) if done else days.discard(day)
+            recs[i] = r.model_copy(update={"done_days": sorted(days)})
+            _write(recs)
+            return recs[i]
+    return None
+
+
+def set_checked(record_id: Optional[str], names: list[str]) -> Optional[PlanRecord]:
+    """记住买菜清单的勾选（M4：一周边买边勾，关掉浏览器再打开还在）。"""
+    if not record_id:
+        return None
+    recs = load_records()
+    for i, r in enumerate(recs):
+        if r.id == record_id:
+            recs[i] = r.model_copy(update={"checked_items": sorted(set(names))})
+            _write(recs)
+            return recs[i]
+    return None
+
+
 def archive_summary() -> list[str]:
     return [f"{r.label}（{r.created_at}）" for r in load_records()]
 
@@ -207,5 +237,6 @@ def inputs_from_constraints(c: UserConstraints, start_date: Any = None) -> dict:
         "max_time_min": c.max_time_min,
         "budget_per_person_day": c.budget_per_person_day,
         "pantry_items": list(c.pantry_items),
+        "must_include": list(c.must_include_recipes),   # 被「定住 / 加一道」的菜
         "start_date": normalize_start(start_date).isoformat(),
     }

@@ -21,7 +21,8 @@ def day_minutes(plan: DayPlan, db: RecipeDB) -> int:
 
 
 def day_cost(plan: DayPlan, db: RecipeDB, people: int) -> float:
-    return sum(r.cost_yuan * people / 2.0 for d in plan.dishes if (r := db.by_id(d.recipe_id)))
+    p = plan.people or people        # 「来客人了」只改这一天的份量
+    return sum(r.cost_yuan * p / 2.0 for d in plan.dishes if (r := db.by_id(d.recipe_id)))
 
 
 def day_dish_names(plan: DayPlan, db: RecipeDB) -> list[str]:
@@ -177,7 +178,7 @@ def shopping_text(result: PlanResult, checked: set[str] | None = None,
     """纯文本清单：可以直接复制到微信 / 备忘录。"""
     c = result.constraints
     checked = checked or set()
-    lines = [f"🛒 买菜清单{f'（{label}）' if label else ''} · {c.people} 人 · {c.days} 天"]
+    lines = [f"买菜清单{f'（{label}）' if label else ''} · {c.people} 人 · {c.days} 天"]
     total = 0
     for row in shopping_rows(result, checked):
         total += 1
@@ -187,7 +188,7 @@ def shopping_text(result: PlanResult, checked: set[str] | None = None,
     lines.append(f"—— 共 {total} 项；卖场里买一样划一样 ——")
     have = [s.name for s in result.shopping if not s.needed]
     if have:
-        lines.append("🏠 家里已有，无需购买：" + "、".join(have))
+        lines.append("家里已有，无需购买：" + "、".join(have))
     return "\n".join(lines)
 
 

@@ -423,6 +423,72 @@ def main() -> int:
           f"cancelled={job2.cancelled} result={job2.result}")
     check("取消后文案是「已停止」", job2.stage.startswith("⏹️"), job2.stage)
 
+    print("[14] 说一句改需求（第一篇 E2 / 第二篇 E-03、E-05、E-02）")
+    from recipe_planner import assistant  # noqa: E402
+
+    cc_a = UserConstraints(people=2, days=3, dishes_per_day=2, spice_level="不辣",
+                           budget_per_person_day=60.0, goal="随便")
+    res_a = run_pipeline(cc_a, db)
+    for text, action in [
+        ("周二换成鱼", "swap_day"),
+        ("第 3 天不做饭", "skip_day"),
+        ("周三别做饭了", "skip_day"),
+        ("今天 4 个人吃", "set_people"),
+        ("预算改成 40 元一人一天", "set_budget"),
+        ("每道菜别超过 30 分钟", "set_max_time"),
+        ("帮我省点钱", "cheaper"),
+        ("这周别太素", "more_protein"),
+        ("太油了想吃清爽点", "more_veg"),
+        ("把蒜蓉西兰花定住", "lock_dish"),
+        ("我想吃红烧肉", "add_dish"),
+        ("随便说点什么吧", "unknown"),
+    ]:
+        got = assistant.parse_intent(text, db, cc_a, res_a, 3, today_idx=1, use_llm=False)
+        check(f"听得懂「{text}」→ {action}", got.action == action, f"{got} 期望 {action}")
+
+    before = {p.day: [d.recipe_id for d in p.dishes] for p in res_a.days}
+    used_now = {d.recipe_id for p in res_a.days for d in p.dishes}
+    pick = next(r for r in retrieve_candidates(db, cc_a) if r.id not in used_now)
+    assistant.apply_intent(assistant.Intent("swap_day", day=2, keyword=pick.name), res_a, db)
+    after = {p.day: [d.recipe_id for d in p.dishes] for p in res_a.days}
+    check("换某天的菜：其余天一处没动",
+          all(after[d] == before[d] for d in before if d != 2), f"{before} -> {after}")
+    check("指定的菜进了第 2 天", pick.id in after[2], f"{after[2]} 期望含 {pick.id}")
+
+    cost_before = res_a.estimated_cost_yuan
+    out = assistant.apply_intent(assistant.Intent("skip_day", day=3), res_a, db)
+    check("这天不做饭：当天没菜且带 skipped 标记",
+          res_a.days[2].skipped and not res_a.days[2].dishes)
+    check("不做饭后总花费下降", res_a.estimated_cost_yuan < cost_before)
+    check("回执说清「不计花费」（E1 透明）", "不计花费" in out.text, out.text)
+    out = assistant.apply_intent(assistant.Intent("restore_day", day=3), res_a, db)
+    check("还能改回来（恢复做饭）", not res_a.days[2].skipped and len(res_a.days[2].dishes) > 0)
+
+    menu_before = {p.day: [d.recipe_id for d in p.dishes] for p in res_a.days}
+    old_cost = res_a.estimated_cost_yuan
+    out = assistant.apply_intent(assistant.Intent("set_people", value=4), res_a, db)
+    check("改人数不动菜单本身",
+          {p.day: [d.recipe_id for d in p.dishes] for p in res_a.days} == menu_before)
+    check("改人数后花费按人数翻倍", abs(res_a.estimated_cost_yuan - old_cost * 2) < 1,
+          f"{old_cost} -> {res_a.estimated_cost_yuan}")
+    check("回执说明只改了份量", "4 人" in out.text and "菜单本身没动" in out.text, out.text)
+
+    out = assistant.apply_intent(assistant.Intent("cheaper"), res_a, db)
+    check("省钱模式给的是具体金额或诚实回绝",
+          ("省了约" in out.text) or ("没有明显更省的换法" in out.text), out.text)
+
+    lock_target = db.by_id(menu_before[1][0])
+    out = assistant.apply_intent(assistant.Intent("lock_dish", keyword=lock_target.name), res_a, db)
+    check("定住会写进必做清单并要求重排",
+          out.replan and lock_target.id in res_a.constraints.must_include_recipes, out.text)
+    res_locked = run_pipeline(res_a.constraints.model_copy(deep=True), db)
+    locked_ids = [d.recipe_id for p in res_locked.days for d in p.dishes]
+    check("定住的菜重排之后仍在菜单里", lock_target.id in locked_ids,
+          f"{locked_ids} 期望含 {lock_target.id}")
+
+    out = assistant.apply_intent(assistant.Intent("unknown"), res_a, db)
+    check("听不懂时给例子而不是报错", "没太听懂" in out.text and not out.replan)
+
     print(f"\n结果: {PASS} 通过, {len(FAIL)} 失败")
     if FAIL:
         print("失败项:", FAIL)

@@ -70,11 +70,12 @@ def retrieve_candidates(db: RecipeDB, c: UserConstraints) -> list[Recipe]:
 # ---------------------------------------------------------------- 确定性排菜
 
 def _day_total_cost(plan: DayPlan, db: RecipeDB, c: UserConstraints) -> float:
+    people = plan.people or c.people      # 「来客人了」只改这一天的份量
     total = 0.0
     for dish in plan.dishes:
         r = db.by_id(dish.recipe_id)
         if r:
-            total += r.cost_yuan * c.people / 2.0
+            total += r.cost_yuan * people / 2.0
     return total
 
 
@@ -216,12 +217,12 @@ def validate_plan(plans: list[DayPlan], db: RecipeDB, c: UserConstraints) -> lis
                 seen_ids[dish.recipe_id] = p.day
         # 预算
         if c.budget_per_person_day is not None:
-            limit = c.budget_per_person_day * c.people
+            limit = c.budget_per_person_day * (p.people or c.people)
             if day_total > limit + 1e-6:
                 issues.append(ValidationIssue(level="error", code="over_budget",
                                               message=f"第{p.day}天合计约 {day_total:.1f} 元，超出当日预算 {limit:.1f} 元", day=p.day))
-        # 目标覆盖（软）
-        if c.goal != "随便":
+        # 目标覆盖（软）——「这天不做饭」的日子不检查
+        if c.goal != "随便" and p.dishes:
             day_goals = [r.goal_tags for dish in p.dishes if (r := db.by_id(dish.recipe_id))]
             if not any(c.goal in tg for tg in day_goals):
                 issues.append(ValidationIssue(level="warning", code="goal",
@@ -249,13 +250,13 @@ def shopping_list(plans: list[DayPlan], db: RecipeDB, c: UserConstraints) -> lis
     否则 1 人和 4 人会买到完全一样的量（客户买菜量错误）。
     """
     pantry = {s.strip() for s in c.pantry_items if s and s.strip()}
-    scale = c.people / 2.0
     agg: dict[tuple[str, str], dict] = {}  # (name, category) -> {grams, amount_texts, recipes}
 
     def norm(s: str) -> str:
         return "".join(s.split())
 
     for p in plans:
+        scale = (p.people or c.people) / 2.0     # 每天都可能人数不同（来客人了）
         for dish in p.dishes:
             r = db.by_id(dish.recipe_id)
             if not r:
@@ -282,7 +283,7 @@ def shopping_list(plans: list[DayPlan], db: RecipeDB, c: UserConstraints) -> lis
             amount = f"约 {g / 500:.1f} 斤（{g:.0f} 克）" if g >= 500 else f"约 {g:.0f} 克"
         else:
             amount = "、".join(sorted(set(slot["texts"])))
-            if scale != 1.0:
+            if c.people != 2:
                 amount += f"（按 {c.people} 人调整）"
         items.append(ShoppingItem(name=name, category=cat, amount=amount,
                                   needed=not covered, for_recipes=slot["recipes"]))
@@ -345,3 +346,242 @@ def refresh_result(result, db: RecipeDB):
     result.estimated_cost_yuan = round(total, 2)
     result.final = not any(i.level == "error" for i in result.issues)
     return result
+
+
+# ---------------------------------------------------------------- 人话改菜单（E2 / E-03 / E-05 / E-02）
+# 客户的一句话（"周二换成鱼""这天不做饭""帮我省点"）落到这里变成对菜单的一次具体改动。
+
+def recipes_matching(db: RecipeDB, keyword: str) -> list[Recipe]:
+    """按关键词找菜：菜名 / 主料 / 口味标签 / 类别 里包含这个词就算。"""
+    kw = (keyword or "").strip()
+    if not kw:
+        return []
+    out: list[Recipe] = []
+    for r in db.recipes:
+        text = r.name + r.category + "".join(i.name for i in r.ingredients) + "".join(r.taste_tags)
+        if kw in text:
+            out.append(r)
+    return out
+
+
+def replace_in_day(plans: list[DayPlan], day_no: int, old_id: str, new_recipe: Recipe,
+                   c: UserConstraints) -> list[DayPlan]:
+    """把某天的一道菜换成指定菜，其余各天原样保留。"""
+    out: list[DayPlan] = []
+    for p in plans:
+        if p.day != day_no:
+            out.append(p.model_copy(deep=True))
+            continue
+        dishes = [
+            ChosenDish(recipe_id=new_recipe.id, reason=make_reason(new_recipe, c))
+            if d.recipe_id == old_id else d
+            for d in p.dishes
+        ]
+        out.append(DayPlan(day=p.day, meal=p.meal, dishes=dishes, skipped=p.skipped))
+    return out
+
+
+def candidates_matching(plans: list[DayPlan], day_no: int, keyword: str, db: RecipeDB,
+                        c: UserConstraints, replace_id: str | None = None) -> list[Recipe]:
+    """在「满足硬约束 + 全周不重复 + 不超当天预算」的前提下，找匹配关键词的候选菜。"""
+    allowed = {r.id for r in recipes_matching(db, keyword)}
+    if not allowed:
+        return []
+    used = {d.recipe_id for p in plans for d in p.dishes if d.recipe_id != replace_id}
+    day = next((p for p in plans if p.day == day_no), None)
+    others_cost = 0.0
+    if day is not None:
+        for d in day.dishes:
+            if d.recipe_id == replace_id:
+                continue
+            r = db.by_id(d.recipe_id)
+            if r:
+                others_cost += r.cost_yuan * c.people / 2.0
+    limit = c.budget_per_person_day * c.people if c.budget_per_person_day is not None else None
+    out: list[Recipe] = []
+    for r in retrieve_candidates(db, c):        # 已按软偏好（含"喜欢"加权）排序
+        if r.id in used or r.id not in allowed:
+            continue
+        if limit is not None and others_cost + r.cost_yuan * c.people / 2.0 > limit + 1e-6:
+            continue
+        out.append(r)
+    return out
+
+
+def skip_day(plans: list[DayPlan], day_no: int) -> list[DayPlan]:
+    """「这天不做饭」：清空当天菜品（清单与花费自然跟着变）。"""
+    out: list[DayPlan] = []
+    for p in plans:
+        if p.day == day_no:
+            out.append(DayPlan(day=p.day, meal=p.meal, dishes=[], skipped=True))
+        else:
+            out.append(p.model_copy(deep=True))
+    return out
+
+
+def restore_day(plans: list[DayPlan], day_no: int, db: RecipeDB,
+                c: UserConstraints) -> list[DayPlan]:
+    """把「这天不做饭」改回来：重新给这天挑菜，不与其他天重复、不超当天预算。"""
+    used = {d.recipe_id for p in plans for d in p.dishes}
+    limit = c.budget_per_person_day * c.people if c.budget_per_person_day is not None else None
+    pool = [r for r in retrieve_candidates(db, c) if r.id not in used]
+    picked: list[ChosenDish] = []
+    spent = 0.0
+    need_protein = True
+    while len(picked) < c.dishes_per_day and pool:
+        pool.sort(key=lambda r: (-(recipe_score(r, c) + (3.0 if (need_protein and _has_protein(r)) else 0.0)),
+                                 r.time_min))
+        chosen = None
+        for r in pool:
+            if limit is not None and spent + r.cost_yuan * c.people / 2.0 > limit + 1e-6:
+                continue
+            chosen = r
+            break
+        if chosen is None:
+            break
+        pool.remove(chosen)
+        picked.append(ChosenDish(recipe_id=chosen.id, reason=make_reason(chosen, c)))
+        spent += chosen.cost_yuan * c.people / 2.0
+        if _has_protein(chosen):
+            need_protein = False
+    out: list[DayPlan] = []
+    for p in plans:
+        if p.day == day_no:
+            out.append(DayPlan(day=p.day, meal=p.meal, dishes=picked, skipped=False))
+        else:
+            out.append(p.model_copy(deep=True))
+    return out
+
+
+def _swap_by_rule(plans: list[DayPlan], db: RecipeDB, c: UserConstraints,
+                  chooser) -> tuple[list[DayPlan], int, Recipe, Recipe] | None:
+    """通用：按 chooser(当天菜) 决定要换掉哪道，再找替换菜。"""
+    used = {d.recipe_id for p in plans for d in p.dishes}
+    for p in plans:
+        for d in p.dishes:
+            old = db.by_id(d.recipe_id)
+            if old is None:
+                continue
+            kind = chooser(p, old)
+            if kind is None:
+                continue
+            for cand in retrieve_candidates(db, c):
+                if cand.id in used or cand.id == old.id:
+                    continue
+                if kind == "cheaper" and cand.cost_yuan >= old.cost_yuan * 0.7:
+                    continue
+                if kind == "protein" and not _has_protein(cand):
+                    continue
+                if kind == "veg" and _has_protein(cand):
+                    continue
+                if not _fits_day_budget(plans, p.day, d.recipe_id, cand, db, c):
+                    continue
+                return (replace_in_day(plans, p.day, d.recipe_id, cand, c), p.day, old, cand)
+    return None
+
+
+def _fits_day_budget(plans: list[DayPlan], day_no: int, replace_id: str, cand: Recipe,
+                     db: RecipeDB, c: UserConstraints) -> bool:
+    if c.budget_per_person_day is None:
+        return True
+    day = next((p for p in plans if p.day == day_no), None)
+    if day is None:
+        return True
+    total = 0.0
+    for d in day.dishes:
+        if d.recipe_id == replace_id:
+            continue
+        r = db.by_id(d.recipe_id)
+        if r:
+            total += r.cost_yuan * c.people / 2.0
+    return total + cand.cost_yuan * c.people / 2.0 <= c.budget_per_person_day * c.people + 1e-6
+
+
+def cheapest_swap(plans: list[DayPlan], db: RecipeDB,
+                  c: UserConstraints) -> tuple[list[DayPlan], int, Recipe, Recipe, float] | None:
+    """E-05：把最贵的一道换成更便宜的一道，并算出省了多少钱。"""
+    best = None
+    for p in plans:
+        for d in p.dishes:
+            r = db.by_id(d.recipe_id)
+            if r is not None and (best is None or r.cost_yuan > best[1].cost_yuan):
+                best = (d, r)
+    if best is None or best[1].cost_yuan <= 0:
+        return None
+    d, old = best
+    day_no = next((p.day for p in plans if any(x.recipe_id == old.id for x in p.dishes)), 1)
+    used = {x.recipe_id for pp in plans for x in pp.dishes}
+    pool = [r for r in retrieve_candidates(db, c)
+            if r.id not in used and r.cost_yuan < old.cost_yuan * 0.7
+            and _fits_day_budget(plans, day_no, old.id, r, db, c)]
+    if not pool:
+        return None
+    pool.sort(key=lambda r: (r.cost_yuan, -recipe_score(r, c)))
+    new_recipe = pool[0]
+    saving = (old.cost_yuan - new_recipe.cost_yuan) * c.people / 2.0
+    return (replace_in_day(plans, day_no, old.id, new_recipe, c), day_no, old, new_recipe, saving)
+
+
+def best_day_no(plans: list[DayPlan], recipe: Recipe) -> int:
+    for p in plans:
+        if any(d.recipe_id == recipe.id for d in p.dishes):
+            return p.day
+    return 1
+
+
+def best_day_no(plans: list[DayPlan], recipe: Recipe) -> int:
+    for p in plans:
+        if any(d.recipe_id == recipe.id for d in p.dishes):
+            return p.day
+    return 1
+
+
+def protein_swap(plans: list[DayPlan], db: RecipeDB,
+                 c: UserConstraints) -> tuple[list[DayPlan], int, Recipe, Recipe] | None:
+    """「这周别太素」：找一天缺蛋白的菜换掉。"""
+    return _swap_by_rule(plans, db, c,
+                         lambda p, old: "protein" if not _has_protein(old) and not any(
+                             _has_protein(db.by_id(d.recipe_id)) for d in p.dishes
+                             if db.by_id(d.recipe_id) and d.recipe_id != old.id) else None)
+
+
+def veg_swap(plans: list[DayPlan], db: RecipeDB,
+             c: UserConstraints) -> tuple[list[DayPlan], int, Recipe, Recipe] | None:
+    """「太油腻了」：把一道荤菜换成素菜。"""
+    return _swap_by_rule(plans, db, c,
+                         lambda p, old: "veg" if _has_protein(old) else None)
+
+
+def fastest_day(plans: list[DayPlan], day_no: int, db: RecipeDB,
+                c: UserConstraints) -> tuple[list[DayPlan], list[Recipe]] | None:
+    """「回家晚了」：只把这一天换成最快能做完的组合（05 M1）。"""
+    day = next((p for p in plans if p.day == day_no), None)
+    if day is None:
+        return None
+    used = {d.recipe_id for p in plans for d in p.dishes if p.day != day_no}
+    pool = [r for r in retrieve_candidates(db, c) if r.id not in used]
+    pool.sort(key=lambda r: (r.time_min, -(recipe_score(r, c))))
+    picked: list[Recipe] = []
+    spent = 0.0
+    limit = c.budget_per_person_day * (day.people or c.people) if c.budget_per_person_day else None
+    for r in pool:
+        if len(picked) >= c.dishes_per_day:
+            break
+        if limit is not None and spent + r.cost_yuan * (day.people or c.people) / 2.0 > limit + 1e-6:
+            continue
+        picked.append(r)
+        spent += r.cost_yuan * (day.people or c.people) / 2.0
+    if not picked:
+        return None
+    if day.dishes and max(r.time_min for r in picked) >= max(
+            (db.by_id(d.recipe_id).time_min for d in day.dishes if db.by_id(d.recipe_id)), default=999):
+        return None       # 换不更快就没必要换
+    out: list[DayPlan] = []
+    for p in plans:
+        if p.day == day_no:
+            out.append(DayPlan(day=p.day, meal=p.meal, skipped=False, people=p.people,
+                               dishes=[ChosenDish(recipe_id=r.id, reason=f"快手：约 {r.time_min} 分钟就能上桌。")
+                                       for r in picked]))
+        else:
+            out.append(p.model_copy(deep=True))
+    return out, picked

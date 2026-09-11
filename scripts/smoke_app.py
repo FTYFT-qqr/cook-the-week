@@ -75,6 +75,22 @@ def nav_exists(at) -> bool:
     return any((b.key or "").startswith("nav_") for b in at.button)
 
 
+def goto_create(at) -> bool:
+    """进「排一周」动作页（它不在任务栏里，入口是引导卡或「改需求」）。"""
+    for key in ("tonight_start", "edit_inputs_btn", "create_back_tonight"):
+        found = [b for b in at.button if (b.key or "") == key]
+        if found and key != "create_back_tonight":
+            found[0].click()
+            at.run()
+            return True
+    found = [b for b in at.button if (b.label or "").startswith("去排一周")]
+    if found:
+        found[0].click()
+        at.run()
+        return True
+    return False
+
+
 def _btn_type(b):
     """AppTest 里按钮的 type 是字符串（primary / secondary）。"""
     try:
@@ -114,8 +130,14 @@ print("[1] 首次加载 & 生成菜单")
 at = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=90)
 at.run()
 check("首屏无异常", not at.exception, str([str(e.value) for e in at.exception]))
-check("没有方案时默认落在「📝 需求 & 生成」页", current_page(at) == "demand", current_page(at))
+check("没有方案时默认落在「今晚」页（05 §2）", current_page(at) == "tonight", current_page(at))
+check("空状态给「帮我排一周」引导卡",
+      any((b.key or "") == "tonight_start" for b in at.button))
+check("排一周不在任务栏里（动作页）",
+      not any((b.key or "") == "nav_create" for b in at.button))
 
+goto_create(at)
+check("进入「排一周」动作页", current_page(at) == "create", current_page(at))
 fill = scene_btns(at)
 check("有三张场景卡（首屏图形锚点）", len(fill) == 3, [b.key for b in fill])
 if fill:
@@ -129,8 +151,10 @@ if run_btn:
     run_btn[0].click()
     at.run()
 check("生成菜单后无异常", not at.exception, str([str(e.value) for e in at.exception]))
-check("菜单已渲染", has_menu(at))
-check("生成后自动跳到「本周菜单」", current_page(at) == "menu", current_page(at))
+check("首次排完自动落到「今晚」", current_page(at) == "tonight", current_page(at))
+check("今晚页有主角大卡", "hero" in page_text(at))
+nav_to(at, "plan")
+check("本周计划页有菜单", has_menu(at))
 print(f"    菜单上可反馈的菜: {len(dish_btns(at, 'like'))} 道")
 
 print("[2] 点击「不喜欢」→ 菜单不消失 + 反馈被记录（问题1）")
@@ -197,7 +221,7 @@ if nav_to(at, "profile"):
         print(f"    档案页新增喜欢: {target_name}")
 
 print("[5] 回到菜单页：自动按新口味重排")
-if nav_to(at, "menu"):
+if nav_to(at, "plan"):
     check("回菜单页无异常", not at.exception, str([str(e.value) for e in at.exception]))
     check("菜单仍渲染", has_menu(at), f"titles={[t.value for t in at.title]}")
     check("被排除的菜仍未出现在菜单",
@@ -303,7 +327,7 @@ def menu_day_map(at) -> dict:
     return out
 
 
-if nav_to(at, "menu"):
+if nav_to(at, "plan"):
     snap = menu_day_map(at)
     prof_before = prof.load_profile()
 
@@ -384,7 +408,7 @@ try:
 except Exception as exc:  # AppTest 对部分元素状态不支持时跳过
     print(f"    (跳过标签页状态注入: {type(exc).__name__})")
 
-nav_to(at, "menu")
+nav_to(at, "plan")
 inp = at.session_state["plan_inputs"]
 if inp:
     inp["days"] = 1                     # 天数从 3 变 1，之前停在第 2 天
@@ -421,10 +445,12 @@ check("重排不会静默覆盖旧方案", len(store.load_records()) >= 2,
 at2 = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=120)
 at2.run()
 check("回访首屏无异常", not at2.exception, str([str(e.value) for e in at2.exception]))
-check("打开就直接显示我那一周的菜单（不是空表单）", has_menu(at2))
-check("出现回访提示（说明这是哪一周）", "已经帮你打开" in page_text(at2), page_text(at2)[:160])
-check("今晚大卡是首屏焦点（E-01）", "今晚" in page_text(at2) or "第 1 天" in page_text(at2),
-      page_text(at2)[:120])
+check("打开直接落在「今晚」", current_page(at2) == "tonight", current_page(at2))
+check("今晚页直接显示我那一周的菜（不是空表单）",
+      "hero" in page_text(at2) and "今晚" in page_text(at2), page_text(at2)[:160])
+nav_to(at2, "plan")
+check("本周计划页显示整周（回访不用重排）", has_menu(at2))
+check("出现回访提示说明这是哪一周", "已经帮你打开" in page_text(at2), page_text(at2)[:160])
 print(f"    回访打开的方案: {rec.label if rec else '—'}（{rec.created_at if rec else '—'}）")
 
 print("[10] 回到上一版")
@@ -496,14 +522,15 @@ if toggles:
         at.run()
 
 print("[12] D1/D2 人话指标 + 整周总览 + 开发者视角")
-nav_to(at, "menu")
+nav_to(at, "plan")
 txt = page_text(at)
 check("前排显示「本周花费」", "本周花费" in txt)
 check("前排显示「最费时」", "最费时" in txt)
 check("前排显示忌口结果", "忌口 / 过敏冲突" in txt)
 check("整周总览一屏可见（每天一行）", "整周总览" in txt and "分钟 · ¥" in txt)
 metric_labels = [m.label for m in at.metric]
-check("技术指标已收进开发者视角", "候选菜谱" in metric_labels)
+check("开发者视角已从常规界面撤出（05 §1.4）", "候选菜谱" not in metric_labels,
+      metric_labels)
 check("技术指标不再占据前排", "候选菜谱" not in txt)
 check("花费口径有说明（不让人拿去对账）", "实际以当地物价为准" in txt)
 check("今晚大卡是首屏焦点（V-08/E-01）", "今晚" in txt or "这一周" in txt)
@@ -545,7 +572,7 @@ if nav_to(at, "profile"):
                       f"{prof.disliked_names()} vs {before_dislike}")
 
 print("[14] 响应式：一套组件按宽度自动适配（不再有「手机视图」开关）")
-nav_to(at, "menu")
+nav_to(at, "plan")
 check("界面上没有「手机视图」开关了（V-14）",
       not any("手机视图" in (getattr(t, "label", "") or "") for t in _elems(at, "toggle")))
 check("手机底部导航已内置（按宽度自动显示）",
@@ -573,47 +600,164 @@ if rt:
           f"{at.session_state['plan_inputs'].get('max_time_min')} vs {old_max + 20}")
     check("放宽后自动重排出了新菜单", has_menu(at))
 
-print("[16] 页面结构：需求 / 菜单 / 买菜清单 三页分开 + 任务栏高亮")
-nav_to(at, "demand")
-check("需求页有生成表单", bool(find_buttons(at, "生成菜单")))
-check("需求页不再堆菜单详情", not has_menu(at))
-check("需求页有去看菜单的入口",
-      bool([b for b in at.button if (b.label or "").startswith("查看本周菜单")]))
+print("[16] 页面结构：今晚 / 本周计划 / 买菜清单 / 口味档案 + 排一周动作页")
+goto_create(at)
+check("排一周页有生成表单", bool(find_buttons(at, "生成菜单")))
+check("排一周页不堆菜单详情", not has_menu(at))
+check("排一周页有返回入口",
+      bool([b for b in at.button if (b.key or "") == "create_back_tonight"]))
 check("表单已分成四组（人数与天数 / 口味与忌口 / 时间与预算 / 家里已有）",
       all(k in page_text(at) for k in ["人数与天数", "口味与忌口", "时间与预算", "家里已有"]))
-nav_to(at, "menu")
-check("菜单页没有需求表单（不再和表单挤一起）",
+nav_to(at, "plan")
+check("本周计划页没有需求表单（不再和表单挤一起）",
       not find_buttons(at, "生成菜单"))
-check("菜单页有菜单", has_menu(at))
+check("本周计划页有菜单", has_menu(at))
+check("本周计划页有重排 / 改需求入口",
+      bool([b for b in at.button if (b.key or "") == "replan_btn"])
+      and bool([b for b in at.button if (b.key or "") == "edit_inputs_btn"]))
 nav_to(at, "shopping")
 check("清单页有打勾与导出", bool([b for b in at.button if (b.key or "") == "clear_checks"]))
 nav_items = [b for b in at.button if (b.key or "").startswith("nav_")]
-check("任务栏共 4 项（需求/菜单/清单/口味档案）", len(nav_items) == 4,
+check("任务栏共 4 项（今晚/本周计划/买菜清单/口味档案）", len(nav_items) == 4,
       [b.key for b in nav_items])
 active = [b for b in at.button if (b.key or "") == "nav_shopping"]
-other = [b for b in at.button if (b.key or "") == "nav_menu"]
+other = [b for b in at.button if (b.key or "") == "nav_plan"]
 if active and other:
     ta, to = _btn_type(active[0]), _btn_type(other[0])
     check("当前所在页在任务栏上高亮", ta is not None and to is not None and ta != to,
           f"active={ta} other={to}")
 print(f"    任务栏: {[b.label for b in nav_items]}")
 
-print("[17] 空状态：没有菜单时进「本周菜单」会被引导去填需求")
+print("[17] 空状态：全新客户落在「今晚」并被引导去排一周")
 EMPTY_PLANS = os.path.join(ROOT, ".tmp", "test_plans_empty.json")
 if os.path.exists(EMPTY_PLANS):
     os.remove(EMPTY_PLANS)
 os.environ["RECIPE_PLAN_FILE"] = EMPTY_PLANS
 at3 = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=90)
 at3.run()
-check("全新客户默认落在需求页", current_page(at3) == "demand", current_page(at3))
-nav_to(at3, "menu")
-check("空状态给出人话引导", "还没有菜单" in page_text(at3), page_text(at3)[:120])
-go = [b for b in at3.button if (b.label or "").startswith("去填需求")]
-check("空状态有「去填需求」按钮", bool(go))
+check("全新客户默认落在今晚页", current_page(at3) == "tonight", current_page(at3))
+check("空状态给出人话引导", "还没有这周的菜单" in page_text(at3), page_text(at3)[:120])
+go = [b for b in at3.button if (b.key or "") == "tonight_start"]
+check("空状态有「帮我排一周」按钮", bool(go))
 if go:
     go[0].click()
     at3.run()
-    check("点引导能回到需求页", current_page(at3) == "demand", current_page(at3))
+    check("点引导能进排一周动作页", current_page(at3) == "create", current_page(at3))
+
+print("[18] 今晚页（M1）：五个状态 + 两个整卡级快改")
+nav_to(at, "tonight")
+_inp = dict(at.session_state["plan_inputs"] or {})
+_inp["days"] = 3
+at.session_state["plan_inputs"] = _inp
+at.session_state["stale"] = True
+at.session_state["tonight_override"] = None
+at.run()
+check("今晚页无异常", not at.exception, str([str(e.value) for e in at.exception]))
+check("今晚页有主角大卡", "hero" in page_text(at) and "今晚" in page_text(at), page_text(at)[:160])
+check("每道菜都有「这道不吃」",
+      len([b for b in at.button if (b.key or "").startswith("tonight_dislike_")])
+      == len(at.session_state["result"].days[0].dishes),
+      [b.key for b in at.button if (b.key or "").startswith("tonight_dislike_")])
+check("有两个整卡级快改", bool([b for b in at.button if (b.key or "") == "quick_faster"])
+      and bool([b for b in at.button if (b.key or "") == "quick_guests"]))
+check("有「做完了」与「开始做饭」",
+      bool([b for b in at.button if (b.key or "") == "quick_done"])
+      and bool([b for b in at.button if (b.key or "") == "order_show"]))
+
+# ① 回家晚了：只把今晚换成更快的一组合
+_day_before = [d.recipe_id for d in at.session_state["result"].days[0].dishes]
+_other_before = {p.day: [d.recipe_id for d in p.dishes] for p in at.session_state["result"].days[1:]}
+_fast = [b for b in at.button if (b.key or "") == "quick_faster"]
+if _fast:
+    _fast[0].click()
+    at.run()
+    check("「回家晚了」后无异常", not at.exception, str([str(e.value) for e in at.exception]))
+    _res = at.session_state["result"]
+    check("「回家晚了」只动今晚",
+          {p.day: [d.recipe_id for d in p.dishes] for p in _res.days[1:]} == _other_before,
+          "其他天被动到了")
+    _mins = [db.by_id(d.recipe_id).time_min for d in _res.days[0].dishes if db.by_id(d.recipe_id)]
+    _old_mins = [db.by_id(rid).time_min for rid in _day_before if db.by_id(rid)]
+    check("今晚确实换成了更快的组合（或诚实告知已最快）",
+          (max(_mins) <= max(_old_mins)) if _mins else True, f"{_old_mins} -> {_mins}")
+    check("给出了回执说明其他天没动", "其他六天没动" in page_text(at) or "更快" in page_text(at),
+          page_text(at)[:200])
+
+# ② 来客人了：只改今晚的人数与份量
+_qg = [b for b in at.button if (b.key or "") == "quick_guests"]
+if _qg:
+    _qg[0].click()
+    at.run()
+    _g2 = [b for b in at.button if (b.key or "") == "guests_2"]
+    check("「来客人了」先问几位", bool(_g2))
+    if _g2:
+        _g2[0].click()
+        at.run()
+        _res2 = at.session_state["result"]
+        check("只改今晚的人数", _res2.days[0].people == _res2.constraints.people + 2,
+              f"tonight={_res2.days[0].people} base={_res2.constraints.people}")
+        check("其他天人数没变", all(p.people is None for p in _res2.days[1:]))
+        check("给了临时补买提醒", "临时要补买" in page_text(at) or "其他天不变" in page_text(at),
+              page_text(at)[:200])
+
+# ③ 做完了 → 状态③；再做一次 → 回到状态①
+_done = [b for b in at.button if (b.key or "") == "quick_done"]
+if _done:
+    _done[0].click()
+    at.run()
+    check("标记后进入「已做过」状态", "已经做过了" in page_text(at), page_text(at)[:160])
+    _again = [b for b in at.button if (b.key or "") == "done_undo"]
+    check("已做状态给「再做一次」", bool(_again))
+    if _again:
+        _again[0].click()
+        at.run()
+        check("可以改回未做", "已经做过了" not in page_text(at), page_text(at)[:160])
+
+# ④ 开始做饭 → 展开下锅顺序
+_order = [b for b in at.button if (b.key or "") == "order_show"]
+if _order:
+    _order[0].click()
+    at.run()
+    check("「开始做饭」展开下锅顺序", "先上火" in page_text(at) or "接着做" in page_text(at)
+          or "最后" in page_text(at), page_text(at)[:200])
+
+print("[19] 说人话的改需求引擎（05 §1.4：界面不开放自由对话，引擎保留并被测试覆盖）")
+from recipe_planner import assistant  # noqa: E402
+from recipe_planner.core import retrieve_candidates  # noqa: E402
+
+nav_to(at, "plan")
+_inp = dict(at.session_state["plan_inputs"] or {})
+_inp["days"] = 3
+at.session_state["plan_inputs"] = _inp
+at.session_state["stale"] = True
+at.run()
+check("恢复成 3 天菜单", has_menu(at))
+check("界面上没有自由对话输入框（05 §1.4）",
+      not any(getattr(t, "key", "") == "req_text" for t in at.text_input))
+check("解析引擎仍可用（离线规则）",
+      assistant.parse_intent("周二换成鱼", db, at.session_state["result"].constraints,
+                             at.session_state["result"], 3, use_llm=False).action == "swap_day")
+
+print("[20] 买菜清单勾选持久化（05 M4：关掉浏览器再打开还在）+ 全买齐文案")
+nav_to(at, "shopping")
+_need = [s for s in at.session_state["result"].shopping if s.needed]
+check("清单项可勾选", len(at.checkbox) >= max(len(_need), 1))
+if at.checkbox and _need:
+    for _cb in at.checkbox:
+        _cb.check()
+    at.run()
+    _rid_now = at.session_state["record_id"] if "record_id" in at.session_state else None
+    _rec_now = store.get_record(_rid_now)
+    check("勾选已写回存档（不再只活在会话里）",
+          _rec_now is not None and len(_rec_now.checked_items) > 0,
+          f"{_rec_now.checked_items if _rec_now else None}")
+    check("全部买齐后给出完成文案", "清单已全部买齐" in page_text(at), page_text(at)[:160])
+    at5 = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=90)
+    at5.run()
+    nav_to(at5, "shopping")
+    _checked5 = [c for c in at5.checkbox if c.value]
+    check("重开一个会话，勾选还在", len(_checked5) == len(_need),
+          f"{len(_checked5)} vs {len(_need)}")
 
 print(f"\n结果: {PASS} 通过, {len(FAIL)} 失败")
 if FAIL:

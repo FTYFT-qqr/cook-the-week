@@ -133,7 +133,7 @@ def llm_plan(c: UserConstraints, candidates: list[Recipe], feedback: str | None 
                 {"role": "system", "content": "你是食谱规划助手，只输出合规 JSON。"},
                 {"role": "user", "content": build_prompt(c, candidates, feedback)},
             ],
-            temperature=0.4,
+            temperature=0,          # R5 结果可复现：同一需求 + 同一档案 → 同一份菜单
             timeout=timeout,
             max_tokens=2048,
         )

@@ -29,7 +29,12 @@ def init_defaults() -> None:
         "relax": None,            # 排不出来时待展示的放宽选项
         "check_epoch": 0,         # 清单勾选代次（换一版清单就作废旧的勾选）
         "mobile_view": False,
-        "page": None,             # 当前任务栏页面：demand / menu / shopping / profile
+        "page": None,             # 当前任务栏页面：tonight / plan / shopping / profile（+ 动作页 create）
+        "done_days": set(),       # 已做过的日子（M1 状态③）
+        "guests_for": None,       # 「来客人了」正在问哪天的人数
+        "show_order_for": None,   # 「开始做饭」正在看哪天的下锅顺序
+        "tonight_relax": None,    # 今晚换不动时的放宽提示
+        "tonight_override": None,  # 今晚页手动切到别的天（看明天）
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
@@ -52,9 +57,11 @@ def clear_notice() -> None:
 # ---------------------------------------------------------------- 多步撤销
 
 def push_undo(text: str, *, days: Any = None, profile: Any = None,
-              record_id: Optional[str] = None) -> None:
+              record_id: Optional[str] = None, inputs: Any = None,
+              constraints: Any = None) -> None:
     stack = list(st.session_state.get("undo_stack") or [])
-    stack.append({"text": text, "days": days, "profile": profile, "record_id": record_id})
+    stack.append({"text": text, "days": days, "profile": profile, "record_id": record_id,
+                  "inputs": inputs, "constraints": constraints})
     st.session_state["undo_stack"] = stack[-UNDO_LIMIT:]
 
 

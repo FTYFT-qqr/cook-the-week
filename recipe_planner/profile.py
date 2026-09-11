@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date
 from pathlib import Path
 
 DEFAULT_PROFILE_FILE = Path(__file__).resolve().parent.parent / "data" / "customer_profile.json"
@@ -56,7 +57,13 @@ def disliked_names(known: set[str] | None = None) -> list[str]:
     return _clean(names, known) if known else list(dict.fromkeys(names))
 
 
-def set_feedback(name: str, action: str, known: set[str] | None = None) -> dict:
+def _stamp(hist: dict, name: str, source: str) -> None:
+    """记下这条偏好"什么时候、在哪来的"（05 M5：让列表变成我的记忆）。"""
+    hist[name] = {"since": date.today().strftime("%m/%d"), "source": source or "口味档案"}
+
+
+def set_feedback(name: str, action: str, known: set[str] | None = None,
+                 source: str = "口味档案") -> dict:
     """写入一条反馈。
 
     action:
@@ -70,36 +77,50 @@ def set_feedback(name: str, action: str, known: set[str] | None = None) -> dict:
     """
     p = load_profile()
     known = known or set()
+    hist = dict(p.get("history") or {})
     liked = _clean(p.get("liked_dishes", []), known) if known else list(dict.fromkeys(p.get("liked_dishes", [])))
     disliked = _clean(p.get("disliked_dishes", []), known) if known else list(dict.fromkeys(p.get("disliked_dishes", [])))
 
     if action == "like":
         if name in liked:
             liked.remove(name)          # 再点一次 = 取消喜欢
+            hist.pop(name, None)
         else:
             liked.append(name)
             disliked = [n for n in disliked if n != name]
+            _stamp(hist, name, source)
     elif action == "dislike":
         if name in disliked:
             disliked.remove(name)       # 再点一次 = 取消不喜欢
+            hist.pop(name, None)
         else:
             disliked.append(name)
             liked = [n for n in liked if n != name]
+            _stamp(hist, name, source)
     elif action == "remove":
         liked = [n for n in liked if n != name]
         disliked = [n for n in disliked if n != name]
+        hist.pop(name, None)
     elif action == "clear_like":
         liked = []
+        hist = {k: v for k, v in hist.items() if k in disliked}
     elif action == "clear_dislike":
         disliked = []
+        hist = {k: v for k, v in hist.items() if k in liked}
     else:
         raise ValueError(f"未知 action: {action}")
 
     p["liked_dishes"] = liked
     p["disliked_dishes"] = disliked
+    p["history"] = hist
     p.setdefault("customer_name", "默认客户")
     save_profile(p)
     return p
+
+
+def feedback_origin(name: str) -> dict:
+    """这条偏好的来源痕迹（界面显示成「8/10 在菜单里点的收藏」）。"""
+    return dict((load_profile().get("history") or {}).get(name) or {})
 
 
 def bulk_feedback(names: list[str], action: str, known: set[str] | None = None) -> dict:
@@ -133,7 +154,7 @@ def bulk_feedback(names: list[str], action: str, known: set[str] | None = None) 
 
 def clear_all() -> None:
     save_profile({"customer_name": load_profile().get("customer_name", "默认客户"),
-                  "liked_dishes": [], "disliked_dishes": []})
+                  "liked_dishes": [], "disliked_dishes": [], "history": {}})
 
 
 def profile_signature() -> str:

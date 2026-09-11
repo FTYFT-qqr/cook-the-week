@@ -12,6 +12,19 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# DB 模式（STORAGE=db）下用一份临时库跑，避免把测试数据写进真实 data/app.db
+if os.environ.get("STORAGE", "db").lower() == "db":
+    _root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _tmp_db = os.path.join(_root_dir, ".tmp", "self_check.db")
+    os.makedirs(os.path.dirname(_tmp_db), exist_ok=True)
+    for _suffix in ("", "-wal", "-shm"):
+        if os.path.exists(_tmp_db + _suffix):
+            try:
+                os.remove(_tmp_db + _suffix)
+            except OSError:
+                pass
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///" + _tmp_db.replace(os.sep, "/")
+
 from recipe_planner.core import (  # noqa: E402
     plan_deterministic,
     retrieve_candidates,
@@ -36,6 +49,18 @@ def check(name: str, cond: bool, detail: str = "") -> None:
 
 
 def main() -> int:
+    if os.environ.get("STORAGE", "db").lower() == "db":
+        # DB 模式：临时库需要先建表并导入菜谱，再读（JSON 模式无需这一步）
+        from recipe_planner.db import _load_json_db
+        from recipe_planner.storage import sync_bridge
+        from recipe_planner.storage.engine import create_all
+        from recipe_planner.storage.repositories import RecipeRepo
+
+        sync_bridge.run(create_all())
+        sync_bridge.run(RecipeRepo.upsert_many(_load_json_db().recipes))
+        print("[存储后端] STORAGE=db（临时库）")
+    else:
+        print("[存储后端] STORAGE=json")
     db = load_db()
     print(f"[1] 数据完整性: 共 {len(db.recipes)} 道菜")
     check("菜谱数 >= 20", len(db.recipes) >= 20)
@@ -304,13 +329,20 @@ def main() -> int:
 
     store.save_plan(res_s, start_date="2026-08-26")
     store.save_plan(res_s, start_date="2026-09-02")
-    check(f"存档只保留最近 {store.MAX_PLANS} 份", len(store.load_records()) == store.MAX_PLANS)
-    check("存档文件写在指定路径", tmp_plans.exists() and tmp_plans.stat().st_size > 100)
+    if os.environ.get("STORAGE", "db").lower() == "db":
+        # DB 后端按「保留 12 周」策略归档（决策 3），不截断到 3 份；文件级容错也不适用
+        check("数据库后端：多份方案都能读回", len(store.load_records()) >= 3,
+              f"records={len(store.load_records())}")
+        check("数据库后端：最新一份仍是最新的", store.latest_record() is not None)
+    else:
+        check(f"存档只保留最近 {store.MAX_PLANS} 份",
+              len(store.load_records()) == store.MAX_PLANS)
+        check("存档文件写在指定路径", tmp_plans.exists() and tmp_plans.stat().st_size > 100)
 
-    tmp_plans.write_text("{ 这不是合法 json", encoding="utf-8")
-    check("坏掉的存档文件不会让页面崩", store.load_records() == [])
-    tmp_plans.write_text('{"version":1,"plans":[{"id":"x"}]}', encoding="utf-8")
-    check("缺字段的单条被跳过而不是整体崩", store.load_records() == [])
+        tmp_plans.write_text("{ 这不是合法 json", encoding="utf-8")
+        check("坏掉的存档文件不会让页面崩", store.load_records() == [])
+        tmp_plans.write_text('{"version":1,"plans":[{"id":"x"}]}', encoding="utf-8")
+        check("缺字段的单条被跳过而不是整体崩", store.load_records() == [])
     os.environ.pop("RECIPE_PLAN_FILE", None)
 
     check("周期标签能跨月", store.week_label("2026-08-31") == "8/31–9/6", store.week_label("2026-08-31"))

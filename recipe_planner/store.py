@@ -20,21 +20,15 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
+from recipe_planner.models import PlanRecord as PlanRecordModel
 from recipe_planner.models import PlanResult, UserConstraints
 
 DEFAULT_PLANS_FILE = Path(__file__).resolve().parent.parent / "data" / "saved_plans.json"
 MAX_PLANS = 3  # 只留最近几份；方案历史与对比属于正式版后续能力
 
 
-class PlanRecord(BaseModel):
-    id: str
-    created_at: str = ""      # "2026-08-09 15:20"
-    start_date: str = ""      # ISO 日期，这一周的第一天（周一）
-    label: str = ""           # "8/12–8/18"
-    change_note: str = ""     # 最近一次改动的说明
-    done_days: list[int] = []        # 已经做过饭的日子（M1 状态③ / R8 状态可见）
-    checked_items: list[str] = []    # 买菜清单的勾选（M4：关掉浏览器再打开还在）
-    result: PlanResult
+class PlanRecord(PlanRecordModel):
+    """兼容别名：结构定义已上移到 models（JSON / DB 两种后端共用）。"""
 
     def constraints(self) -> UserConstraints:
         return self.result.constraints
@@ -242,3 +236,17 @@ def inputs_from_constraints(c: UserConstraints, start_date: Any = None) -> dict:
         "must_include": list(c.must_include_recipes),   # 被「定住 / 加一道」的菜
         "start_date": normalize_start(start_date).isoformat(),
     }
+
+
+# ---------------------------------------------------------------- 后端切换（docs/08 §7）
+# STORAGE=db 时，用数据库实现覆盖上面的 JSON 实现；`app.py` 与现有测试一行都不用改。
+_json_today_index = today_index          # db_store 复用这段纯日期逻辑（无 IO）
+
+from recipe_planner.infra import settings as _settings  # noqa: E402
+
+if _settings.storage_kind() == "db":  # pragma: no cover - 由环境变量决定
+    from recipe_planner.storage.db_store import (  # noqa: E402,F401,F811
+        archive_old, archive_summary, delete_record, get_record, latest_record,
+        load_records, previous_record, save_plan, set_checked, set_done,
+        today_index, update_result,
+    )

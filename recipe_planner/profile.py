@@ -62,39 +62,31 @@ def _stamp(hist: dict, name: str, source: str) -> None:
     hist[name] = {"since": date.today().strftime("%m/%d"), "source": source or "口味档案"}
 
 
-def set_feedback(name: str, action: str, known: set[str] | None = None,
-                 source: str = "口味档案") -> dict:
-    """写入一条反馈。
-
-    action:
-      like          → 加入「喜欢」（若已喜欢则取消）
-      dislike       → 加入「不喜欢」（若已不喜欢则取消）
-      remove        → 从两个列表中都移除（取消表态）
-      clear_like    → 清空「喜欢」
-      clear_dislike → 清空「不喜欢」
-
-    互斥：同一道菜不会同时在喜欢与不喜欢里（后写的生效）。
-    """
-    p = load_profile()
+def apply_feedback_to_dict(p: dict, name: str, action: str,
+                           known: set[str] | None = None, source: str = "口味档案",
+                           toggle: bool = True) -> dict:
+    """纯函数：在档案字典上应用一条反馈（JSON 与数据库两种后端共用，避免两套规则）。"""
     known = known or set()
     hist = dict(p.get("history") or {})
     liked = _clean(p.get("liked_dishes", []), known) if known else list(dict.fromkeys(p.get("liked_dishes", [])))
     disliked = _clean(p.get("disliked_dishes", []), known) if known else list(dict.fromkeys(p.get("disliked_dishes", [])))
 
     if action == "like":
-        if name in liked:
-            liked.remove(name)          # 再点一次 = 取消喜欢
+        if name in liked and toggle:
+            liked.remove(name)
             hist.pop(name, None)
         else:
-            liked.append(name)
+            if name not in liked:
+                liked.append(name)
             disliked = [n for n in disliked if n != name]
             _stamp(hist, name, source)
     elif action == "dislike":
-        if name in disliked:
-            disliked.remove(name)       # 再点一次 = 取消不喜欢
+        if name in disliked and toggle:
+            disliked.remove(name)
             hist.pop(name, None)
         else:
-            disliked.append(name)
+            if name not in disliked:
+                disliked.append(name)
             liked = [n for n in liked if n != name]
             _stamp(hist, name, source)
     elif action == "remove":
@@ -114,6 +106,13 @@ def set_feedback(name: str, action: str, known: set[str] | None = None,
     p["disliked_dishes"] = disliked
     p["history"] = hist
     p.setdefault("customer_name", "默认客户")
+    return p
+
+
+def set_feedback(name: str, action: str, known: set[str] | None = None,
+                 source: str = "口味档案") -> dict:
+    """写入一条反馈（判定规则见 apply_feedback_to_dict）。"""
+    p = apply_feedback_to_dict(load_profile(), name, action, known, source)
     save_profile(p)
     return p
 
@@ -149,41 +148,33 @@ def rating_of(name: str) -> dict:
     return dict((load_profile().get("ratings") or {}).get(name) or {})
 
 
-def bulk_feedback(names: list[str], action: str, known: set[str] | None = None) -> dict:
+def bulk_feedback(names: list[str], action: str, known: set[str] | None = None,
+                  source: str = "口味档案") -> dict:
     """批量写入（一次落盘），用于「快速添加」多选场景。"""
     p = load_profile()
-    known = known or set()
-    liked = _clean(p.get("liked_dishes", []), known) if known else list(dict.fromkeys(p.get("liked_dishes", [])))
-    disliked = _clean(p.get("disliked_dishes", []), known) if known else list(dict.fromkeys(p.get("disliked_dishes", [])))
-
     for name in names:
-        if action == "like":
-            if name not in liked:
-                liked.append(name)
-            disliked = [n for n in disliked if n != name]
-        elif action == "dislike":
-            if name not in disliked:
-                disliked.append(name)
-            liked = [n for n in liked if n != name]
-        elif action == "remove":
-            liked = [n for n in liked if n != name]
-            disliked = [n for n in disliked if n != name]
-        else:
-            raise ValueError(f"bulk_feedback 不支持的 action: {action}")
-
-    p["liked_dishes"] = liked
-    p["disliked_dishes"] = disliked
-    p.setdefault("customer_name", "默认客户")
+        p = apply_feedback_to_dict(p, name, action, known, source, toggle=False)
     save_profile(p)
     return p
 
 
 def clear_all() -> None:
     save_profile({"customer_name": load_profile().get("customer_name", "默认客户"),
-                  "liked_dishes": [], "disliked_dishes": [], "history": {}})
+                  "liked_dishes": [], "disliked_dishes": [], "history": {}, "ratings": {}})
 
 
 def profile_signature() -> str:
     """档案指纹：菜单页据此判断偏好变了需要重排。"""
     p = load_profile()
     return "|".join(sorted(p.get("liked_dishes", []))) + "||" + "|".join(sorted(p.get("disliked_dishes", [])))
+
+
+# ---------------------------------------------------------------- 后端切换（docs/08 §7）
+# STORAGE=db 时用数据库实现覆盖上面的 JSON 实现；`app.py` 与现有测试一行都不用改。
+from recipe_planner.infra import settings as _settings  # noqa: E402
+
+if _settings.storage_kind() == "db":  # pragma: no cover - 由环境变量决定
+    from recipe_planner.storage.db_profile import (  # noqa: E402,F401,F811
+        bulk_feedback, clear_all, disliked_names, feedback_origin, liked_names,
+        load_profile, profile_signature, rate, save_profile, set_feedback,
+    )

@@ -151,3 +151,19 @@ class PlanResult(BaseModel):
 
     def to_rich_dict(self) -> dict[str, Any]:
         return json.loads(self.model_dump_json())
+
+
+class PlanRecord(BaseModel):
+    """一份方案存档（内存/JSON/DB 三种实现共用同一个结构）。"""
+
+    id: str
+    created_at: str = ""      # "2026-08-09 15:20"
+    start_date: str = ""      # ISO 日期，这一周的第一天（周一）
+    label: str = ""           # "8/12–8/18"
+    change_note: str = ""     # 最近一次改动的说明
+    done_days: list[int] = []        # 已经做过饭的日子（M1 状态③）
+    checked_items: list[str] = []    # 买菜清单的勾选（M4：关掉浏览器再打开还在）
+    result: PlanResult
+
+    def constraints(self) -> UserConstraints:
+        return self.result.constraints

@@ -1,9 +1,8 @@
-"""AppTest 冒烟：验证两个用户报告的问题已修复。
+"""AppTest 冒烟：真实点击走完主链路。
 
-1) 点击 ❤️/🚫 后菜单仍在（不消失、不需重新生成），且反馈被真实记录；
-2) 「我的口味档案」页面可独立打开、独立管理喜好。
-
-用临时档案文件，避免污染真实客户档案。
+两种存储后端都能跑（docs/09 P0-6）：
+- 默认 `STORAGE=json`：用临时档案/方案文件，不污染真实数据；
+- `SMOKE_STORAGE=db`：自动换成一份全新的临时 SQLite 库并导入菜谱，验证数据库后端下行为一致。
 """
 import os
 import sys
@@ -13,13 +12,33 @@ sys.path.insert(0, ROOT)
 os.environ["DEEPSEEK_API_KEY"] = ""          # 确定性路径，无需网络
 os.environ["TEMP"] = os.environ["TMP"] = os.path.join(ROOT, ".tmp")
 os.makedirs(os.environ["TEMP"], exist_ok=True)
+
+SMOKE_DB = os.environ.get("SMOKE_STORAGE", "json").lower() == "db"
 PROFILE_TMP = os.path.join(ROOT, ".tmp", "test_profile.json")
 PLANS_TMP = os.path.join(ROOT, ".tmp", "test_plans.json")
-for _f in (PROFILE_TMP, PLANS_TMP):
-    if os.path.exists(_f):
-        os.remove(_f)
-os.environ["RECIPE_PROFILE_FILE"] = PROFILE_TMP
-os.environ["RECIPE_PLAN_FILE"] = PLANS_TMP
+if SMOKE_DB:
+    os.environ["STORAGE"] = "db"
+    DB_TMP = os.path.join(ROOT, ".tmp", "smoke_app.db")
+    for _suffix in ("", "-wal", "-shm"):
+        if os.path.exists(DB_TMP + _suffix):
+            os.remove(DB_TMP + _suffix)
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///" + DB_TMP.replace(os.sep, "/")
+else:
+    os.environ["STORAGE"] = "json"
+    for _f in (PROFILE_TMP, PLANS_TMP):
+        if os.path.exists(_f):
+            os.remove(_f)
+    os.environ["RECIPE_PROFILE_FILE"] = PROFILE_TMP
+    os.environ["RECIPE_PLAN_FILE"] = PLANS_TMP
+
+if SMOKE_DB:                                  # 建表 + 导入菜谱（DB 模式需要一个干净的库）
+    from recipe_planner.db import _load_json_db
+    from recipe_planner.storage import sync_bridge
+    from recipe_planner.storage.engine import create_all
+    from recipe_planner.storage.repositories import RecipeRepo
+
+    sync_bridge.run(create_all())
+    sync_bridge.run(RecipeRepo.upsert_many(_load_json_db().recipes))
 
 from streamlit.testing.v1 import AppTest  # noqa: E402
 
@@ -28,6 +47,7 @@ from recipe_planner import store  # noqa: E402
 from recipe_planner.db import load_db  # noqa: E402
 
 db = load_db()
+print(f"[存储后端] STORAGE={os.environ['STORAGE']}")
 PASS, FAIL = 0, []
 
 
@@ -633,19 +653,22 @@ print(f"    任务栏: {[b.label for b in nav_items]}")
 
 print("[17] 空状态：全新客户落在「今晚」并被引导去排一周")
 EMPTY_PLANS = os.path.join(ROOT, ".tmp", "test_plans_empty.json")
-if os.path.exists(EMPTY_PLANS):
-    os.remove(EMPTY_PLANS)
-os.environ["RECIPE_PLAN_FILE"] = EMPTY_PLANS
-at3 = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=90)
-at3.run()
-check("全新客户默认落在今晚页", current_page(at3) == "tonight", current_page(at3))
-check("空状态给出人话引导", "还没有这周的菜单" in page_text(at3), page_text(at3)[:120])
-go = [b for b in at3.button if (b.key or "") == "tonight_start"]
-check("空状态有「帮我排一周」按钮", bool(go))
-if go:
-    go[0].click()
+if SMOKE_DB:
+    print("    (DB 模式下库里已有方案，空状态属于 JSON 路径场景，已在 JSON 模式覆盖 —— 跳过)")
+else:
+    if os.path.exists(EMPTY_PLANS):
+        os.remove(EMPTY_PLANS)
+    os.environ["RECIPE_PLAN_FILE"] = EMPTY_PLANS
+    at3 = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=90)
     at3.run()
-    check("点引导能进排一周动作页", current_page(at3) == "create", current_page(at3))
+    check("全新客户默认落在今晚页", current_page(at3) == "tonight", current_page(at3))
+    check("空状态给出人话引导", "还没有这周的菜单" in page_text(at3), page_text(at3)[:120])
+    go = [b for b in at3.button if (b.key or "") == "tonight_start"]
+    check("空状态有「帮我排一周」按钮", bool(go))
+    if go:
+        go[0].click()
+        at3.run()
+        check("点引导能进排一周动作页", current_page(at3) == "create", current_page(at3))
 
 print("[18] 今晚页（M1）：五个状态 + 两个整卡级快改")
 nav_to(at, "tonight")

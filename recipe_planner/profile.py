@@ -125,6 +125,26 @@ def feedback_origin(name: str) -> dict:
 RATINGS = {"好吃": 2, "一般": 1, "下次不做": 0}
 
 
+def apply_rating_to_dict(p: dict, name: str, score: int, known: set[str] | None = None,
+                         source: str = "今晚页", today: Optional[date] = None,
+                         toggle: bool = True) -> dict:
+    """纯函数：把一次打分写进档案字典（ratings + 好吃/下次不做 联动偏好）。
+
+    两种后端与 API 都调这一个，别再各写一份。
+    `toggle=True` 沿用界面现在的行为（重复打同一分会在喜欢/不喜欢之间来回切）——
+    这个语义有点可疑，已记在 docs/09 待产品负责人定夺，改动前不要单方面改这里。
+    """
+    p = dict(p)
+    ratings = dict(p.get("ratings") or {})
+    ratings[name] = {"score": int(score), "date": (today or date.today()).strftime("%m/%d")}
+    p["ratings"] = ratings
+    if score >= 2:
+        p = apply_feedback_to_dict(p, name, "like", known, source, toggle=toggle)
+    elif score <= 0:
+        p = apply_feedback_to_dict(p, name, "dislike", known, source, toggle=toggle)
+    return p
+
+
 def rate(name: str, score: int, known: set[str] | None = None,
          source: str = "今晚页") -> dict:
     """E-07：做完之后打一分（好吃 / 一般 / 下次不做）。
@@ -132,15 +152,8 @@ def rate(name: str, score: int, known: set[str] | None = None,
     好吃 → 记进「喜欢」；下次不做 → 记进「不喜欢」；一般 → 只留记录、不改偏好。
     这样这个产品才开始积累"我家真正的经验"。
     """
-    p = load_profile()
-    ratings = dict(p.get("ratings") or {})
-    ratings[name] = {"score": int(score), "date": date.today().strftime("%m/%d")}
-    p["ratings"] = ratings
+    p = apply_rating_to_dict(load_profile(), name, score, known, source)
     save_profile(p)
-    if score >= 2:
-        set_feedback(name, "like", known, source=source)
-    elif score <= 0:
-        set_feedback(name, "dislike", known, source=source)
     return load_profile()
 
 

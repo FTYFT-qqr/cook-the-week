@@ -64,16 +64,7 @@ def feedback_origin(name: str) -> dict:
 
 def rate(name: str, score: int, known: Optional[set[str]] = None,
          source: str = "今晚页") -> dict:
-    """打分（E-07）。注意：这里**不能**转调 profile.rate —— 那个名字在 db 模式下已被本模块覆盖。"""
-    from datetime import date
-
-    p = load_profile()
-    ratings = dict(p.get("ratings") or {})
-    ratings[name] = {"score": int(score), "date": date.today().strftime("%m/%d")}
-    p["ratings"] = ratings
+    """打分（E-07）。规则用 profile.apply_rating_to_dict，不在这里重写一遍。"""
+    p = prof_mod.apply_rating_to_dict(load_profile(), name, score, known, source)
     save_profile(p)
-    if score >= 2:
-        set_feedback(name, "like", known, source=source)
-    elif score <= 0:
-        set_feedback(name, "dislike", known, source=source)
     return load_profile()

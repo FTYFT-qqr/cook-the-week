@@ -11,6 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import httpx
+import pytest
 import pytest_asyncio
 
 from recipe_planner.api.main import create_app
@@ -54,13 +55,15 @@ PROFILE = {
 START = "2026-09-14"          # 周一
 
 
-def build_result(days: int = 3, people: int = 2, **constraint_kw) -> PlanResult:
+def build_result(days: int = 3, people: int = 2, dishes_per_day: int = 2,
+                 **constraint_kw) -> PlanResult:
     db = RecipeDB(recipes=RECIPES)
-    constraints = UserConstraints(people=people, days=days, dishes_per_day=2,
-                                  cook_start="18:30", **constraint_kw)
+    constraints = UserConstraints(people=people, days=days, dishes_per_day=dishes_per_day,
+                                  cook_start=constraint_kw.pop("cook_start", "18:30"),
+                                  **constraint_kw)
     day_plans = []
     for day in range(1, days + 1):
-        picks = [RECIPES[(day - 1) % len(RECIPES)], RECIPES[day % len(RECIPES)]]
+        picks = [RECIPES[(day - 1 + i) % len(RECIPES)] for i in range(dishes_per_day)]
         day_plans.append(DayPlan(day=day, dishes=[ChosenDish(recipe_id=r.id, reason="快手又下饭")
                                                   for r in picks]))
     return PlanResult(
@@ -104,3 +107,14 @@ async def api(monkeypatch):
 @pytest_asyncio.fixture()
 async def client(api):
     return api[0]
+
+
+@pytest.fixture()
+def result_factory():
+    """造一份排菜结果（需要不同形态的测试用，例如"全是便宜菜"）。"""
+    return build_result
+
+
+@pytest.fixture()
+def start_date():
+    return START

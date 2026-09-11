@@ -210,6 +210,52 @@ class TonightOut(BaseModel):
     next_steps: list[NextStep] = []
 
 
+# ----------------------------------------------------------------- 写入
+
+class MutationOut(BaseModel):
+    """写入类接口的统一回执（docs/08 §6：`{data, action_log_id, undo_hint}`）。
+
+    - `message` 是人话回执，句式「已<做了什么>，<哪里没动>」（05 §5.3）；
+    - `undo_hint` 是**精确的**逆操作（method/path/body），不是"再点一次"；
+    - `next_steps` 给"换不动"时的放宽项（05 §5.1：失败必须给可点击的补救项）。
+    """
+
+    kind: str
+    message: str
+    data: dict[str, Any] = {}
+    action_log_id: Optional[int] = None
+    undo_hint: Optional[dict[str, Any]] = None
+    next_steps: list[NextStep] = []
+
+
+class DayPatchIn(BaseModel):
+    """`PATCH /plans/{id}/days/{day}` 的请求体（一次只做一件事）。"""
+
+    op: Literal["skip", "restore", "people", "faster", "swap", "replace_day", "done"]
+    people: Optional[int] = None          # op=people：这一天**总共**几人（绝对值）
+    recipe_id: Optional[str] = None       # op=swap：要换掉的那道
+    recipe_ids: Optional[list[str]] = None  # op=replace_day：这一天最终要有哪些菜（空数组=不做饭）
+    done: bool = True                     # op=done
+
+
+class FeedbackIn(BaseModel):
+    op: Literal["like", "dislike", "lock", "unlock"]
+
+
+class RateIn(BaseModel):
+    day: int = Field(ge=1, le=7)
+    score: int = Field(ge=0, le=2, description="2=好吃 / 1=一般 / 0=下次不做")
+
+
+class ChecksIn(BaseModel):
+    names: list[str] = Field(default_factory=list, description="已买到的食材名（全量覆盖，幂等）")
+
+
+class ProfilePatchIn(BaseModel):
+    op: Literal["like", "dislike", "remove"]
+    names: list[str] = Field(default_factory=list)
+
+
 # ----------------------------------------------------------------- 档案
 
 class ProfileOut(BaseModel):

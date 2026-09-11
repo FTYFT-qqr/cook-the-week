@@ -22,6 +22,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from recipe_planner.actions import ActionError
 from recipe_planner.infra.logging import log_event, request_id
 
 logger = logging.getLogger("recipe_planner.api")
@@ -118,6 +119,12 @@ def problem_response(code: str, message: str, status: int, details: Optional[dic
 
 def install_error_handlers(app: FastAPI) -> None:
     """注册全部异常处理器（等价于"中间件 7"）。"""
+
+    @app.exception_handler(ActionError)
+    async def _action_error(request: Request, exc: ActionError) -> JSONResponse:
+        """领域层的"这件事做不了"：已经是人话 + 可点击的下一步，直接透出。"""
+        return problem_response(exc.code, exc.message, exc.status,
+                                {"next_steps": exc.next_steps})
 
     @app.exception_handler(ApiError)
     async def _api_error(request: Request, exc: ApiError) -> JSONResponse:

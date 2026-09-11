@@ -15,7 +15,7 @@ from recipe_planner.infra.logging import setup_logging
 
 from .errors import install_error_handlers
 from .middleware import AccessLogMiddleware, RequestIDMiddleware, SessionMiddleware
-from .routes import health, plans, profile, recipes
+from .routes import health, plan_mutations, plans, profile, recipes
 
 API_PREFIX = "/api/v1"
 VERSION = "0.2.0"
@@ -44,6 +44,8 @@ def create_app() -> FastAPI:
     api = APIRouter(prefix=API_PREFIX)
     api.include_router(recipes.router)
     api.include_router(plans.router)
+    # 写入路由放在只读之后：/plans/current 等固定路径必须先匹配
+    api.include_router(plan_mutations.router)
     api.include_router(profile.router)
     app.include_router(api)
     return app

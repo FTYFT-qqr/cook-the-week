@@ -7,6 +7,14 @@ data/customer_profile.json
 # 客户方案存档（这一周的菜单，不入库）
 data/saved_plans.json
 
+# 数据库文件（本机 SQLite；P2 的 Postgres 数据在容器卷里）
+data/app.db
+data/app.db-wal
+data/app.db-shm
+
+# 迁移前的备份（导入 JSON → DB 时自动生成）
+data/backup/
+
 # python
 __pycache__/
 *.pyc
@@ -14,6 +22,10 @@ __pycache__/
 # IDE
 .idea/
 .vscode/
+
+# 测试缓存
+.pytest_cache/
+pytest-cache-files-*/
 
 # 临时目录
 .tmp/

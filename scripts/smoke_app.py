@@ -76,10 +76,12 @@ def nav_exists(at) -> bool:
 
 
 def goto_create(at) -> bool:
-    """进「排一周」动作页（它不在任务栏里，入口是引导卡或「改需求」）。"""
-    for key in ("tonight_start", "edit_inputs_btn", "create_back_tonight"):
+    """进「排一周」页（任务栏第 3 项；也兼容引导卡与「改需求」入口）。"""
+    if nav_to(at, "create"):
+        return True
+    for key in ("tonight_start", "edit_inputs_btn"):
         found = [b for b in at.button if (b.key or "") == key]
-        if found and key != "create_back_tonight":
+        if found:
             found[0].click()
             at.run()
             return True
@@ -133,11 +135,12 @@ check("首屏无异常", not at.exception, str([str(e.value) for e in at.excepti
 check("没有方案时默认落在「今晚」页（05 §2）", current_page(at) == "tonight", current_page(at))
 check("空状态给「帮我排一周」引导卡",
       any((b.key or "") == "tonight_start" for b in at.button))
-check("排一周不在任务栏里（动作页）",
-      not any((b.key or "") == "nav_create" for b in at.button))
+check("「排一周」在任务栏里（第 3 项，独立入口）",
+      any((b.key or "") == "nav_create" for b in at.button),
+      [b.key for b in at.button if (b.key or "").startswith("nav_")])
 
 goto_create(at)
-check("进入「排一周」动作页", current_page(at) == "create", current_page(at))
+check("进入「排一周」页", current_page(at) == "create", current_page(at))
 fill = scene_btns(at)
 check("有三张场景卡（首屏图形锚点）", len(fill) == 3, [b.key for b in fill])
 if fill:
@@ -600,7 +603,7 @@ if rt:
           f"{at.session_state['plan_inputs'].get('max_time_min')} vs {old_max + 20}")
     check("放宽后自动重排出了新菜单", has_menu(at))
 
-print("[16] 页面结构：今晚 / 本周计划 / 买菜清单 / 口味档案 + 排一周动作页")
+print("[16] 页面结构：今晚 / 本周计划 / 排一周 / 买菜清单 / 口味档案")
 goto_create(at)
 check("排一周页有生成表单", bool(find_buttons(at, "生成菜单")))
 check("排一周页不堆菜单详情", not has_menu(at))
@@ -618,7 +621,7 @@ check("本周计划页有重排 / 改需求入口",
 nav_to(at, "shopping")
 check("清单页有打勾与导出", bool([b for b in at.button if (b.key or "") == "clear_checks"]))
 nav_items = [b for b in at.button if (b.key or "").startswith("nav_")]
-check("任务栏共 4 项（今晚/本周计划/买菜清单/口味档案）", len(nav_items) == 4,
+check("任务栏共 5 项（今晚/本周计划/排一周/买菜清单/口味档案）", len(nav_items) == 5,
       [b.key for b in nav_items])
 active = [b for b in at.button if (b.key or "") == "nav_shopping"]
 other = [b for b in at.button if (b.key or "") == "nav_plan"]

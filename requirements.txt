@@ -1,12 +1,30 @@
+# 核心：编排与领域模型
 langgraph
 langchain-core
 openai
 pydantic
+pydantic-settings
 python-dotenv
+
+# 记忆（预留）
 langgraph-checkpoint
 langgraph-checkpoint-sqlite
+
+# 外壳（当前：Streamlit）
 streamlit
+
+# 后端服务化（见 docs/08-后端架构设计.md）
 fastapi
 uvicorn
+sqlalchemy>=2.0
+alembic
+aiosqlite
+redis
+
+# 测试
+pytest
+pytest-asyncio
+
+# 可选：LangChain 适配 / 观测
 langchain-openai
 langsmith

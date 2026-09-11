@@ -1,29 +1,34 @@
+# 版本固定（2026-09-11 实测可用的组合；升级前先跑一遍全套回归，见 docs/07 §5）
+# 环境：conda D:\conda\cook\recipe-planner（Python 3.13）
+
 # 核心：编排与领域模型
-langgraph
-langchain-core
-openai
-pydantic
+langgraph==1.2.11
+langchain-core==1.6.2
+openai==3.8.0
+pydantic==2.13.5
 pydantic-settings
-python-dotenv
+python-dotenv==1.2.3
 
 # 记忆（预留）
 langgraph-checkpoint
 langgraph-checkpoint-sqlite
 
 # 外壳（当前：Streamlit）
-streamlit
+streamlit==1.63.0
 
 # 后端服务化（见 docs/08-后端架构设计.md）
-fastapi
-uvicorn
-sqlalchemy>=2.0
-alembic
-aiosqlite
-redis
+fastapi==0.141.1
+uvicorn==0.52.4
+httpx==0.28.1
+SQLAlchemy==2.0.52
+alembic==1.19.2
+aiosqlite==0.22.1
+greenlet==3.5.5
+redis==8.1.0
 
 # 测试
-pytest
-pytest-asyncio
+pytest==9.1.1
+pytest-asyncio==1.4.0
 
 # 可选：LangChain 适配 / 观测
 langchain-openai

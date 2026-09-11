@@ -18,18 +18,17 @@ from pathlib import Path
 
 from recipe_planner.infra import settings
 from recipe_planner.models import PlanRecord, PlanResult, RecipeDB
-from recipe_planner.storage import sync_bridge
-from recipe_planner.storage.engine import create_all
+from recipe_planner.storage import migrate, sync_bridge
 from recipe_planner.storage.repositories import PlanRepo, ProfileRepo, RecipeRepo
 
 DATA = settings.DATA_DIR
 
 
 def ensure_schema() -> None:
-    """本地首次初始化：建表（生产走 `alembic upgrade head`，见 docs/09 P0-3）。"""
+    """本地首次初始化：走 Alembic（`create_all` 只留给测试，见 docs/09 P0-3）。"""
     DATA.mkdir(parents=True, exist_ok=True)
-    sync_bridge.run(create_all())
-    print(f"数据库就绪：{settings.database_url()}")
+    action = migrate.ensure_schema(verbose=True)
+    print(f"  （{action}）")
 
 
 def _backup() -> Path:

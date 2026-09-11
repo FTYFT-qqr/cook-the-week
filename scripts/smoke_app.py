@@ -13,6 +13,35 @@ os.environ["DEEPSEEK_API_KEY"] = ""          # 确定性路径，无需网络
 os.environ["TEMP"] = os.environ["TMP"] = os.path.join(ROOT, ".tmp")
 os.makedirs(os.environ["TEMP"], exist_ok=True)
 
+
+def _patch_tempfile_permissions() -> None:
+    """本机环境的一个坑，必须在 Streamlit 之前修：
+
+    `os.mkdir(path, 0o700)` 建出来的目录，本机（DSH 沙箱令牌）**连列都列不了**，
+    而 `tempfile.mkdtemp` 恰好把 0o700 写死了。后果是 Streamlit/AppTest 的临时目录建完就用不了、
+    退出时也删不掉，atexit 会打一串 `PermissionError` traceback —— 看着像回归失败，其实断言早全过了。
+    `mkdtemp` 在新版 Python 里没有可替换的内部函数，只能自己实现一份"用默认权限"的版本
+    （默认 mode 会继承父目录 ACL，实测可建/可列/可写/可删）。
+    """
+    import tempfile
+
+    def mkdtemp(suffix=None, prefix=None, dir=None):        # noqa: A002 - 与标准库同签名
+        prefix, suffix, target, output_type = tempfile._sanitize_params(prefix, suffix, dir)
+        for _ in range(tempfile.TMP_MAX):
+            name = next(tempfile._get_candidate_names())
+            path = os.path.join(target, prefix + name + suffix)
+            try:
+                os.mkdir(path)
+            except FileExistsError:
+                continue
+            return os.fsencode(path) if output_type is bytes else path
+        raise FileExistsError("没有可用的临时目录名")
+
+    tempfile.mkdtemp = mkdtemp
+
+
+_patch_tempfile_permissions()
+
 SMOKE_DB = os.environ.get("SMOKE_STORAGE", "json").lower() == "db"
 PROFILE_TMP = os.path.join(ROOT, ".tmp", "test_profile.json")
 PLANS_TMP = os.path.join(ROOT, ".tmp", "test_plans.json")
@@ -33,11 +62,12 @@ else:
 
 if SMOKE_DB:                                  # 建表 + 导入菜谱（DB 模式需要一个干净的库）
     from recipe_planner.db import _load_json_db
-    from recipe_planner.storage import sync_bridge
-    from recipe_planner.storage.engine import create_all
+    from recipe_planner.storage import migrate, sync_bridge
     from recipe_planner.storage.repositories import RecipeRepo
 
-    sync_bridge.run(create_all())
+    # 用 Alembic 建库（生产同一条路径）：这样 SMOKE_STORAGE=db 顺带验证了
+    # "迁移建出来的库能驱动整个界面"，而不是只验证 create_all 建出来的库。
+    migrate.ensure_schema()
     sync_bridge.run(RecipeRepo.upsert_many(_load_json_db().recipes))
 
 from streamlit.testing.v1 import AppTest  # noqa: E402
@@ -785,8 +815,21 @@ if at.checkbox and _need:
     check("重开一个会话，勾选还在", len(_checked5) == len(_need),
           f"{len(_checked5)} vs {len(_need)}")
 
+def _tempfile_noise_guard() -> None:
+    """兜底：把没删掉的临时目录再清一遍（正常情况下 `_patch_tempfile_permissions()` 已经解决了）。"""
+    import glob
+    import shutil
+
+    temp_root = os.environ.get("TEMP", "")
+    if not temp_root:
+        return
+    for path in glob.glob(os.path.join(temp_root, "tmp*")):
+        shutil.rmtree(path, ignore_errors=True)
+
+
 print(f"\n结果: {PASS} 通过, {len(FAIL)} 失败")
 if FAIL:
     print("失败项:", FAIL)
     sys.exit(1)
 print("✅ 全部回归通过（含信任修复 / 任务栏分页 / 清单打勾与带走 / 二次确认与撤销 / 放宽选项 / 响应式与设计规范）")
+_tempfile_noise_guard()

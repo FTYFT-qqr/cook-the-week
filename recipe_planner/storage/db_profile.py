@@ -55,9 +55,7 @@ def clear_all() -> None:
 
 
 def profile_signature() -> str:
-    p = load_profile()
-    return "|".join(sorted(p.get("liked_dishes", []))) + "||" + \
-        "|".join(sorted(p.get("disliked_dishes", [])))
+    return prof_mod.profile_signature_of(load_profile())
 
 
 def feedback_origin(name: str) -> dict:

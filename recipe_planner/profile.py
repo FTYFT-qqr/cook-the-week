@@ -163,10 +163,17 @@ def clear_all() -> None:
                   "liked_dishes": [], "disliked_dishes": [], "history": {}, "ratings": {}})
 
 
+def profile_signature_of(p: dict) -> str:
+    """档案指纹的**唯一**算法（纯函数）：菜单页据此判断偏好变了需要重排。
+
+    两种后端（JSON / DB）都必须调这个，不要再各写一遍。
+    """
+    return "|".join(sorted(p.get("liked_dishes", []))) + "||" + \
+        "|".join(sorted(p.get("disliked_dishes", [])))
+
+
 def profile_signature() -> str:
-    """档案指纹：菜单页据此判断偏好变了需要重排。"""
-    p = load_profile()
-    return "|".join(sorted(p.get("liked_dishes", []))) + "||" + "|".join(sorted(p.get("disliked_dishes", [])))
+    return profile_signature_of(load_profile())
 
 
 # ---------------------------------------------------------------- 后端切换（docs/08 §7）

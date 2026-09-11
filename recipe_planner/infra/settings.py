@@ -63,3 +63,12 @@ def plan_retention_weeks() -> int:
 
 def llm_model() -> str:
     return _env("LLM_MODEL", "deepseek-chat")
+
+
+def llm_api_key() -> str:
+    """DeepSeek 密钥是否配置（没配就会走确定性兜底，功能不受影响）。"""
+    return _env("DEEPSEEK_API_KEY")
+
+
+def llm_base_url() -> str:
+    return _env("OPENAI_BASE_URL", "https://api.deepseek.com")

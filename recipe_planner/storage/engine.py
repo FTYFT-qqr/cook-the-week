@@ -6,7 +6,8 @@
 """
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
+from contextvars import ContextVar
 
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
@@ -15,6 +16,10 @@ from recipe_planner.infra.settings import database_url
 
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
+
+# 请求级会话（docs/08 §5 中间件 6）：HTTP 请求内由中间件放进来，
+# 仓储方法里的 session_scope() 会复用它，于是整个请求是一个事务。
+_request_session: ContextVar[AsyncSession | None] = ContextVar("request_session", default=None)
 
 
 def attach_sqlite_pragmas(engine: AsyncEngine) -> None:
@@ -51,7 +56,15 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
 
 @asynccontextmanager
 async def session_scope():
-    """一个请求/一个用例一个事务：正常提交，异常回滚。"""
+    """一个请求/一个用例一个事务：正常提交，异常回滚。
+
+    如果当前协程处在 HTTP 请求里（`request_scope` 已放入会话），就直接复用那个会话，
+    由请求中间件统一提交/回滚 —— 这样一次请求里的多次仓储调用共享同一事务。
+    """
+    outer = _request_session.get()
+    if outer is not None:
+        yield outer
+        return
     async with get_sessionmaker()() as session:
         try:
             yield session
@@ -59,6 +72,16 @@ async def session_scope():
         except Exception:
             await session.rollback()
             raise
+
+
+@contextmanager
+def request_scope(session: AsyncSession):
+    """把会话登记为"本请求的会话"（由 api 的 SessionMiddleware 调用）。"""
+    token = _request_session.set(session)
+    try:
+        yield session
+    finally:
+        _request_session.reset(token)
 
 
 async def create_all(engine: AsyncEngine | None = None) -> None:

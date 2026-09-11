@@ -123,6 +123,32 @@ def feedback_origin(name: str) -> dict:
     return dict((load_profile().get("history") or {}).get(name) or {})
 
 
+RATINGS = {"好吃": 2, "一般": 1, "下次不做": 0}
+
+
+def rate(name: str, score: int, known: set[str] | None = None,
+         source: str = "今晚页") -> dict:
+    """E-07：做完之后打一分（好吃 / 一般 / 下次不做）。
+
+    好吃 → 记进「喜欢」；下次不做 → 记进「不喜欢」；一般 → 只留记录、不改偏好。
+    这样这个产品才开始积累"我家真正的经验"。
+    """
+    p = load_profile()
+    ratings = dict(p.get("ratings") or {})
+    ratings[name] = {"score": int(score), "date": date.today().strftime("%m/%d")}
+    p["ratings"] = ratings
+    save_profile(p)
+    if score >= 2:
+        set_feedback(name, "like", known, source=source)
+    elif score <= 0:
+        set_feedback(name, "dislike", known, source=source)
+    return load_profile()
+
+
+def rating_of(name: str) -> dict:
+    return dict((load_profile().get("ratings") or {}).get(name) or {})
+
+
 def bulk_feedback(names: list[str], action: str, known: set[str] | None = None) -> dict:
     """批量写入（一次落盘），用于「快速添加」多选场景。"""
     p = load_profile()

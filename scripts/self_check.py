@@ -489,6 +489,61 @@ def main() -> int:
     out = assistant.apply_intent(assistant.Intent("unknown"), res_a, db)
     check("听不懂时给例子而不是报错", "没太听懂" in out.text and not out.replan)
 
+    print("[15] 收尾功能：厨艺 / 省钱 / 拆批 / 可选 / 分享视图 / 打分")
+    from recipe_planner import reporting as rep2  # noqa: E402
+    from recipe_planner.core import cheapest_swap  # noqa: E402
+    cc_f = UserConstraints(people=2, days=3, dishes_per_day=2, spice_level="不辣",
+                           goal="随便", budget_per_person_day=80.0)
+    res_f = run_pipeline(cc_f, db)
+    cc_new = UserConstraints(people=2, days=3, dishes_per_day=2, spice_level="辣",
+                             max_time_min=90, skill="新手", goal="随便")
+    cand_new = retrieve_candidates(db, cc_new)
+    check("D4 新手不排「较难」的菜", all(r.difficulty != "较难" for r in cand_new),
+          [r.name for r in cand_new if r.difficulty == "较难"][:3])
+    cc_any = UserConstraints(people=2, days=3, max_time_min=90, spice_level="辣")
+    check("D4 选「随便」时较难的菜还在",
+          any(r.difficulty == "较难" for r in retrieve_candidates(db, cc_any)))
+
+    got_save = cheapest_swap(res_f.days, db, cc_f)
+    check("E-05 省钱换菜能算出差额", got_save is None or got_save[4] > 0,
+          f"{got_save[4] if got_save else 'None'}")
+    if got_save:
+        check("E-05 省钱换菜只动一天",
+              len({p.day for p in res_f.days if any(
+                  d.recipe_id == got_save[3].id for d in p.dishes)}) <= 1)
+
+    rows_f = rep2.shopping_rows(res_f)
+    b1, b2 = rep2.split_batches(rows_f)
+    check("F1 采购拆批不丢项、不重复", len(b1) + len(b2) == len(rows_f))
+    check("F1 青菜/肉放第二批", all(r["分类"] in rep2.BATCH_LATER for r in b2))
+    check("F1 可选标注只给单菜小料",
+          all(rep2.optional_hint(r) == "" for r in rows_f if len(r["用于"].split("、")) > 1))
+
+    share = rep2.share_text(res_f, db, "2026-08-12")
+    check("E-08 分享视图有日期与菜名", "周三" in share and "¥" in share, share[:60])
+    check("E-08 分享视图没有工程词与 emoji",
+          not any(w in share for w in ["候选", "校验", "兜底", "🛒", "🏠"]))
+    check("E-08 分享视图不含按钮",
+          "换一道" not in share and "不喜欢" not in share)
+
+    import os as _os
+    _prof_dir = _root / ".tmp" / "self_check_final"
+    _prof_dir.mkdir(parents=True, exist_ok=True)
+    _prof_file = _prof_dir / "profile.json"
+    if _prof_file.exists():
+        _prof_file.unlink()
+    _os.environ["RECIPE_PROFILE_FILE"] = str(_prof_file)
+    from recipe_planner import profile as prof2  # noqa: E402
+    known2 = {r.name for r in db.recipes}
+    first_name = db.by_id(res_f.days[0].dishes[0].recipe_id).name
+    prof2.rate(first_name, 2, known2, source="做完了打分")
+    check("E-07 打「好吃」会记进喜欢", first_name in prof2.liked_names(known2))
+    check("E-07 评分本身也留档", prof2.rating_of(first_name).get("score") == 2)
+    prof2.rate(first_name, 0, known2)
+    check("E-07 打「下次不做」会移进不喜欢",
+          first_name in prof2.disliked_names(known2) and first_name not in prof2.liked_names(known2))
+    _os.environ.pop("RECIPE_PROFILE_FILE", None)
+
     print(f"\n结果: {PASS} 通过, {len(FAIL)} 失败")
     if FAIL:
         print("失败项:", FAIL)

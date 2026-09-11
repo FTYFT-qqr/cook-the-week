@@ -83,6 +83,8 @@ class UserConstraints(BaseModel):
     taste_tags: list[str] = []  # 期望口味偏好（尽量满足，软约束）
     goal: str = "随便"  # GOALS
     max_time_min: int = Field(default=45, ge=1, le=180)
+    skill: str = "随便"  # 随便/新手/老手（D4：新手排除「较难」的菜）
+    cook_start: str = ""  # 我几点开始做饭（"18:30"），用来倒推「几点能吃上」（B2）
     budget_per_person_day: Optional[float] = Field(default=None, ge=0)
     pantry_items: list[str] = []  # 家里已有食材（名称关键词）
     liked_dishes: list[str] = []  # 客户喜欢的菜品 id（软性，尽量安排）

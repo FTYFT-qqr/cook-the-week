@@ -511,7 +511,7 @@ if code_text:
 else:
     print("    (AppTest 未暴露 code 元素，复制内容交由 self_check 断言)")
 
-toggles = _elems(at, "toggle")
+toggles = [t for t in _elems(at, "toggle") if getattr(t, "key", "") == "print_preview"]
 if toggles:
     toggles[0].set_value(True)     # 打印预览
     at.run()
@@ -519,7 +519,7 @@ if toggles:
     check("A4 打印版式已渲染（周菜单表格 + 方框清单）",
           "本周晚餐菜单" in page_text(at) and "买菜清单" in page_text(at),
           page_text(at)[:160])
-    toggles = _elems(at, "toggle")
+    toggles = [t for t in _elems(at, "toggle") if getattr(t, "key", "") == "print_preview"]
     if toggles:
         toggles[0].set_value(False)
         at.run()

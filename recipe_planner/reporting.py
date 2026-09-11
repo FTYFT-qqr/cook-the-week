@@ -215,6 +215,37 @@ def printable_text(result: PlanResult, db: RecipeDB, start_date=None,
     return "\n".join(lines)
 
 
+BATCH_LATER = {"蔬菜", "菌菇", "水产", "肉蛋"}   # 周中再买更新鲜（F1 采购拆批）
+
+
+def split_batches(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """把清单拆两批：第一批耐放的（主食/干货/豆制品等），第二批易坏的（青菜/菌菇/肉/水产）。"""
+    first = [r for r in rows if r["分类"] not in BATCH_LATER]
+    second = [r for r in rows if r["分类"] in BATCH_LATER]
+    return first, second
+
+
+def optional_hint(row: dict) -> str:
+    """只在一道菜里用到的小料 → 提示「可以不买」（F1 可选食材标注）。"""
+    uses = [x for x in (row.get("用于") or "").split("、") if x]
+    return "可选" if len(uses) == 1 else ""
+
+
+def share_text(result: PlanResult, db: RecipeDB, start_date=None) -> str:
+    """E-08：分享给家人的干净视图 —— 只有日期、菜名、时间、金额，没有按钮、没有技术字样。"""
+    summary = plan_summary(result, db, start_date)
+    lines = [f"这一周的晚饭（{store.week_label(start_date)}）", ""]
+    for row in summary.rows:
+        if not row.dishes:
+            lines.append(f"{row.weekday} {row.date_label}　这天不做饭")
+            continue
+        lines.append(f"{row.weekday} {row.date_label}　{'、'.join(row.dishes)}"
+                     f"　（约 {row.minutes} 分钟 · ¥{row.cost:.0f}）")
+    lines += ["", "本周预计 ¥%.0f" % summary.total_cost
+              + (" / 预算 ¥%.0f" % summary.budget_total if summary.budget_total else "")]
+    return "\n".join(lines)
+
+
 def structure_line(result: PlanResult, db: RecipeDB) -> str:
     """E-06：一句话说清这一周的结构（几荤几素几汤），不用客户自己数。"""
     meat = veg = soup = 0

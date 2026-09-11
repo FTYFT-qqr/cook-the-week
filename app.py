@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import streamlit as st
 
@@ -33,7 +33,8 @@ from recipe_planner import profile as prof
 from recipe_planner import reporting as rep
 from recipe_planner import store
 from recipe_planner import ui_state as ui
-from recipe_planner.core import fastest_day, refresh_result, restore_day, swap_dish
+from recipe_planner.core import (cheapest_swap, fastest_day, refresh_result,
+                                 restore_day, swap_dish)
 from recipe_planner.db import load_db
 from recipe_planner.models import (
     ALLERGENS,
@@ -214,22 +215,26 @@ NAME2ID = {r.name: r.id for r in db.recipes}
 
 # ---------------------------------------------------------------- 示例场景（三张场景卡）
 SCENES = [
-    ("light", "清淡减脂 3 天", "2 人 · 3 天 · 单菜 ≤40 分钟 · ¥45/人·天",
-     dict(people=2, days=3, spice="不辣", goal="减脂", taste=["清淡"],
-          max_time=40, budget=45.0, allergens=[], pantry="鸡蛋, 西红柿")),
-    ("allergy", "海鲜过敏 + 控糖", "3 人 · 4 天 · 单菜 ≤35 分钟 · ¥40/人·天",
-     dict(people=3, days=4, spice="不辣", goal="控糖", taste=["清淡"],
-          max_time=35, budget=40.0, allergens=["海鲜"], pantry="")),
-    ("spicy", "无辣不欢 · 省钱 5 天", "2 人 · 5 天 · 单菜 ≤30 分钟 · ¥25/人·天",
-     dict(people=2, days=5, spice="辣", goal="省钱", taste=["下饭"],
-          max_time=30, budget=25.0, allergens=[], pantry="土豆")),
+    ("light", "清淡减脂 3 天", "2 人 · 3 天 · 单菜 ≤40 分钟 · 本周 ¥270",
+     dict(people=2, days=3, spice="不辣", goal="减脂", taste=["清淡"], skill="随便",
+          max_time=40, budget_week=270.0, allergens=[], pantry_list=["鸡蛋", "西红柿"],
+          cook_start="18:30")),
+    ("allergy", "海鲜过敏 + 控糖", "3 人 · 4 天 · 单菜 ≤35 分钟 · 本周 ¥480",
+     dict(people=3, days=4, spice="不辣", goal="控糖", taste=["清淡"], skill="随便",
+          max_time=35, budget_week=480.0, allergens=["海鲜"], pantry_list=[],
+          cook_start="18:30")),
+    ("spicy", "无辣不欢 · 省钱 5 天", "2 人 · 5 天 · 单菜 ≤30 分钟 · 本周 ¥250",
+     dict(people=2, days=5, spice="辣", goal="省钱", taste=["下饭"], skill="新手",
+          max_time=30, budget_week=250.0, allergens=[], pantry_list=["土豆"],
+          cook_start="18:30")),
 ]
 
 # ---------------------------------------------------------------- 会话状态
 ui.init_defaults()
 for _k, _v in dict(
-    people=2, days=3, spice="不辣", max_time=40, goal="随便", budget=0.0,
-    allergens=[], taste=[], pantry="", dishes_per_day=2,
+    people=2, days=3, spice="不辣", max_time=40, goal="随便", budget_week=0.0,
+    allergens=[], taste=[], pantry_list=[], dishes_per_day=2,
+    skill="随便", cook_start="18:30",
 ).items():
     st.session_state.setdefault(_k, _v)
 st.session_state.setdefault("start_date", store.next_monday())
@@ -241,16 +246,21 @@ st.session_state.setdefault("notice_toast_id", None)
 
 def _sync_widgets_from_inputs(inp: dict) -> None:
     """把约束写回表单控件（必须在控件创建之前调用）。"""
-    st.session_state["people"] = int(inp.get("people", 2))
-    st.session_state["days"] = int(inp.get("days", 3))
+    _people = int(inp.get("people", 2))
+    _days = int(inp.get("days", 3))
+    _ppd = inp.get("budget_per_person_day")
+    st.session_state["people"] = _people
+    st.session_state["days"] = _days
     st.session_state["dishes_per_day"] = int(inp.get("dishes_per_day", 2))
     st.session_state["allergens"] = list(inp.get("allergens") or [])
     st.session_state["spice"] = inp.get("spice", "不辣")
     st.session_state["taste"] = list(inp.get("taste_tags") or [])
     st.session_state["goal"] = inp.get("goal", "随便")
+    st.session_state["skill"] = inp.get("skill", "随便")
+    st.session_state["cook_start"] = inp.get("cook_start", "18:30")
     st.session_state["max_time"] = int(inp.get("max_time_min", 40))
-    st.session_state["budget"] = float(inp.get("budget_per_person_day") or 0.0)
-    st.session_state["pantry"] = "，".join(inp.get("pantry_items") or [])
+    st.session_state["budget_week"] = round(_ppd * _people * _days) if _ppd else 0.0
+    st.session_state["pantry_list"] = list(inp.get("pantry_items") or [])
     st.session_state["start_date"] = store.normalize_start(inp.get("start_date"))
 
 
@@ -262,6 +272,8 @@ def build_constraints(inp: dict) -> UserConstraints:
         allergens=inp.get("allergens", []), spice_level=inp.get("spice", "不辣"),
         taste_tags=inp.get("taste_tags", []), goal=inp.get("goal", "随便"),
         max_time_min=inp.get("max_time_min", 40),
+        skill=inp.get("skill", "随便"),
+        cook_start=inp.get("cook_start", ""),
         budget_per_person_day=inp.get("budget_per_person_day"),
         pantry_items=inp.get("pantry_items", []),
         must_include_recipes=list(inp.get("must_include") or []),  # 「定住 / 加一道」的菜
@@ -562,6 +574,7 @@ def render_tonight() -> None:
     summary = rep.plan_summary(result, db, start_date)
     label = store.week_label(start_date)
     day_no, hint = _view_day_index(result, start_date)
+    today_idx = store.today_index(start_date, len(result.days))
     if st.session_state.get("tonight_override"):
         day_no = int(st.session_state["tonight_override"])
         hint = f"你手动切到了第 {day_no} 天"
@@ -579,6 +592,33 @@ def render_tonight() -> None:
 
     st.markdown(f"<p class='line'>方案 {label} · {c.people} 人"
                 + (f" · {hint}" if hint else "") + "</p>", unsafe_allow_html=True)
+
+    # 状态⑤：这一周已经结束（05 M1 状态⑤）
+    _week_end = store.normalize_start(start_date) + timedelta(days=len(result.days) - 1)
+    if _week_end < date.today():
+        st.markdown(
+            f"<div class='hero'><div class='hero-kicker'>这一周已经吃完了</div>"
+            f"<div class='hero-dishes'>{label} 的菜单在这里</div>"
+            "<div class='hero-meta'>要不要照上周再来一份，或者重新排一周？</div>"
+            "</div>", unsafe_allow_html=True)
+        w1, w2, _sp = st.columns([1, 1, 3])
+        with w1:
+            if st.button("照上周", key="tonight_reuse_prev", type="primary",
+                         use_container_width=True, help="用上一版的需求重新排一版"):
+                prev_rec = store.previous_record(st.session_state.get("record_id"))
+                if prev_rec is not None:
+                    _load_record(prev_rec)
+                st.session_state["stale"] = True
+                st.session_state["job"] = None
+                ui.set_notice("info", "已照上一版重新排了一版。")
+                st.rerun()
+        with w2:
+            if st.button("重新排", key="tonight_replan", use_container_width=True):
+                goto("create")
+        nav_to_plan = st.button("看这一周", key="tonight_view_week", use_container_width=True)
+        if nav_to_plan:
+            goto("plan")
+        return
 
     # 状态②：今天已跳过
     if day_plan.skipped:
@@ -602,19 +642,38 @@ def render_tonight() -> None:
                 goto("plan")
         return
 
-    # 状态③：今天已做过
+    # 状态③：今天已做过（含 E-07 做完之后打一分）
     if day_no in done_days:
         names = "、".join(row.dishes) or "（未排）"
         st.markdown(
             f"<div class='hero'><div class='hero-kicker'>第 {row.day} 天 {row.weekday} "
             f"{row.date_label}</div>"
             f"<div class='hero-dishes'>{names}</div>"
-            "<div class='hero-meta'>已经做过了。看看明天，或者再做一次。</div>"
+            "<div class='hero-meta'>已经做过了。这几道怎么样？（说一句就够，下周会照你的口味排）</div>"
             "</div>", unsafe_allow_html=True)
-        b1, b2, _sp = st.columns([1, 1, 3])
+        r1, r2, r3, _sp = st.columns([1, 1, 1, 3])
+        for col, (label_, score) in zip((r1, r2, r3),
+                                        (("好吃", 2), ("一般", 1), ("下次不做", 0))):
+            with col:
+                if st.button(label_, key=f"rate_{score}", type="primary" if score == 2 else "secondary",
+                             use_container_width=True):
+                    prev_profile = prof.load_profile()
+                    for d in day_plan.dishes:
+                        rec_r = db.by_id(d.recipe_id)
+                        if rec_r is not None:
+                            prof.rate(rec_r.name, score, KNOWN_NAMES, source="做完了打分")
+                    text = {"好吃": "已记住这几道好吃，以后会多安排。",
+                            "一般": "已记下，下次不会特意多排。",
+                            "下次不做": "已记住不再做这几道。"}[label_]
+                    ui.set_notice("info", text)
+                    ui.push_undo(text, profile=prev_profile)
+                    ui.push_history(text)
+                    st.session_state["stale"] = True
+                    st.rerun()
+        b1, b2, _sp2 = st.columns([1, 1, 3])
         with b1:
             nxt = day_no % len(result.days) + 1
-            if st.button("看看明天", key="done_next_day", type="primary", use_container_width=True):
+            if st.button("看看明天", key="done_next_day", use_container_width=True):
                 st.session_state["tonight_override"] = nxt
                 st.rerun()
         with b2:
@@ -624,12 +683,21 @@ def render_tonight() -> None:
 
     # 状态①：今天有安排（主角）
     hero_reason = day_plan.dishes[0].reason if day_plan.dishes else ""
+    _cook_eta = ""
+    if c.cook_start and (today_idx is None or day_no == today_idx + 1):
+        try:
+            _hh, _mm = (int(x) for x in c.cook_start.replace("：", ":").split(":"))
+            _eta = (datetime(2000, 1, 1, _hh, _mm) + timedelta(minutes=row.minutes)).strftime("%H:%M")
+            _cook_eta = f"　·　{c.cook_start} 开始做，约 {_eta} 能吃上"
+        except Exception:
+            _cook_eta = ""
     st.markdown(
         f"<div class='hero'><div class='hero-kicker'>今晚 · {row.weekday} {row.date_label}"
         f"（第 {row.day} 天）</div>"
         f"<div class='hero-dishes'>{'、'.join(row.dishes) or '（未排）'}</div>"
         f"<div class='hero-meta'>约 {row.minutes} 分钟 · 预计 ¥{row.cost:.0f}"
-        + (f"　·　按 {day_plan.people} 人算" if day_plan.people else "") + "</div>"
+        + (f"　·　按 {day_plan.people} 人算" if day_plan.people else "")
+        + _cook_eta + "</div>"
         + (f"<div class='hero-reason'>{hero_reason}</div>" if hero_reason else "")
         + "</div>", unsafe_allow_html=True)
 
@@ -794,20 +862,48 @@ def render_create() -> None:
             taste = st.multiselect("口味偏好（尽量满足）", TASTE_TAGS, key="taste")
             st.caption("喜欢 / 不喜欢的菜可在「口味档案」里随时改")   # 就地提示（P-11）
 
-        # ③ 时间与预算
+        # ③ 时间与预算 / 厨艺（B1 预算用"本周总预算"、B2 开饭倒推、D4 厨艺）
         st.markdown("#### 时间与预算")
         g3 = st.columns(3)
         with g3[0]:
             max_time = st.slider("单菜耗时上限（分钟）", 10, 90, key="max_time")
         with g3[1]:
-            budget = st.number_input("预算（元/人·天，0=不限）", 0.0, 200.0, step=5.0, key="budget")
+            budget_week = st.number_input("本周总预算（元，0=不限）", 0.0, 3000.0,
+                                          step=50.0, key="budget_week")
+            _ppl, _dys = int(st.session_state["people"]), int(st.session_state["days"])
+            if budget_week and budget_week > 0 and _ppl and _dys:
+                st.caption(f"≈ 每人每天 ¥{budget_week / (_ppl * _dys):.0f}"
+                           f"　·　按 {_ppl} 人 × {_dys} 天折算")
+            else:
+                st.caption("按周去超市的话，直接填这一周想花多少钱")
         with g3[2]:
-            start_date_pick = st.date_input("这一周从哪天开始（默认下周一）", key="start_date")
+            skill = st.selectbox("你的厨艺", ["随便", "新手", "老手"], key="skill",
+                                 help="新手会把「较难」的功夫菜排除掉")
 
-        # ④ 家里已有
+        g3b = st.columns(3)
+        with g3b[0]:
+            start_date_pick = st.date_input("这一周从哪天开始", key="start_date")
+        with g3b[1]:
+            cook_start = st.text_input("我一般几点开始做饭", key="cook_start",
+                                       placeholder="例如 18:30", help="用来倒推「几点能吃上」")
+        with g3b[2]:
+            st.caption("　")
+            st.caption("填了开始时间，今晚页会告诉你大概几点能开饭")
+
+        # ④ 家里已有（B4：标签式输入 + 常用食材快选 + 认没认出的回显）
         st.markdown("#### 家里已有")
-        pantry = st.text_input("家里已有食材（逗号分隔，会从买菜清单里扣除）",
-                               placeholder="例如：鸡蛋, 土豆, 西红柿, 葱姜蒜", key="pantry")
+        pantry_list = st.multiselect(
+            "家里已有食材（会从买菜清单里扣掉）",
+            sorted({i.name for r in db.recipes for i in r.ingredients}),
+            key="pantry_list", accept_new_options=True,
+            placeholder="可以直接选，也可以打字新建（如：鸡蛋、西红柿）",
+        )
+        if pantry_list:
+            _all_ing = {i.name for r in db.recipes for i in r.ingredients}
+            _known = [p for p in pantry_list if any(p in n or n in p for n in _all_ing)]
+            _unknown = [p for p in pantry_list if p not in _known]
+            st.caption("我认出了：" + ("、".join(_known) or "—")
+                       + (f"　·　没认出的（不会扣减）：{'、'.join(_unknown)}" if _unknown else ""))
 
         # 提交区：提示在上、按钮右对齐（P-10）
         st.caption("生成大约 3–5 秒：先挑菜谱，再按你的忌口、预算和时间校验一遍。")
@@ -816,12 +912,15 @@ def render_create() -> None:
             submitted = st.form_submit_button("生成菜单", type="primary", use_container_width=True)
 
     if submitted:
+        _people, _days = int(people), int(days)
+        _week = float(budget_week) if budget_week and budget_week > 0 else 0.0
         st.session_state["plan_inputs"] = dict(
-            people=int(people), days=int(days), dishes_per_day=int(dishes_per_day),
+            people=_people, days=_days, dishes_per_day=int(dishes_per_day),
             allergens=list(allergens), spice=spice, taste_tags=list(taste), goal=goal,
+            skill=skill, cook_start=cook_start,
             max_time_min=int(max_time),
-            budget_per_person_day=budget if budget and budget > 0 else None,
-            pantry_items=[p.strip() for p in pantry.replace("，", ",").split(",") if p.strip()],
+            budget_per_person_day=round(_week / (_people * _days), 2) if _week else None,
+            pantry_items=list(pantry_list),
             start_date=str(start_date_pick),
         )
         st.session_state["stale"] = True
@@ -905,21 +1004,26 @@ def _dish_card(r, dish, is_loved: bool, is_hated: bool) -> str:
         "</div>")
 
 
-def _dish_actions(plan_day: int, dish, is_loved: bool, is_hated: bool):
-    """每道菜的操作：换一道 + 喜欢 / 不喜欢（去掉 emoji，V-03）。"""
+def _dish_actions(plan_day: int, dish, is_loved: bool, is_hated: bool, locked: bool = False):
+    """每道菜的操作：换一道 / 定住 / 喜欢 / 不喜欢（E-02 定住，去掉 emoji）。"""
     picked = None
     rid = dish.recipe_id
     with st.container(key=f"dishacts_{plan_day}_{rid}"):
-        row = st.columns(3)
+        row = st.columns(4)
         with row[0]:
             if st.button("换一道", key=f"swap_{plan_day}_{rid}", use_container_width=True,
                          help="只换今晚这道，不动口味偏好"):
                 picked = ("swap", plan_day, rid)
         with row[1]:
+            if st.button("已定住" if locked else "定住", key=f"lock_{plan_day}_{rid}",
+                         use_container_width=True,
+                         help="定住这道菜：以后重排也会保留它"):
+                picked = ("unlock" if locked else "lock", plan_day, rid)
+        with row[2]:
             if st.button("已喜欢" if is_loved else "喜欢", key=f"like_{plan_day}_{rid}",
                          use_container_width=True, help="合口味：以后多安排这道菜"):
                 picked = ("like", plan_day, rid)
-        with row[2]:
+        with row[3]:
             if st.button("已排除" if is_hated else "不喜欢", key=f"hate_{plan_day}_{rid}",
                          use_container_width=True, help="不合口味：换掉并记住"):
                 picked = ("dislike", plan_day, rid)
@@ -974,7 +1078,47 @@ def render_plan() -> None:
 
     pending = None
 
-    # ---- 一行数字（4.6-3 / V-09）
+    # ---- 三个整周级动作：哪里能省（E-05）/ 都满意（E-04）/ 分享视图（E-08）
+    q1, q2, q3, _spq = st.columns([1, 1, 1, 2])
+    with q1:
+        if st.button("哪里能省", key="save_money_btn", use_container_width=True,
+                     help="挑最贵的一道换成更便宜的，并告诉你这周省了多少"):
+            got = cheapest_swap(result.days, db, c)
+            if got is None:
+                ui.set_notice("info", "这一周已经没有明显更省的换法了。")
+                st.rerun()
+            new_plans, day_no_s, old_r, new_r, saving = got
+            prev_days = [p.model_copy(deep=True) for p in result.days]
+            result.days = new_plans
+            refresh_result(result, db)
+            _commit_plan()
+            text = (f"把第 {day_no_s} 天的「{old_r.name}」换成「{new_r.name}」，"
+                    f"这周省了约 ¥{saving:.0f}（其他天没动）。")
+            ui.set_notice("swap", text)
+            ui.push_undo(text, days=prev_days, record_id=st.session_state.get("record_id"))
+            ui.push_history(text)
+            st.rerun()
+    with q2:
+        if st.button("都满意", key="all_good_btn", use_container_width=True,
+                     help="把这一周的菜都记成「喜欢」，以后多安排；不满意的单独点不喜欢"):
+            prev_profile = prof.load_profile()
+            n_new = 0
+            for p in result.days:
+                for d in p.dishes:
+                    rec_r = db.by_id(d.recipe_id)
+                    if rec_r is not None and rec_r.name not in liked_now:
+                        prof.set_feedback(rec_r.name, "like", KNOWN_NAMES, source="本周计划")
+                        n_new += 1
+            text = f"已把这一周 {n_new} 道没表过态的菜都记成「喜欢」，以后会多安排（可撤销）。"
+            ui.set_notice("like", text)
+            ui.push_undo(text, profile=prev_profile)
+            ui.push_history(text)
+            st.rerun()
+    with q3:
+        st.toggle("分享视图", key="share_view", help="给家人看的干净版：只有日期、菜名、金额")
+    if st.session_state.get("share_view"):
+        st.code(rep.share_text(result, db, start_date), language=None)
+        st.caption("这一屏可以直接截图发给家人；没有按钮、没有技术字样。")
     stat = [
         (f"¥{summary.total_cost:.0f}",
          f"本周花费（预算 ¥{summary.budget_total:.0f}）" if summary.budget_total
@@ -1057,7 +1201,8 @@ def render_plan() -> None:
                                 unsafe_allow_html=True)
                     if not is_past:
                         picked = _dish_actions(plan_day.day, dish, r.name in liked_now,
-                                               r.name in hated_now)
+                                               r.name in hated_now,
+                                               dish.recipe_id in set(c.must_include_recipes))
                         pending = picked or pending
                 minutes = rep.day_minutes(plan_day, db)
                 cost = rep.day_cost(plan_day, db, c.people)
@@ -1112,6 +1257,13 @@ def render_plan() -> None:
                         _load_record(rec_item)
                         ui.set_notice("info", f"已切到「{rec_item.label}」。")
                         st.rerun()
+                    if guarded_button("删除", f"del_{rec_item.id}",
+                                      f"确认删除「{rec_item.label}」这一版吗？删除后无法找回"
+                                      "（其它版本不受影响）。"):
+                        store.delete_record(rec_item.id)
+                        ui.set_notice("info", f"已删除「{rec_item.label}」这一版。")
+                        ui.push_history(f"删除了方案「{rec_item.label}」")
+                        st.rerun()
         if ui.history():
             st.markdown("**改动历史**")
             for h in ui.history():
@@ -1130,6 +1282,24 @@ def render_plan() -> None:
         undo_profile = None
         relax_failed = None
         text = ""
+        if kind in ("lock", "unlock"):
+            locked_now = list(c.must_include_recipes or [])
+            if kind == "lock" and rid not in locked_now:
+                locked_now.append(rid)
+            elif kind == "unlock":
+                locked_now = [x for x in locked_now if x != rid]
+            c.must_include_recipes = locked_now
+            _inp_lock = dict(st.session_state.get("plan_inputs") or {})
+            _inp_lock["must_include"] = locked_now
+            st.session_state["plan_inputs"] = _inp_lock
+            st.session_state["pending_sync"] = _inp_lock
+            ui.set_notice("info", f"已定住「{name}」，以后重排会保留它（其他菜不受影响）。"
+                          if kind == "lock" else f"已取消定住「{name}」，重排时可以被换掉。")
+            ui.push_history(ui.get_notice()["text"])
+            st.session_state["stale"] = True
+            st.session_state["job"] = None
+            st.rerun()
+
         if kind == "swap":
             new_days, new_recipe = swap_dish(result.days, day_no, rid, db, c)
             if new_recipe:
@@ -1231,6 +1401,24 @@ def render_shopping() -> None:
 
     if need:
         st.progress(len(checked) / len(need))
+        _rows_now = rep.shopping_rows(result, set(checked))
+        _b1, _b2 = rep.split_batches(_rows_now)
+        st.toggle("分两次买（周初买耐放的，周中再买青菜鲜肉）", key="two_batches")
+        if st.session_state.get("two_batches"):
+            with st.container(key="batch_view"):
+                st.markdown("<div class='cat-bar'>第一次买 · 耐放的（"
+                            f"{len(_b1)} 样）</div>", unsafe_allow_html=True)
+                for _row in _b1:
+                    st.markdown(f"<p class='line'>{_row['食材']}　{_row['数量']}"
+                                + ("　可选" if rep.optional_hint(_row) else "") + "</p>",
+                                unsafe_allow_html=True)
+                st.markdown("<div class='cat-bar'>第二次买 · 周中更新鲜（"
+                            f"{len(_b2)} 样）</div>", unsafe_allow_html=True)
+                for _row in _b2:
+                    st.markdown(f"<p class='line'>{_row['食材']}　{_row['数量']}"
+                                + ("　可选" if rep.optional_hint(_row) else "") + "</p>",
+                                unsafe_allow_html=True)
+            st.caption("青菜、菌菇、肉和水产放到周中再买更新鲜；只在一道菜里用到的小料标了「可选」，可以先不买。")
         if len(checked) >= len(need):
             st.markdown("<p class='line ok'>清单已全部买齐，可以开始做饭了。</p>",
                         unsafe_allow_html=True)

@@ -36,6 +36,8 @@ def recipe_conflicts(r: Recipe, c: UserConstraints) -> list[str]:
         conflicts.append("spice")
     if r.time_min > c.max_time_min:
         conflicts.append("time")
+    if getattr(c, "skill", "随便") == "新手" and r.difficulty == "较难":
+        conflicts.append("difficulty")     # D4：新手不排功夫菜
     return conflicts
 
 
@@ -205,6 +207,9 @@ def validate_plan(plans: list[DayPlan], db: RecipeDB, c: UserConstraints) -> lis
             if r.time_min > c.max_time_min:
                 issues.append(ValidationIssue(level="error", code="over_time",
                                               message=f"第{p.day}天「{r.name}」需{r.time_min}分钟，超出上限{c.max_time_min}分钟", day=p.day, recipe_id=r.id))
+            if getattr(c, "skill", "随便") == "新手" and r.difficulty == "较难":
+                issues.append(ValidationIssue(level="warning", code="difficulty",
+                                              message=f"第{p.day}天「{r.name}」对新手偏难（{r.difficulty}）", day=p.day, recipe_id=r.id))
             # 客户明确不喜欢的菜
             if r.id in set(c.disliked_dishes):
                 issues.append(ValidationIssue(level="error", code="disliked",

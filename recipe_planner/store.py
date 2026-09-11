@@ -235,6 +235,8 @@ def inputs_from_constraints(c: UserConstraints, start_date: Any = None) -> dict:
         "taste_tags": list(c.taste_tags),
         "goal": c.goal,
         "max_time_min": c.max_time_min,
+        "skill": c.skill,
+        "cook_start": c.cook_start,
         "budget_per_person_day": c.budget_per_person_day,
         "pantry_items": list(c.pantry_items),
         "must_include": list(c.must_include_recipes),   # 被「定住 / 加一道」的菜

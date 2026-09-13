@@ -38,6 +38,10 @@ def recipe_conflicts(r: Recipe, c: UserConstraints) -> list[str]:
         conflicts.append("time")
     if getattr(c, "skill", "随便") == "新手" and r.difficulty == "较难":
         conflicts.append("difficulty")     # D4：新手不排功夫菜
+    # docs/10：早餐菜（粥/面/蛋饼…）只在**勾了早餐**时才是候选，
+    # 否则"只做晚餐"的用户会被排出一碗皮蛋瘦肉粥当晚饭。
+    if r.category == "早餐" and "早餐" not in c.active_meals():
+        conflicts.append("breakfast")
     return conflicts
 
 

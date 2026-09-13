@@ -115,9 +115,9 @@ async def test_plans_list_marks_current(api, client):
 
 # ---------------------------------------------------------------- 今晚
 
-TONIGHT_KEYS = {"state", "plan_id", "kicker", "headline", "meta", "reason", "day", "weekday",
-                "date_label", "week_label", "dishes", "minutes", "cost", "people", "eat_eta",
-                "hint", "next_steps"}
+TONIGHT_KEYS = {"state", "plan_id", "kicker", "headline", "meta", "reason", "day", "meal",
+                "weekday", "date_label", "week_label", "dishes", "minutes", "cost", "people",
+                "eat_eta", "hint", "next_steps"}
 
 
 async def test_current_plan_has_everything_the_tonight_page_needs(client):

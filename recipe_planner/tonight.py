@@ -196,7 +196,10 @@ def tonight_view(record: Optional[PlanRecord], db: RecipeDB, today: Optional[dat
     if day_plan.people:
         minutes_txt += f" · 按 {day_plan.people} 人算"
     today_idx = store.today_index(start, days_span, today)
-    if c.cook_start and (today_idx is None or day_plan.day == today_idx + 1):
+    # 「几点开始做、几点能吃上」只对**当天最后那一顿**说（docs/10）：
+    # 多餐时三张卡都写"18:30 开始做"是错的 —— 早上八点不会开始做晚饭。
+    is_last_meal = day_plan.meal == slots[-1].meal
+    if c.cook_start and is_last_meal and (today_idx is None or day_plan.day == today_idx + 1):
         eta = eat_eta(c.cook_start, row.minutes)
         if eta:
             minutes_txt += f" · {eta}"

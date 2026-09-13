@@ -123,9 +123,13 @@ async def list_plans(records: list[PlanRecord] = Depends(get_records),
 
 
 def _tonight_payload(record: Optional[PlanRecord], db: RecipeDB,
-                     day: Optional[int]) -> TonightOut:
-    """「今晚」页的响应体（`/plans/current` 与 `/plans/{id}/tonight` 共用，判定只有一份）。"""
-    payload = tonight_mod.tonight_view(record, db, day=day).to_dict()
+                     day: Optional[int], meal: Optional[str] = None) -> TonightOut:
+    """「今晚」页的响应体（`/plans/current` 与 `/plans/{id}/tonight` 共用，判定只有一份）。
+
+    docs/10：多餐时必须点名看哪一顿（不给 = 当天最后一顿）。界面「今天」页一天要问三顿，
+    而且拿这一顿的 `meal` 去决定"做完了/来客人了"落在哪 —— 少了它全会落到晚餐上。
+    """
+    payload = tonight_mod.tonight_view(record, db, day=day, meal=meal).to_dict()
     payload["plan_id"] = record.id if record else None
     return TonightOut(**payload)
 
@@ -133,13 +137,15 @@ def _tonight_payload(record: Optional[PlanRecord], db: RecipeDB,
 @router.get("/plans/current", response_model=TonightOut, tags=["plans"])
 async def current_plan(db: RecipeDB = Depends(get_db),
                        day: Optional[int] = Query(None, ge=1, le=7,
-                                                  description="手动切到第几天看")) -> TonightOut:
+                                                  description="手动切到第几天看"),
+                       meal: Optional[str] = Query(None, description="看哪一顿；不给=当天最后一顿")
+                       ) -> TonightOut:
     """今晚页首页数据：状态①–⑤ + 今晚菜/时间/金额/理由/几点能吃上（**没有方案也返回 200**）。
 
     这里刻意不返回 404：没有方案是正常的"状态④"，不是错误 —— 前端要拿它渲染引导卡。
     `day` 是"手动切到第 N 天"：状态判定仍然只有 `tonight` 这一份实现，界面不用自己再推一遍。
     """
-    return _tonight_payload(await data.latest_record(), db, day)
+    return _tonight_payload(await data.latest_record(), db, day, meal)
 
 
 @router.get("/plans/{plan_id}", response_model=PlanDetailOut, tags=["plans"],
@@ -192,13 +198,16 @@ async def plan_detail(record: PlanRecord = Depends(require_record),
 async def plan_tonight(record: PlanRecord = Depends(require_record),
                        db: RecipeDB = Depends(get_db),
                        day: Optional[int] = Query(None, ge=1, le=7,
-                                                  description="手动切到第几天看")) -> TonightOut:
+                                                  description="手动切到第几天看"),
+                       meal: Optional[str] = Query(None,
+                                                   description="看哪一顿；不给=当天最后一顿")
+                       ) -> TonightOut:
     """**指定某一版方案**的「今晚」（界面"切到以前的某一版"之后要看的就是它）。
 
     与 `/plans/current` 是同一份判定（`tonight_view`），只是看的是旧那一版，
     所以响应形状完全一样，`plan_id` 是这一版自己的 id。
     """
-    return _tonight_payload(record, db, day)
+    return _tonight_payload(record, db, day, meal)
 
 
 @router.delete("/plans/{plan_id}", response_model=MutationOut, tags=["plans"],

@@ -198,6 +198,43 @@ async def test_反馈要带餐次才找得到那道菜(meal_api):
 
 
 @pytest.mark.asyncio
+async def test_今天页能按顿问且带回餐次(meal_api):
+    """界面「今天」页一天问三顿：服务端必须接受 meal，并且**把 meal 带回来**。
+
+    带不回来（DTO 少一个字段）就回到老毛病：界面以为自己在看晚餐，
+    "做完了 / 来客人了"全落到晚餐上。
+    """
+    client, plan_id = meal_api
+    r = await client.get(f"/api/v1/plans/{plan_id}/tonight", params={"day": 1, "meal": "午餐"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["meal"] == "午餐" and body["day"] == 1
+    assert body["headline"] == "红烧排骨", body["headline"]
+
+    last = (await client.get(f"/api/v1/plans/{plan_id}/tonight", params={"day": 1})).json()
+    assert last["meal"] == "晚餐", "不给 meal 就是当天最后一顿"
+    assert last["headline"] == "紫菜蛋花汤、凉拌黄瓜", last["headline"]
+
+    am = (await client.get(f"/api/v1/plans/{plan_id}/tonight",
+                           params={"day": 1, "meal": "早餐"})).json()
+    assert am["meal"] == "早餐" and am["headline"] == "番茄炒蛋、清炒时蔬", am["headline"]
+
+
+@pytest.mark.asyncio
+async def test_今天页认得出做完了的是哪一顿(meal_api):
+    """早餐标记做完了：「今天」页看早餐是 done，看晚餐还是 planned。"""
+    client, plan_id = meal_api
+    await client.patch(f"/api/v1/plans/{plan_id}/days/1",
+                       json={"op": "done", "done": True, "meal": "早餐"})
+    am = (await client.get(f"/api/v1/plans/{plan_id}/tonight",
+                           params={"day": 1, "meal": "早餐"})).json()
+    pm = (await client.get(f"/api/v1/plans/{plan_id}/tonight",
+                           params={"day": 1, "meal": "晚餐"})).json()
+    assert am["state"] == "done", am["state"]
+    assert pm["state"] == "planned", pm["state"]
+
+
+@pytest.mark.asyncio
 async def test_单餐时接口形状与以前一致(api):
     """只做晚餐的老方案：不带 meal 也能正常读（老客户端不用改）。"""
     client, _app, record = api

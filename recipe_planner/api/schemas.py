@@ -9,7 +9,7 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from recipe_planner.models import ALLERGENS
+from recipe_planner.models import ALLERGENS, MEAL
 
 
 # ----------------------------------------------------------------- 通用
@@ -273,6 +273,7 @@ class TonightOut(BaseModel):
     meta: str = ""
     reason: str = ""
     day: int = 0
+    meal: str = MEAL          # docs/10：一条 TonightOut = 一天里的一顿（缺了它多餐会塌成晚餐）
     weekday: str = ""
     date_label: str = ""
     week_label: str = ""

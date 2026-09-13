@@ -221,6 +221,32 @@ def test_今晚_做完了会进入已做状态(live):
     assert live.get_record(record.id).done_days == []
 
 
+def test_今晚_多餐时按顿取且服务端把餐次带回来(live):
+    """界面「今天」页一天问三顿 —— 服务端少回一个 `meal`，三张卡就会都以为自己看的是晚餐。"""
+    record = _make_plan(live, days=2, dishes_per_meal={"早餐": 1, "午餐": 1, "晚餐": 1},
+                        meals=["早餐", "午餐", "晚餐"])
+    heads = {m: live.tonight_view(record, day=1, meal=m).headline
+             for m in ("早餐", "午餐", "晚餐")}
+    assert all(heads.values()), heads
+    assert len(set(heads.values())) == 3, f"三顿的主菜串了：{heads}"
+
+    am = live.tonight_view(record, day=1, meal="早餐")
+    assert am.meal == "早餐", "服务端必须把 meal 带回来（DTO 少字段就会退回晚餐）"
+    assert live.tonight_view(record, day=1, meal="晚餐").meal == "晚餐"
+    assert live.tonight_view(record, day=1).meal == "晚餐", "不给 meal 就是当天最后一顿"
+
+
+def test_今晚_多餐时做完一顿只影响那一顿(live):
+    record = _make_plan(live, days=2, dishes_per_meal={"早餐": 1, "午餐": 1, "晚餐": 1},
+                        meals=["早餐", "午餐", "晚餐"])
+    live.set_done(record.id, 1, True, meal="午餐")
+    after = live.get_record(record.id)
+    assert after.is_done(1, "午餐")
+    assert not after.is_done(1, "早餐") and not after.is_done(1, "晚餐")
+    assert live.tonight_view(after, day=1, meal="午餐").state == "done"
+    assert live.tonight_view(after, day=1, meal="晚餐").state == "planned"
+
+
 # ---------------------------------------------------------------- 写：清单 / 整周 / 删除
 
 

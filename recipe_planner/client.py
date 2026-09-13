@@ -387,7 +387,7 @@ def previous_record(record_id: Optional[str]) -> Optional[PlanRecord]:
 
 def tonight_view(record: Optional[PlanRecord] = None, db: Any = None,
                  today: Any = None, now: Any = None,
-                 day: Optional[int] = None) -> Any:
+                 day: Optional[int] = None, meal: Optional[str] = None) -> Any:
     """「今晚」页的数据 —— **由服务端产出**（docs/08 §5：措辞统一由后端给）。
 
     - 本地模式下这个函数来自 `recipe_planner.tonight`，两种模式返回**同一个** `TonightView`，
@@ -395,16 +395,23 @@ def tonight_view(record: Optional[PlanRecord] = None, db: Any = None,
     - 给了 `record` 就查**那一版**的今晚（界面允许"切到以前的某一版"），
       没给就查最新一版（`/plans/current`，它在没有方案时也会正常返回 `no_plan`）。
 
+    docs/10：`meal` 是"看哪一顿"（不给 = 当天最后一顿）。**必须回读 `meal`** ——
+    界面拿它决定"做完了 / 来客人了 / 改回来做"落在哪一顿，丢了就会全部落到晚餐上。
+
     `db` / `today` / `now` 是为了和本地版**同签名**（服务端自己决定今天是哪天），
     在这里刻意不使用。
     """
     from recipe_planner.tonight import TonightDish, TonightView     # 见模块开头的导入说明
 
-    params = {"day": int(day)} if day else None
+    params: dict[str, Any] = {}
+    if day:
+        params["day"] = int(day)
+    if meal:
+        params["meal"] = meal
     if record is not None:
-        data = _request("GET", f"/plans/{record.id}/tonight", params=params)
+        data = _request("GET", f"/plans/{record.id}/tonight", params=params or None)
     else:
-        data = _request("GET", "/plans/current", params=params)
+        data = _request("GET", "/plans/current", params=params or None)
 
     return TonightView(
         state=data.get("state") or "no_plan",
@@ -413,6 +420,7 @@ def tonight_view(record: Optional[PlanRecord] = None, db: Any = None,
         meta=data.get("meta") or "",
         reason=data.get("reason") or "",
         day=int(data.get("day") or 0),
+        meal=data.get("meal") or MEAL,
         weekday=data.get("weekday") or "",
         date_label=data.get("date_label") or "",
         week_label=data.get("week_label") or "",

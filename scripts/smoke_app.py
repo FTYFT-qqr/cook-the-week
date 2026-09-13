@@ -872,7 +872,21 @@ def section_multi_meal() -> None:
     check("每日详情的标签仍然是 2 个「第 N 天」（不是 6 个）",
           all(f"第 {i} 天" in txt3 for i in (1, 2)), txt3[:160])
     nav_to(at, "tonight")
-    check("多餐时今晚页改叫「今天」", "今天" in page_text(at), page_text(at)[:120])
+    _tt = page_text(at)
+    check("多餐时今晚页改叫「今天」", "今天" in _tt, _tt[:120])
+    # docs/10：一天三顿 → 一屏三张卡，每顿都是自己那几道菜（只画一顿 = 又回到"看起来像 bug"）
+    _names3 = {m: [db.by_id(x.recipe_id).name for x in (res.slot(d, m).dishes if res.slot(d, m) else [])]
+               for d in (1, 2) for m in ("早餐", "午餐", "晚餐")}
+    _shown = next((d for d in (1, 2)
+                   if all(all(db.by_id(x.recipe_id).name in _tt
+                              for x in (res.slot(d, m).dishes if res.slot(d, m) else []))
+                          for m in ("早餐", "午餐", "晚餐"))), None)
+    check("「今天」页把这一天的三顿一次画全（每顿都是自己那几道菜）",
+          _shown is not None, f"1/2 天都没有三餐齐全；页面开头：{_tt[:200]}")
+    check("三顿饭各带自己的小标题（早餐 · / 午餐 · / 晚餐 ·）",
+          all(f"{m} ·" in _tt for m in ("早餐", "午餐", "晚餐")), _tt[:200])
+    check("三顿各有一个「做完了」按钮（没撞控件 key）",
+          len(find_buttons(at, "做完了")) == 3, len(find_buttons(at, "做完了")))
     print(f"    三餐方案: {[(p.day, p.meal, len(p.dishes)) for p in res.days]}")
 
 

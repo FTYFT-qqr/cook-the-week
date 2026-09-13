@@ -107,6 +107,66 @@ def test_after_22_on_last_day_stays():
     assert view.hint == ""
 
 
+# ---------------------------------------------------------------- docs/10：一天多顿
+
+MEALS3 = ["早餐", "午餐", "晚餐"]
+DB3 = RecipeDB(recipes=RECIPES + [
+    Recipe(id="c", name="清蒸鲈鱼", category="热菜", difficulty="简单", time_min=20, cost_yuan=22.0)])
+
+
+def make_multi_record(*, days: int = 3, cook_start: str = "18:30",
+                      done_slots: list[str] | None = None) -> PlanRecord:
+    """一天三顿、每顿一道**互不相同**的菜（哪一处把餐次弄丢都看得出来）。"""
+    picks = {"早餐": "a", "午餐": "b", "晚餐": "c"}
+    plans = [DayPlan(day=d, meal=m, dishes=[ChosenDish(recipe_id=picks[m], reason=f"{m}的安排")])
+             for d in range(1, days + 1) for m in MEALS3]
+    return PlanRecord(
+        id="p_multi", created_at="2026-09-13 20:00", start_date=START, label="9/14–9/20",
+        change_note="", done_slots=list(done_slots or []),
+        result=PlanResult(
+            constraints=UserConstraints(people=2, days=days, dishes_per_day=1,
+                                        cook_start=cook_start, meals=list(MEALS3),
+                                        dishes_per_meal={"早餐": 1, "午餐": 1, "晚餐": 1}),
+            candidate_count=3, days=plans))
+
+
+def test_多餐_每一顿各是各的():
+    """界面「今天」页一天问三顿，返回的三份必须各归各位（别都拿早餐那份）。"""
+    rec = make_multi_record()
+    views = {m: tonight_view(rec, DB3, today=date(2026, 9, 16), day=3, meal=m) for m in MEALS3}
+    assert all(v.meal == m for m, v in views.items()), {m: v.meal for m, v in views.items()}
+    assert all(v.day == 3 for v in views.values())
+    assert [v.headline for v in views.values()] == ["番茄炒蛋", "清炒时蔬", "清蒸鲈鱼"]
+    assert views["晚餐"].meal == "晚餐" and views["午餐"].kicker.startswith("午餐 ·")
+
+
+def test_多餐_不给餐次就是当天最后一顿():
+    view = tonight_view(make_multi_record(), DB3, today=date(2026, 9, 16), day=3)
+    assert view.meal == "晚餐"
+    assert view.headline == "清蒸鲈鱼"
+
+
+def test_多餐_几点能上桌只对最后一顿说():
+    """"18:30 开始做"只对当天最后那一顿说 —— 三张卡都写这句是错的（早上不做晚饭）。"""
+    rec = make_multi_record()
+    kw = dict(today=date(2026, 9, 16), now=datetime(2026, 9, 16, 18, 0), day=3)
+    am = tonight_view(rec, DB3, meal="早餐", **kw)
+    pm = tonight_view(rec, DB3, meal="晚餐", **kw)
+    assert am.eat_eta == "" and "开始做" not in am.meta, am.meta
+    assert pm.eat_eta == "18:30 开始做，约 18:50 能吃上", pm.eat_eta
+    # 单餐时这条规则不生效（老行为一字不变）
+    one = tonight_view(make_record(), DB, today=date(2026, 9, 16), day=3)
+    assert one.eat_eta == "18:30 开始做，约 18:55 能吃上"
+
+
+def test_多餐_做完一顿只有那一顿是已做():
+    rec = make_multi_record(done_slots=["3|午餐"])
+    kw = dict(today=date(2026, 9, 16), day=3)
+    assert tonight_view(rec, DB3, meal="午餐", **kw).state == "done"
+    assert tonight_view(rec, DB3, meal="早餐", **kw).state == "planned"
+    assert tonight_view(rec, DB3, meal="晚餐", **kw).state == "planned"
+
+
 def test_eat_eta_formats_and_tolerates_bad_input():
     assert eat_eta("18:30", 45) == "18:30 开始做，约 19:15 能吃上"
     assert eat_eta("18：30", 45) == "18：30 开始做，约 19:15 能吃上"     # 全角冒号也能认

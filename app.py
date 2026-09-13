@@ -364,6 +364,20 @@ def _name_of(rid: str) -> str:
     return r.name if r else rid
 
 
+def days_span_of(result) -> int:
+    """这份方案一共**几天**（不是顿数 —— 一天三顿时 `len(result.days)` 是 21）。
+
+    docs/10：凡是要"天数"的地方（标签页个数、第几天、今天算第几天、回执里说几天）
+    都必须走这里，直接用 `len(result.days)` 会说出"排好 12 天晚餐"这种话。
+    """
+    return max((p.day for p in result.days), default=0)
+
+
+def _slot_tag(day: int, meal: str) -> tuple[int, str]:
+    """「这一天这一顿」在 session_state 里的键：多餐时只用一个 day 会互相串（docs/10）。"""
+    return (int(day), meal)
+
+
 def _load_record(rec: store.PlanRecord) -> None:
     """切到某一版存档：结果、需求、控件值一起换过去。"""
     inp = store.inputs_from_constraints(rec.result.constraints, rec.start_date)
@@ -630,10 +644,12 @@ def _quick_faster(day_no: int, meal: str | None = None) -> None:
     """回家晚了：只把这一顿换成最快能做完的组合（不碰其他餐）。"""
     result = st.session_state["result"]
     c = result.constraints
+    slot = result.slot(day_no, meal)
+    meal = slot.meal if slot is not None else meal
     prev_days = [p.model_copy(deep=True) for p in result.days]
     got = fastest_day(result.days, day_no, db, c, meal=meal)
     if got is None:
-        st.session_state["tonight_relax"] = day_no
+        st.session_state["tonight_relax"] = _slot_tag(day_no, meal)
         ui.set_notice("info", "今晚这几道已经是最快的组合了，想更快可以放宽一点：")
         st.rerun()
     new_plans, recipes = got
@@ -685,6 +701,172 @@ def _mark_done(day_no: int, done: bool = True, meal: str | None = None) -> None:
     st.rerun()
 
 
+def _tonight_week_over(view) -> None:
+    """状态⑤：这一周已经结束（周级状态，多餐时也只画一次）。"""
+    _hero(view)
+    w1, w2, _sp = st.columns([1, 1, 3])
+    with w1:
+        if st.button("照上周", key="tonight_reuse_prev", type="primary",
+                     use_container_width=True, help="用上一版的需求重新排一版"):
+            prev_rec = store.previous_record(st.session_state.get("record_id"))
+            if prev_rec is not None:
+                _load_record(prev_rec)
+            st.session_state["stale"] = True
+            st.session_state["job"] = None
+            ui.set_notice("info", "已照上一版重新排了一版。")
+            st.rerun()
+    with w2:
+        if st.button("重新排", key="tonight_replan", use_container_width=True):
+            goto("create")
+    if st.button("看这一周", key="tonight_view_week", use_container_width=True):
+        goto("plan")
+
+
+def _tonight_slot(view, result, c, db, multi: bool = False) -> bool:
+    """画「今天」里的**一顿**：主角卡 + 每道菜 + 这一顿的快改。
+
+    单餐时这一页只有一顿，行为与以前一字不差（控件 key 也一模一样）；
+    多餐时同一段代码一天画三遍，每顿各带自己的状态（早餐做完了、午/晚还没做）——
+    状态判定仍然只由 `tonight_view` 一处给，界面不自己推。
+
+    返回"要不要画页脚那块"（与以前单餐时的行为一致：只有状态①才画）。
+    """
+    day_plan = result.slot(view.day, view.meal) or result.days[0]
+    # 多餐时同一页有三个"做完了"，不区分餐次 Streamlit 会直接报控件 key 重复
+    k = "" if not multi else f"_{view.meal}"
+    _hero(view)
+    tag = _slot_tag(view.day, view.meal)
+
+    # 状态②：这一顿不做饭
+    if view.state == "skipped":
+        b1, b2, _sp = st.columns([1, 1, 3])
+        with b1:
+            if st.button("改回来做", key=f"unskip_{view.day}{k}", type="primary",
+                         use_container_width=True):
+                result.days = restore_day(result.days, view.day, db, c, meal=view.meal)
+                refresh_result(result, db)
+                _commit_plan()
+                ui.set_notice("swap", f"{where_text(view.day, view.meal, c)}恢复做饭，其他天没动。")
+                st.rerun()
+        with b2:
+            if st.button("看这一周", key=f"skipped_to_plan{k}", use_container_width=True):
+                goto("plan")
+        return False
+
+    # 状态③：这一顿已做过（含 E-07 做完之后打一分）
+    if view.state == "done":
+        r1, r2, r3, _sp = st.columns([1, 1, 1, 3])
+        for col, (label_, score) in zip((r1, r2, r3),
+                                        (("好吃", 2), ("一般", 1), ("下次不做", 0))):
+            with col:
+                if st.button(label_, key=f"rate_{score}{k}",
+                             type="primary" if score == 2 else "secondary",
+                             use_container_width=True):
+                    _rate_tonight(view.day, score, view.meal)
+        b1, b2, _sp2 = st.columns([1, 1, 3])
+        with b1:
+            nxt = view.day % max(days_span_of(result), 1) + 1
+            if st.button("看看明天", key=f"done_next_day{k}", use_container_width=True):
+                st.session_state["tonight_override"] = nxt
+                st.rerun()
+        with b2:
+            if st.button("再做一次", key=f"done_undo{k}", use_container_width=True):
+                _mark_done(view.day, False, view.meal)
+        return False
+
+    if view.state != "planned":       # 兜底：真出了没见过的状态也别白费一张白页（R7）
+        _empty_state("这一顿暂时没有可显示的内容，先去排一周。", f"tonight_unknown{k}")
+        return False
+
+    place = where_text(view.day, view.meal, c)
+
+    # 每道菜一行：菜名 + 这道不想吃（05 M1-3）
+    for dish in day_plan.dishes:
+        r = db.by_id(dish.recipe_id)
+        if r is None:
+            continue
+        d1, d2 = st.columns([4, 1])
+        with d1:
+            st.markdown(f"<p style='margin:.35rem 0'>**{r.name}**　"
+                        f"<span class='line'>{r.time_min} 分钟 · {r.difficulty}</span></p>",
+                        unsafe_allow_html=True)
+        with d2:
+            if st.button("这道不吃", key=f"tonight_dislike_{r.id}{k}", use_container_width=True,
+                         help="只换这一道，并记进口味档案"):
+                prev_days = [p.model_copy(deep=True) for p in result.days]
+                prev_profile = prof.load_profile()
+                prof.set_feedback(r.name, "dislike", KNOWN_NAMES, source="今晚页")
+                new_days, rep_recipe = swap_dish(result.days, view.day, r.id, db, c, view.meal)
+                if rep_recipe:
+                    result.days = new_days
+                    refresh_result(result, db)
+                    _commit_plan()
+                    text = (f"已把{place}的「{r.name}」换成「{rep_recipe.name}」，"
+                            "并记住你以后不想吃它（其他天没动）。")
+                else:
+                    text = f"已记住你不想吃「{r.name}」，但{place}暂时没有可替换的菜。"
+                ui.set_notice("dislike", text)
+                ui.push_undo(text, days=prev_days, profile=prev_profile,
+                             record_id=st.session_state.get("record_id"))
+                ui.push_history(text)
+                st.rerun()
+
+    # 两个整卡级快改（05 §1.2 A）
+    if st.session_state.get("guests_for") == tag:
+        st.markdown(f"<p class='line'>{place}来几位？（只影响这一顿的份量）</p>",
+                    unsafe_allow_html=True)
+        g1, g2, g3, _sp = st.columns([1, 1, 1, 3])
+        with g1:
+            if st.button("多 2 人", key=f"guests_2{k}", type="primary", use_container_width=True):
+                _quick_guests(view.day, 2, view.meal)
+        with g2:
+            if st.button("多 4 人", key=f"guests_4{k}", use_container_width=True):
+                _quick_guests(view.day, 4, view.meal)
+        with g3:
+            if st.button("取消", key=f"guests_cancel{k}", use_container_width=True):
+                st.session_state["guests_for"] = None
+                st.rerun()
+    else:
+        q1, q2, q3, _sp = st.columns([1, 1, 1, 3])
+        with q1:
+            if st.button("回家晚了", key=f"quick_faster{k}", use_container_width=True,
+                         help="只把这一顿换成最快能做完的组合"):
+                _quick_faster(view.day, view.meal)
+        with q2:
+            if st.button("来客人了", key=f"quick_guests{k}", use_container_width=True,
+                         help="只改这一顿的人数与份量，其他天不动"):
+                st.session_state["guests_for"] = tag
+                st.rerun()
+        with q3:
+            if st.button("做完了", key=f"quick_done{k}", use_container_width=True,
+                         help="标记这一顿做完了，明天打开还记着"):
+                _mark_done(view.day, True, view.meal)
+
+    # 开始做饭 → 展开下锅顺序（05 M1-5）
+    order, has_slow = rep.cook_order(day_plan, db)
+    if order:
+        if st.session_state.get("show_order_for") == tag:
+            st.markdown("<p class='line'>照这个顺序来：</p>", unsafe_allow_html=True)
+            for line in order:
+                st.markdown(f"- {line}")
+            if has_slow:
+                st.markdown("<p class='line'>有汤/炖菜可以先上火，边炖边做别的。</p>",
+                            unsafe_allow_html=True)
+            if st.button("收起", key=f"order_hide{k}", use_container_width=True):
+                st.session_state["show_order_for"] = None
+                st.rerun()
+        elif st.button("开始做饭", key=f"order_show{k}", type="primary"):
+            st.session_state["show_order_for"] = tag
+            st.rerun()
+
+    # 换不动时的放宽选项（R4）
+    if st.session_state.get("tonight_relax") == tag:
+        _relax_options(c, result.issues, swap_failed=True)
+    elif st.session_state.get("tonight_relax"):
+        st.session_state["tonight_relax"] = None
+    return True
+
+
 def render_tonight() -> None:
     # 只做晚餐时这一页仍然叫「今晚」（与以前一致）；勾了多顿时它就是"今天"
     _inp_meals = _picked_meals(st.session_state.get("plan_inputs") or {})
@@ -725,159 +907,26 @@ def render_tonight() -> None:
         _hero(view)
         return
 
-    day_plan = result.slot(view.day, view.meal) or result.days[0]
-    _hero(view)
-
-    # 状态⑤：这一周已经结束（05 M1 状态⑤）
+    # 状态⑤：这一周已经结束（05 M1 状态⑤）—— 周级状态，多餐时也只画一次
     if view.state == "week_over":
-        w1, w2, _sp = st.columns([1, 1, 3])
-        with w1:
-            if st.button("照上周", key="tonight_reuse_prev", type="primary",
-                         use_container_width=True, help="用上一版的需求重新排一版"):
-                prev_rec = store.previous_record(st.session_state.get("record_id"))
-                if prev_rec is not None:
-                    _load_record(prev_rec)
-                st.session_state["stale"] = True
-                st.session_state["job"] = None
-                ui.set_notice("info", "已照上一版重新排了一版。")
-                st.rerun()
-        with w2:
-            if st.button("重新排", key="tonight_replan", use_container_width=True):
-                goto("create")
-        nav_to_plan = st.button("看这一周", key="tonight_view_week", use_container_width=True)
-        if nav_to_plan:
-            goto("plan")
+        _tonight_week_over(view)
         return
 
-    # 状态②：今天已跳过
-    if view.state == "skipped":
-        b1, b2, _sp = st.columns([1, 1, 3])
-        with b1:
-            if st.button("改回来做", key=f"unskip_{view.day}", type="primary",
-                         use_container_width=True):
-                result.days = restore_day(result.days, view.day, db, c, meal=view.meal)
-                refresh_result(result, db)
-                _commit_plan()
-                ui.set_notice("swap", f"{where_text(view.day, view.meal, c)}恢复做饭，其他天没动。")
-                st.rerun()
-        with b2:
-            if st.button("看这一周", key="skipped_to_plan", use_container_width=True):
-                goto("plan")
-        return
+    # 一天要画几顿：只做晚餐时就是一顿（行为与以前一字不差）；
+    # 多餐时**一顿一张卡**，从早到晚排下来（05 M1 的"今天"）。
+    meals = [view.meal] if not c.is_multi_meal() else (
+        [p.meal for p in result.slots_for(view.day)] or [view.meal])
+    show_tail = False
+    for meal in meals:
+        slot_view = view if not c.is_multi_meal() else tonight_view(
+            record, db, day=view.day, meal=meal)
+        show_tail = _tonight_slot(slot_view, result, c, db,
+                                 multi=c.is_multi_meal()) or show_tail
 
-    # 状态③：今天已做过（含 E-07 做完之后打一分）
-    if view.state == "done":
-        r1, r2, r3, _sp = st.columns([1, 1, 1, 3])
-        for col, (label_, score) in zip((r1, r2, r3),
-                                        (("好吃", 2), ("一般", 1), ("下次不做", 0))):
-            with col:
-                if st.button(label_, key=f"rate_{score}", type="primary" if score == 2 else "secondary",
-                             use_container_width=True):
-                    _rate_tonight(view.day, score, view.meal)
-        b1, b2, _sp2 = st.columns([1, 1, 3])
-        with b1:
-            nxt = view.day % len(result.days) + 1
-            if st.button("看看明天", key="done_next_day", use_container_width=True):
-                st.session_state["tonight_override"] = nxt
-                st.rerun()
-        with b2:
-            if st.button("再做一次", key="done_undo", use_container_width=True):
-                _mark_done(view.day, False, view.meal)
-        return
-
-    # 状态①：今天有安排 —— 英雄卡已经在上面画好了，这里只画每道菜与快改
-    if view.state != "planned":       # 兜底：真出了没见过的状态也别白屏（R7：状态永远可见）
-        _empty_state("这一页暂时没有可显示的内容，先去排一周。", "tonight_unknown")
-        return
-
-    # 每道菜一行：菜名 + 这道不想吃（05 M1-3）
-    for dish in day_plan.dishes:
-        r = db.by_id(dish.recipe_id)
-        if r is None:
-            continue
-        d1, d2 = st.columns([4, 1])
-        with d1:
-            st.markdown(f"<p style='margin:.35rem 0'>**{r.name}**　"
-                        f"<span class='line'>{r.time_min} 分钟 · {r.difficulty}</span></p>",
-                        unsafe_allow_html=True)
-        with d2:
-            if st.button("这道不吃", key=f"tonight_dislike_{r.id}", use_container_width=True,
-                         help="只换这一道，并记进口味档案"):
-                prev_days = [p.model_copy(deep=True) for p in result.days]
-                prev_profile = prof.load_profile()
-                prof.set_feedback(r.name, "dislike", KNOWN_NAMES, source="今晚页")
-                new_days, rep_recipe = swap_dish(result.days, view.day, r.id, db, c, view.meal)
-                if rep_recipe:
-                    result.days = new_days
-                    refresh_result(result, db)
-                    _commit_plan()
-                    text = (f"已把今晚的「{r.name}」换成「{rep_recipe.name}」，"
-                            "并记住你以后不想吃它（其他天没动）。")
-                else:
-                    text = f"已记住你不想吃「{r.name}」，但今晚暂时没有可替换的菜。"
-                ui.set_notice("dislike", text)
-                ui.push_undo(text, days=prev_days, profile=prev_profile,
-                             record_id=st.session_state.get("record_id"))
-                ui.push_history(text)
-                st.rerun()
-
-    # 两个整卡级快改（05 §1.2 A）
-    if st.session_state.get("guests_for") == view.day:
-        st.markdown("<p class='line'>今晚来几位？（只影响今晚的份量）</p>",
-                    unsafe_allow_html=True)
-        g1, g2, g3, _sp = st.columns([1, 1, 1, 3])
-        with g1:
-            if st.button("多 2 人", key="guests_2", type="primary", use_container_width=True):
-                _quick_guests(view.day, 2, view.meal)
-        with g2:
-            if st.button("多 4 人", key="guests_4", use_container_width=True):
-                _quick_guests(view.day, 4, view.meal)
-        with g3:
-            if st.button("取消", key="guests_cancel", use_container_width=True):
-                st.session_state["guests_for"] = None
-                st.rerun()
-    else:
-        q1, q2, q3, _sp = st.columns([1, 1, 1, 3])
-        with q1:
-            if st.button("回家晚了", key="quick_faster", use_container_width=True,
-                         help="只把这一顿换成最快能做完的组合"):
-                _quick_faster(view.day, view.meal)
-        with q2:
-            if st.button("来客人了", key="quick_guests", use_container_width=True,
-                         help="只改今晚的人数与份量，其他天不动"):
-                st.session_state["guests_for"] = view.day
-                st.rerun()
-        with q3:
-            if st.button("做完了", key="quick_done", use_container_width=True,
-                         help="标记今天做完了，明天打开还记着"):
-                _mark_done(view.day, True, view.meal)
-
-    # 开始做饭 → 展开下锅顺序（05 M1-5）
-    order, has_slow = rep.cook_order(day_plan, db)
-    if order:
-        if st.session_state.get("show_order_for") == view.day:
-            st.markdown("<p class='line'>照这个顺序来：</p>", unsafe_allow_html=True)
-            for line in order:
-                st.markdown(f"- {line}")
-            if has_slow:
-                st.markdown("<p class='line'>有汤/炖菜可以先上火，边炖边做别的。</p>",
-                            unsafe_allow_html=True)
-            if st.button("收起", key="order_hide", use_container_width=True):
-                st.session_state["show_order_for"] = None
-                st.rerun()
-        elif st.button("开始做饭", key="order_show", type="primary"):
-            st.session_state["show_order_for"] = view.day
-            st.rerun()
-
-    # 换不动时的放宽选项（R4）
-    if st.session_state.get("tonight_relax") == view.day:
-        _relax_options(c, result.issues, swap_failed=True)
-    elif st.session_state.get("tonight_relax"):
-        st.session_state["tonight_relax"] = None
-
-    _notice_block(result)
-    st.markdown(f"<p class='line'>明天、后天吃什么 → 「本周计划」；"
-                f"买菜 → 「买菜清单」；口味 → 「口味档案」。</p>", unsafe_allow_html=True)
+    if show_tail:
+        _notice_block(result)
+        st.markdown(f"<p class='line'>明天、后天吃什么 → 「本周计划」；"
+                    f"买菜 → 「买菜清单」；口味 → 「口味档案」。</p>", unsafe_allow_html=True)
 
 
 # ================================================================ 页面 3：排一周（M2）
@@ -1105,7 +1154,10 @@ def _ensure_plan():
     st.session_state["record_id"] = rec.id
     st.session_state["plan_start"] = rec.start_date
     st.session_state["revisit"] = None
-    text = f"已排好 {rec.label} 的 {len(result.days)} 天晚餐，关掉页面明天打开还在。"
+    _c_new = result.constraints
+    text = (f"已排好 {rec.label} 的 {days_span_of(result)} 天"
+            + ("、".join(_c_new.active_meals()) if _c_new.is_multi_meal() else "晚餐")
+            + "，关掉页面明天打开还在。")
     if prev_rec is not None:
         text += f"　这次是另存为新的一版，旧版「{prev_rec.label}」在「以前的方案」里。"
     ui.set_notice("save", text)

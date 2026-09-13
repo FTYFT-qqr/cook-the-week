@@ -102,3 +102,8 @@ def rate_limit_plan_per_min() -> int:
 def idempotency_ttl_hours() -> int:
     """同一个 `Idempotency-Key` 的响应保留多久（默认 24h，docs/08 §5 中间件 5）。"""
     return _int_env("IDEMPOTENCY_TTL_HOURS", 24)
+
+
+def job_timeout_sec() -> int:
+    """一次排菜任务最多跑多久（docs/08 §6：默认 120s，超时记为 failed(timeout)）。"""
+    return _int_env("JOB_TIMEOUT_SEC", 120, low=5)

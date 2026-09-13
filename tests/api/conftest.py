@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+import asyncio
+import time
 from pathlib import Path
 from uuid import uuid4
 
@@ -15,6 +17,7 @@ import pytest
 import pytest_asyncio
 
 from recipe_planner.api.main import create_app
+from recipe_planner.api.worker import InProcessRunner, set_runner
 from recipe_planner.models import (ChosenDish, DayPlan, PlanResult, Recipe, RecipeDB,
                                    ShoppingItem, UserConstraints)
 from recipe_planner.storage.engine import get_engine, reset_engine
@@ -118,3 +121,95 @@ def result_factory():
 @pytest.fixture()
 def start_date():
     return START
+
+
+# ---------------------------------------------------------------- 任务（P1-5）
+
+class FakeGraph:
+    """假流水线：逐节点吐 update，可以精确控制"跑多久 / 在哪失败 / 有没有结果"。
+
+    沿用 `scripts/self_check.py` 里 `_SlowGraph` 的手法 —— 不碰真实 LLM，
+    但走的是和真图一模一样的 `stream(init, stream_mode="updates")` 协议。
+    """
+
+    NODES = ["retrieve", "plan", "validate", "shopping", "answer"]
+
+    def __init__(self, *, delay: float = 0.0, raise_at: str | None = None,
+                 empty: bool = False, nodes: list[str] | None = None) -> None:
+        self.delay = delay
+        self.raise_at = raise_at
+        self.empty = empty
+        self.nodes = nodes or list(self.NODES)
+
+    def stream(self, init: dict, stream_mode: str = "updates"):
+        from recipe_planner.models import ChosenDish, DayPlan, PlanResult
+
+        for node in self.nodes:
+            if self.delay:
+                time.sleep(self.delay)
+            if node == self.raise_at:
+                raise RuntimeError("假图故意失败")
+            if node == "answer":
+                result = None
+                if not self.empty:
+                    c = init["constraints"]
+                    result = PlanResult(
+                        constraints=c, candidate_count=5,
+                        days=[DayPlan(day=d, dishes=[ChosenDish(recipe_id="r1", reason="假图"),
+                                                     ChosenDish(recipe_id="r2", reason="假图")])
+                              for d in range(1, c.days + 1)],
+                        shopping=[], llm_used=False)
+                yield {"answer": {"result": result}}
+            else:
+                yield {node: {}}
+
+
+def fake_graph_factory(**kwargs):
+    return lambda db: FakeGraph(**kwargs)
+
+
+@pytest.fixture()
+def runner_factory(api):
+    """装一个可配置的执行器，用例结束还原（避免工作线程泄漏到别的用例）。"""
+    installed = []
+
+    def _install(**kwargs) -> InProcessRunner:
+        kwargs.setdefault("graph_factory", fake_graph_factory())
+        runner = InProcessRunner(**kwargs)
+        installed.append(runner)
+        set_runner(runner)
+        return runner
+
+    yield _install
+    for runner in installed:
+        runner.shutdown()
+    set_runner(None)
+
+
+@pytest.fixture()
+def fast_runner(runner_factory):
+    """瞬时完成的执行器：只关心"接口返回什么"的用例用它，别让真图跑起来。"""
+    return runner_factory(graph_factory=fake_graph_factory())
+
+
+async def wait_job(client, job_id: str, timeout: float = 15.0) -> dict:
+    """轮询到终态（succeeded / failed / cancelled）。"""
+    deadline = time.time() + timeout
+    body: dict = {}
+    while time.time() < deadline:
+        body = (await client.get(f"/api/v1/jobs/{job_id}")).json()
+        if body["status"] in ("succeeded", "failed", "cancelled"):
+            return body
+        await asyncio.sleep(0.05)
+    raise AssertionError(f"任务 {job_id} 在 {timeout}s 内没有结束，最后状态：{body}")
+
+
+@pytest.fixture()
+def graph_factory():
+    """假流水线工厂（`tests/api` 不是包，所以统一用夹具传函数，不做相对导入）。"""
+    return fake_graph_factory
+
+
+@pytest.fixture()
+def wait_for_job():
+    return wait_job

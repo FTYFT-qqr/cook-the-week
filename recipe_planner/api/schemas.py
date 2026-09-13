@@ -9,6 +9,8 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from recipe_planner.models import ALLERGENS
+
 
 # ----------------------------------------------------------------- 通用
 
@@ -149,6 +151,58 @@ class ConstraintsOut(BaseModel):
     cook_start: str = ""
     budget_per_person_day: Optional[float] = None
     pantry_items: list[str] = []
+
+
+# ----------------------------------------------------------------- 任务（P1-5）
+
+class PlanCreateIn(BaseModel):
+    """排一周的需求（= `UserConstraints` + 起始周与备注）。"""
+
+    people: int = Field(default=2, ge=1, le=20)
+    days: int = Field(default=3, ge=1, le=7)
+    dishes_per_day: int = Field(default=2, ge=1, le=4)
+    allergens: list[str] = Field(default_factory=list,
+                                 description="只能填这几个：" + "、".join(ALLERGENS))
+    spice_level: str = "不辣"
+    taste_tags: list[str] = Field(default_factory=list)
+    goal: str = "随便"
+    max_time_min: int = Field(default=45, ge=1, le=180)
+    skill: str = "随便"
+    cook_start: str = ""
+    budget_per_person_day: Optional[float] = Field(default=None, ge=0)
+    pantry_items: list[str] = Field(default_factory=list)
+    start_date: Optional[str] = Field(default=None, description="这一周的第一天（默认下周一）")
+    change_note: str = ""
+
+
+class JobAcceptedOut(BaseModel):
+    """202 的响应：立刻给 job_id，别让客户端干等。"""
+
+    job_id: str
+    status: Literal["queued"] = "queued"
+    queue_position: int = 1
+    message: str = ""
+    poll_path: str = ""
+    timeout_sec: int = 120
+    next_steps: list[NextStep] = []
+
+
+class JobOut(BaseModel):
+    """任务状态（轮询用）。失败时 `message` 是人话，`next_steps` 可直接点。"""
+
+    id: str
+    kind: str = "plan_week"
+    status: Literal["queued", "running", "succeeded", "failed", "cancelled"]
+    stage: str = ""
+    progress: float = 0.0
+    plan_id: Optional[str] = None
+    created_at: str = ""
+    started_at: str = ""
+    finished_at: str = ""
+    error_code: Optional[str] = None
+    message: str = ""
+    next_steps: list[NextStep] = []
+    request: dict[str, Any] = {}
 
 
 class PlanListItem(BaseModel):

@@ -21,16 +21,8 @@ async def _client(app):
 
 
 def _app_with_plan_route():
-    """补一个 `POST /api/v1/plans`（P1-5 才做真身），用来验证"贵接口单独一个桶"。"""
-    app = create_app()
-    router = APIRouter()
-
-    @router.post("/api/v1/plans")
-    async def create_plan() -> dict:
-        return {"job_id": "job_test"}
-
-    app.include_router(router)
-    return app
+    """用**真实的** `POST /api/v1/plans`（P1-5 已经做出来了）验证"贵接口单独一个桶"。"""
+    return create_app()
 
 
 # ---------------------------------------------------------------- 令牌桶本身
@@ -63,13 +55,13 @@ def test_route_classification():
 
 # ---------------------------------------------------------------- 贵接口
 
-async def test_seventh_plan_request_is_429(api, monkeypatch):
+async def test_seventh_plan_request_is_429(api, fast_runner, monkeypatch):
     monkeypatch.setenv("RATE_LIMIT", "on")
     monkeypatch.delenv("RATE_LIMIT_PLAN_PER_MIN", raising=False)   # 用默认 6
     async with await _client(_app_with_plan_route()) as c:
         for i in range(6):
             r = await c.post("/api/v1/plans", json={})
-            assert r.status_code == 200, f"第 {i + 1} 次不该被拦：{r.text}"
+            assert r.status_code == 202, f"第 {i + 1} 次不该被拦：{r.text}"
 
         r7 = await c.post("/api/v1/plans", json={})
         assert r7.status_code == 429
@@ -85,7 +77,7 @@ async def test_seventh_plan_request_is_429(api, monkeypatch):
         assert body["details"]["next_steps"]
 
 
-async def test_normal_bucket_is_separate_from_expensive(api, monkeypatch):
+async def test_normal_bucket_is_separate_from_expensive(api, fast_runner, monkeypatch):
     monkeypatch.setenv("RATE_LIMIT", "on")
     monkeypatch.setenv("RATE_LIMIT_PER_MIN", "5")
     async with await _client(_app_with_plan_route()) as c:
@@ -95,7 +87,7 @@ async def test_normal_bucket_is_separate_from_expensive(api, monkeypatch):
         assert blocked.status_code == 429
         assert blocked.json()["details"]["bucket"] == "normal"
         # 普通桶满了，不影响贵接口的桶
-        assert (await c.post("/api/v1/plans", json={})).status_code == 200
+        assert (await c.post("/api/v1/plans", json={})).status_code == 202
 
 
 async def test_probes_are_not_rate_limited(api, monkeypatch):
@@ -119,9 +111,9 @@ async def test_identities_get_their_own_buckets(api, monkeypatch):
         assert (await c.get("/api/v1/recipes", headers=b)).status_code == 200
 
 
-async def test_rate_limit_can_be_switched_off(api, monkeypatch):
+async def test_rate_limit_can_be_switched_off(api, fast_runner, monkeypatch):
     monkeypatch.setenv("RATE_LIMIT", "off")
     monkeypatch.setenv("RATE_LIMIT_PER_MIN", "1")
     async with await _client(_app_with_plan_route()) as c:
         for _ in range(12):
-            assert (await c.post("/api/v1/plans", json={})).status_code == 200
+            assert (await c.post("/api/v1/plans", json={})).status_code == 202

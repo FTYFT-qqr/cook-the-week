@@ -11,6 +11,7 @@ from contextvars import ContextVar
 
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from recipe_planner.infra.settings import database_url
 
@@ -40,6 +41,12 @@ def get_engine() -> AsyncEngine:
         kwargs: dict = {"future": True}
         if url.startswith("sqlite"):
             kwargs["connect_args"] = {"timeout": 5}
+            if ":memory:" not in url:
+                # 文件型 SQLite 用 NullPool：**每次用完就关连接**。
+                # 原因（P1-5 踩到）：排菜任务在后台线程里跑，它通过 sync_bridge 用自己的事件循环
+                # 写库；而连接池会把在一个事件循环里建的连接复用给另一个循环 → 直接报
+                # "attached to a different loop"。单机家庭场景没有连接开销问题，关掉池最省心。
+                kwargs["poolclass"] = NullPool
         _engine = create_async_engine(url, **kwargs)
         if url.startswith("sqlite"):
             attach_sqlite_pragmas(_engine)

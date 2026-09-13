@@ -96,6 +96,17 @@ async def set_checked(plan_id: Optional[str], names: list[str]) -> Optional[Plan
     return store.set_checked(plan_id, names)
 
 
+async def save_plan(result, start_date: Optional[str] = None, change_note: str = "",
+                    make_active: bool = True) -> PlanRecord:
+    """存一份新方案（排菜任务完成后调用）。"""
+    if _is_db():
+        return await PlanRepo.save_plan(result, start_date, change_note,
+                                        make_active=make_active)
+    from recipe_planner import store
+
+    return store.save_plan(result, start_date, change_note)
+
+
 async def save_profile(profile: dict) -> None:
     if _is_db():
         await ProfileRepo.save_profile(profile)
@@ -133,3 +144,81 @@ async def recent_logs(plan_id: Optional[str] = None, limit: int = 12) -> list[di
     from recipe_planner.storage.repositories import LogRepo
 
     return await LogRepo.recent(plan_id, limit)
+
+
+# ---------------------------------------------------------------- 任务（P1-5）
+
+
+class MemoryJobRepo:
+    """`STORAGE=json` 时的任务实现：进程内字典（任务本来就短命，重启丢了也无所谓）。
+
+    与 `JobRepo` **同签名**，路由拿到哪个都能用。
+    """
+
+    _rows: dict[str, dict] = {}
+
+    @staticmethod
+    def _now() -> str:
+        from datetime import datetime
+
+        return datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    @staticmethod
+    async def create(kind: str = "plan_week", request: Optional[dict] = None,
+                     job_id: Optional[str] = None) -> dict:
+        from uuid import uuid4
+
+        row = {"id": job_id or uuid4().hex[:12], "plan_id": None,
+               "household_id": "household_default", "kind": kind, "status": "queued",
+               "stage": "queued", "progress": 0.0, "request": request or {},
+               "error": None, "created_at": MemoryJobRepo._now(),
+               "started_at": "", "finished_at": ""}
+        MemoryJobRepo._rows[row["id"]] = row
+        return dict(row)
+
+    @staticmethod
+    async def get(job_id: str) -> Optional[dict]:
+        row = MemoryJobRepo._rows.get(job_id)
+        return None if row is None else dict(row)
+
+    @staticmethod
+    async def list_recent(limit: int = 10) -> list[dict]:
+        rows = sorted(MemoryJobRepo._rows.values(), key=lambda r: r["created_at"], reverse=True)
+        return [dict(r) for r in rows[:limit]]
+
+    @staticmethod
+    async def active_count(household_id: Optional[str] = None, kind: str = "plan_week") -> int:
+        return len([r for r in MemoryJobRepo._rows.values()
+                    if r["kind"] == kind and r["status"] in ("queued", "running")
+                    and (not household_id or r["household_id"] == household_id)])
+
+    @staticmethod
+    async def set_status(job_id: str, status: str, *, stage: Optional[str] = None,
+                         progress: Optional[float] = None, plan_id: Optional[str] = None,
+                         error: Optional[str] = None) -> Optional[dict]:
+        row = MemoryJobRepo._rows.get(job_id)
+        if row is None:
+            return None
+        row["status"] = status
+        if stage is not None:
+            row["stage"] = stage
+        if progress is not None:
+            row["progress"] = max(0.0, min(1.0, float(progress)))
+        if plan_id is not None:
+            row["plan_id"] = plan_id
+        if error is not None:
+            row["error"] = error
+        if status == "running" and not row["started_at"]:
+            row["started_at"] = MemoryJobRepo._now()
+        if status in ("succeeded", "failed", "cancelled"):
+            row["finished_at"] = MemoryJobRepo._now()
+        return dict(row)
+
+
+def job_repo():
+    """任务仓储：db 模式用数据库表，json 模式用进程内字典（同签名）。"""
+    if _is_db():
+        from recipe_planner.storage.repositories import JobRepo
+
+        return JobRepo
+    return MemoryJobRepo

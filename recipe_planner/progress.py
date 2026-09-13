@@ -29,6 +29,26 @@ CANCELLED = "⏹️ 已停止"
 FINISHED = "✅ 排好了"
 STAGE_ORDER = ["retrieve", "plan", "validate", "repair", "shopping", "answer"]
 
+# 给 API / SSE 用的**无 emoji** 版本（06 设计规范：按钮与文案里不放 emoji）。
+# 上面那份 STAGES 是 Streamlit 界面在用的，P1-7 界面切到 API 后两处合一。
+STAGE_LABELS = {
+    "retrieve": "正在挑菜谱（先排除过敏原和忌口）…",
+    "plan": "正在搭配这一周的菜…",
+    "validate": "正在检查忌口、辣度、预算和时间…",
+    "repair": "有几处不太合适，正在调整重排…",
+    "shopping": "正在汇总买菜清单…",
+    "answer": "马上就好…",
+}
+# 每个节点大概推进到多少（给前端一条不会卡住的进度，docs/08 §6 的 SSE 也用这个）
+STAGE_PROGRESS = {
+    "retrieve": 0.15,
+    "plan": 0.45,
+    "validate": 0.65,
+    "repair": 0.75,
+    "shopping": 0.9,
+    "answer": 0.97,
+}
+
 
 class PlanJob:
     """一次排菜任务：可在后台推进，可随时取消。"""

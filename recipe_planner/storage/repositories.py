@@ -405,3 +405,103 @@ class LogRepo:
             rows = (await s.execute(q)).scalars().all()
             return [{"id": r.id, "kind": r.kind, "text": r.text, "at": _iso(r.created_at)}
                     for r in rows]
+
+
+# ---------------------------------------------------------------- 任务（P1-5）
+#
+# 状态机（docs/08 §6）：queued → running → succeeded | failed | cancelled
+# 返回的是**纯字典**：任务会被后台线程读写、还要跨线程传，ORM 对象不能外泄。
+
+JOB_KINDS = ("plan_week",)
+ACTIVE_STATUSES = ("queued", "running")
+
+
+def _job_dict(row: orm.Job) -> dict:
+    return {
+        "id": row.id,
+        "plan_id": row.plan_id,
+        "household_id": row.household_id,
+        "kind": row.kind,
+        "status": row.status,
+        "stage": row.stage or "",
+        "progress": float(row.progress or 0),
+        "request": dict(row.request or {}),
+        "error": row.error,
+        "created_at": _iso(row.created_at),
+        "started_at": _iso(row.started_at),
+        "finished_at": _iso(row.finished_at),
+    }
+
+
+def _now() -> datetime:
+    return datetime.now()
+
+
+class JobRepo:
+    """排菜任务（数据库实现）。
+
+    `error` 列是 Text，里面存的是 JSON：`{"code","message","next_steps"}` ——
+    docs/08 §3.2 的 DDL 没有单独的 code/next_steps 列，而这两样前端要用
+    （05 §5.1 失败必须给可点击的补救项），所以塞进这一个人话字段里，读的时候再解开。
+    """
+
+    @staticmethod
+    async def create(kind: str = "plan_week", request: Optional[dict] = None,
+                     job_id: Optional[str] = None) -> dict:
+        async with session_scope() as s:
+            hid = await ensure_household(s)
+            row = orm.Job(id=job_id or uuid4().hex[:12], household_id=hid, kind=kind,
+                          status="queued", stage="queued", progress=0,
+                          request=request or {}, created_at=_now())
+            s.add(row)
+            await s.flush()
+            return _job_dict(row)
+
+    @staticmethod
+    async def get(job_id: str) -> Optional[dict]:
+        async with session_scope() as s:
+            row = await s.get(orm.Job, job_id)
+            return None if row is None else _job_dict(row)
+
+    @staticmethod
+    async def list_recent(limit: int = 10) -> list[dict]:
+        async with session_scope() as s:
+            rows = (await s.execute(select(orm.Job)
+                                    .order_by(orm.Job.created_at.desc()).limit(limit))
+                    ).scalars().all()
+            return [_job_dict(r) for r in rows]
+
+    @staticmethod
+    async def active_count(household_id: Optional[str] = None, kind: str = "plan_week") -> int:
+        """还有几个没跑完的（用来算排队位置、实现"同 household 并发上限 1"）。"""
+        async with session_scope() as s:
+            q = select(func.count()).select_from(orm.Job).where(
+                orm.Job.kind == kind, orm.Job.status.in_(ACTIVE_STATUSES))
+            if household_id:
+                q = q.where(orm.Job.household_id == household_id)
+            return int((await s.execute(q)).scalar() or 0)
+
+    @staticmethod
+    async def set_status(job_id: str, status: str, *, stage: Optional[str] = None,
+                         progress: Optional[float] = None,
+                         plan_id: Optional[str] = None,
+                         error: Optional[str] = None) -> Optional[dict]:
+        async with session_scope() as s:
+            row = await s.get(orm.Job, job_id)
+            if row is None:
+                return None
+            row.status = status
+            if stage is not None:
+                row.stage = stage
+            if progress is not None:
+                row.progress = max(0.0, min(1.0, float(progress)))
+            if plan_id is not None:
+                row.plan_id = plan_id
+            if error is not None:
+                row.error = error
+            if status == "running" and row.started_at is None:
+                row.started_at = _now()
+            if status in ("succeeded", "failed", "cancelled"):
+                row.finished_at = _now()
+            await s.flush()
+            return _job_dict(row)

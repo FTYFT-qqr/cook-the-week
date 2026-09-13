@@ -26,11 +26,12 @@ async def test_ready_reports_each_dependency(client):
     body = r.json()
     assert body["status"] == "ready"
     names = {c["name"]: c for c in body["checks"]}
-    assert set(names) == {"db", "redis", "llm"}
+    assert set(names) == {"db", "redis", "llm", "auth"}       # auth 检查是 P1-4 加的
     assert names["db"]["ok"] is True
     # 没配 Redis / 没配密钥都不算"没就绪"，但要如实说明（否则排障时看不见）
     assert names["redis"]["ok"] is True and "内存" in names["redis"]["detail"]
     assert names["llm"]["ok"] is True and "兜底" in names["llm"]["detail"]
+    assert names["auth"]["ok"] is True
 
 
 async def test_ready_is_degraded_when_db_unreachable(monkeypatch, api):

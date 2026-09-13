@@ -1,9 +1,15 @@
-"""FastAPI 应用工厂（docs/08 §5/§6，docs/09 P1-1/P1-2）。
+"""FastAPI 应用工厂（docs/08 §5/§6，docs/09 P1-1…P1-4）。
 
 中间件挂载顺序：Starlette 里**后 add 的在外层**，所以按 §5 的执行顺序倒着 add：
 
     执行：RequestID(1) → AccessLog(2) → Auth(3) → RateLimit(4) → Idempotency(5) → Session(6) → 路由
-    add ：Session(6) → [P1-4 在这里插 5/4/3] → AccessLog(2) → RequestID(1)
+    add ：Session(6) → Idempotency(5) → RateLimit(4) → Auth(3) → AccessLog(2) → RequestID(1)
+
+顺序不能随意换，几处依赖关系：
+- Auth 必须在 RateLimit 外层：限流要按 API Key 分桶（没认证就按 IP 兜底）；
+- Idempotency 必须在 Session 外层：它自己的记录要用**独立**事务提交，
+  不能被业务事务的回滚带走；
+- AccessLog 要在最外层附近：被认证/限流拦掉的请求也要出现在访问日志里。
 
 错误处理（7）用异常处理器实现，见 `errors.install_error_handlers`。
 """
@@ -14,7 +20,8 @@ from fastapi import APIRouter, FastAPI
 from recipe_planner.infra.logging import setup_logging
 
 from .errors import install_error_handlers
-from .middleware import AccessLogMiddleware, RequestIDMiddleware, SessionMiddleware
+from .middleware import (AccessLogMiddleware, AuthMiddleware, IdempotencyMiddleware,
+                         RateLimitMiddleware, RequestIDMiddleware, SessionMiddleware)
 from .routes import health, plan_mutations, plans, profile, recipes
 
 API_PREFIX = "/api/v1"
@@ -35,7 +42,9 @@ def create_app() -> FastAPI:
     install_error_handlers(app)
 
     app.add_middleware(SessionMiddleware)        # 6：请求级事务
-    # P1-4 将在此处依次 add：Idempotency(5) → RateLimit(4) → Auth(3)
+    app.add_middleware(IdempotencyMiddleware)    # 5：Idempotency-Key
+    app.add_middleware(RateLimitMiddleware)      # 4：令牌桶
+    app.add_middleware(AuthMiddleware)           # 3：API Key（AUTH_MODE=off 时放行）
     app.add_middleware(AccessLogMiddleware)      # 2
     app.add_middleware(RequestIDMiddleware)      # 1（最外层）
 

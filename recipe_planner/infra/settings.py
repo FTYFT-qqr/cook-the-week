@@ -72,3 +72,33 @@ def llm_api_key() -> str:
 
 def llm_base_url() -> str:
     return _env("OPENAI_BASE_URL", "https://api.deepseek.com")
+
+
+# ---------------------------------------------------------------- 限流与幂等（P1-4）
+
+
+def _int_env(name: str, default: int, low: int = 1) -> int:
+    try:
+        return max(low, int(_env(name, str(default))))
+    except ValueError:
+        return default
+
+
+def rate_limit_enabled() -> bool:
+    """`RATE_LIMIT=off` 可整体关掉（压测/演示用）。"""
+    return _env("RATE_LIMIT", "on").lower() not in {"off", "0", "false", "no"}
+
+
+def rate_limit_per_min() -> int:
+    """普通接口：每分钟多少次。"""
+    return _int_env("RATE_LIMIT_PER_MIN", 60)
+
+
+def rate_limit_plan_per_min() -> int:
+    """排菜（要花钱调模型）单独一个桶，默认 6/分钟（docs/08 §5 中间件 4）。"""
+    return _int_env("RATE_LIMIT_PLAN_PER_MIN", 6)
+
+
+def idempotency_ttl_hours() -> int:
+    """同一个 `Idempotency-Key` 的响应保留多久（默认 24h，docs/08 §5 中间件 5）。"""
+    return _int_env("IDEMPOTENCY_TTL_HOURS", 24)

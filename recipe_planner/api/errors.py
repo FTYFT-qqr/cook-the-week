@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, Optional
 
@@ -115,6 +116,23 @@ def problem_body(code: str, message: str, status: int, details: Optional[dict] =
 def problem_response(code: str, message: str, status: int, details: Optional[dict] = None) -> JSONResponse:
     return JSONResponse(status_code=status, media_type=PROBLEM_MEDIA_TYPE,
                         content=problem_body(code, message, status, details))
+
+
+async def send_problem(send, code: str, message: str, status: int,
+                       details: Optional[dict] = None,
+                       headers: Optional[list[tuple[bytes, bytes]]] = None) -> None:
+    """中间件里直接回一个 problem+json。
+
+    认证/限流/幂等这几个中间件在**异常处理器的外层**（处理器注册在路由上），
+    所以它们拦下来的请求用不了 JSONResponse，只能自己发 ASGI 消息。
+    """
+    payload = json.dumps(problem_body(code, message, status, details),
+                         ensure_ascii=False).encode("utf-8")
+    raw = [(b"content-type", PROBLEM_MEDIA_TYPE.encode("latin-1")),
+           (b"content-length", str(len(payload)).encode("latin-1"))]
+    raw.extend(headers or [])
+    await send({"type": "http.response.start", "status": status, "headers": raw})
+    await send({"type": "http.response.body", "body": payload})
 
 
 def install_error_handlers(app: FastAPI) -> None:

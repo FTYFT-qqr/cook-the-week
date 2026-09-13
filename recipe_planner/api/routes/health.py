@@ -51,10 +51,20 @@ def _check_llm() -> CheckOut:
                 else "没配密钥，排菜会走确定性兜底（功能不受影响）"))
 
 
+def _check_auth() -> CheckOut:
+    """认证配错**必须**在就绪探针里看得见 —— 否则"以为开了认证其实没开"没人会发现。"""
+    mode = settings.auth_mode()
+    if mode == "apikey" and not settings.api_key():
+        return CheckOut(name="auth", ok=False,
+                        detail="AUTH_MODE=apikey 但没配 API_KEY，受保护的接口一律 503")
+    return CheckOut(name="auth", ok=True,
+                    detail="本机模式，不校验 API Key" if mode == "off" else "已开启 API Key 校验")
+
+
 @router.get("/ready", response_model=ReadyOut, tags=["infra"],
             responses={503: {"description": "有依赖不可用"}})
 async def ready():
-    checks = [await _check_db(), _check_redis(), _check_llm()]
+    checks = [await _check_db(), _check_redis(), _check_llm(), _check_auth()]
     payload = ReadyOut(status="ready" if all(c.ok for c in checks) else "degraded", checks=checks)
     if payload.status != "ready":
         return JSONResponse(status_code=503, content=payload.model_dump())

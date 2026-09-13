@@ -63,22 +63,49 @@ def _recipe_catalog(candidates: list[Recipe], liked: set[str] | None = None) -> 
     return "\n".join(lines)
 
 
+def _meal_brief(c: UserConstraints) -> tuple[str, str, str]:
+    """(第一句话, 硬性要求第 1 条, JSON 示例) —— 单顿时与 docs/10 之前**一字不差**。
+
+    刻意分叉而不是统一改写：单顿（只做晚餐）是最常见的用法，提示词一变，
+    LLM 的输出就会跟着变，等于给一个没人要求改的路径引入不确定性。
+    """
+    meals = c.active_meals()
+    if len(meals) == 1:
+        meal = meals[0]
+        return (f"安排 {c.days} 天（每天1顿{meal}）的菜单",
+                f"每天恰好选 {c.dishes_for(meal)} 道菜。",
+                '{"days": [{"day": 1, "dishes": [{"recipe_id": "r01", "reason": "..."}}, '
+                '{"recipe_id": "r02", "reason": "..."}]}, ...]}')
+    per_meal = "、".join(f"{m}{c.dishes_for(m)}道" for m in meals)
+    return (f"安排 {c.days} 天的**全天**菜单（每天 {len(meals)} 顿：{'/'.join(meals)}）",
+            f"每天每一顿都要排，道数是：{per_meal}；每条都必须带 meal 字段，"
+            f"取值只能是 {'/'.join(meals)} 之一。",
+            '{"days": [{"day": 1, "meal": "早餐", "dishes": [{"recipe_id": "r31", "reason": "..."}]}, '
+            '{"day": 1, "meal": "晚餐", "dishes": [{"recipe_id": "r01", "reason": "..."}]}, ...]}')
+
+
 def build_prompt(c: UserConstraints, candidates: list[Recipe], feedback: str | None = None) -> str:
     tag_text = f"目标：{c.goal}（每顿最好至少有 1 道匹配该目标的菜）" if c.goal != "随便" else "目标：随便（无需特别匹配）"
     taste_text = f"口味偏好（尽量满足）：{'、'.join(c.taste_tags) or '无'}"
     budget_text = (f"预算：每人每天 {c.budget_per_person_day} 元，{c.people} 人，即每天总花费不超过 "
                    f"{c.budget_per_person_day * c.people:.1f} 元（菜谱价格为2人份，按人数折算）"
                    if c.budget_per_person_day is not None else "预算：不限")
+    meal_intro, meal_rule, json_shape = _meal_brief(c)
+    meals = c.active_meals()
+    time_text = f"单道菜耗时不超过 {c.max_time_min} 分钟"
+    if len(meals) > 1:
+        time_text = (f"单道菜耗时：早餐不超过 {c.time_cap_for('早餐')} 分钟，"
+                     f"其余餐不超过 {c.max_time_min} 分钟")
     allergens = "、".join(c.allergens) or "无"
     disliked = "、".join(c.disliked_dishes) or "无"
 
-    prompt = f"""你是一位贴心的家庭厨师规划助手。请为一户 {c.people} 人家庭安排 {c.days} 天（每天1顿晚餐）的菜单。
+    prompt = f"""你是一位贴心的家庭厨师规划助手。请为一户 {c.people} 人家庭{meal_intro}。
 
 【硬性要求，必须全部满足】
-1. 每天恰好选 {c.dishes_per_day} 道菜。
+1. {meal_rule}
 2. 只能使用下方候选菜谱里的 id，禁止编造。
 3. 避开过敏原：{allergens}。
-4. 辣度不超过：{c.spice_level}；单道菜耗时不超过 {c.max_time_min} 分钟。
+4. 辣度不超过：{c.spice_level}；{time_text}。
 5. 一周内不要重复同一道菜；荤素搭配、风格错开，避免连续多天都是同一种主料。
 6. 客户明确不喜欢的菜（已从候选中移除）不得出现：{disliked}。
 
@@ -93,7 +120,7 @@ def build_prompt(c: UserConstraints, candidates: list[Recipe], feedback: str | N
 {catalog_text(candidates, set(c.liked_dishes))}
 
 请只输出如下 JSON（不要任何解释文字）：
-{{"days": [{{"day": 1, "dishes": [{{"recipe_id": "r01", "reason": "..."}}, {{"recipe_id": "r02", "reason": "..."}}]}}, ...]}}
+{json_shape}
 """
     if feedback:
         prompt += f"\n\n【上一次方案未通过检查，请针对性修正】\n{feedback}"
@@ -106,16 +133,40 @@ def catalog_text(candidates: list[Recipe], liked: set[str] | None = None) -> str
 
 def _parse_plans(raw: dict, c: UserConstraints) -> list[DayPlan] | None:
     days_raw = raw.get("days")
-    if not isinstance(days_raw, list) or len(days_raw) != c.days:
+    meals = c.active_meals()
+    if not isinstance(days_raw, list):
+        return None
+
+    if len(meals) == 1:
+        # 单顿：与 docs/10 之前完全一样的校验（LLM 不需要给 meal 字段）
+        if len(days_raw) != c.days:
+            return None
+        try:
+            plans = [DayPlan(**d) for d in days_raw]
+        except Exception:
+            return None
+        if {p.day for p in plans} != set(range(1, c.days + 1)):
+            return None
+        for p in plans:
+            if len(p.dishes) != c.dishes_for(p.meal):
+                return None
+            if any(not d.recipe_id or not d.reason for d in p.dishes):
+                return None
+        return plans
+
+    # 多顿：每天每一顿都要有，缺一顿就整体判不通过（宁可用确定性结果，也不留半张全天菜单）
+    if len(days_raw) != c.days * len(meals):
         return None
     try:
         plans = [DayPlan(**d) for d in days_raw]
     except Exception:
         return None
-    if {p.day for p in plans} != set(range(1, c.days + 1)):
+    want = {(day, meal) for day in range(1, c.days + 1) for meal in meals}
+    got = {(p.day, p.meal) for p in plans}
+    if got != want:
         return None
     for p in plans:
-        if len(p.dishes) != c.dishes_per_day:
+        if len(p.dishes) != c.dishes_for(p.meal):
             return None
         if any(not d.recipe_id or not d.reason for d in p.dishes):
             return None

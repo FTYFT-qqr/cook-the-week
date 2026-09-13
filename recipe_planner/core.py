@@ -8,6 +8,7 @@ import math
 
 from recipe_planner.db import load_db
 from recipe_planner.models import (
+    MEALS,
     DayPlan,
     ChosenDish,
     Recipe,
@@ -26,15 +27,38 @@ MAIN_PROTEIN_WORDS = ["鸡", "鸭", "牛", "猪", "鱼", "虾", "蛋", "豆腐",
 
 # ---------------------------------------------------------------- 检索
 
-def recipe_conflicts(r: Recipe, c: UserConstraints) -> list[str]:
-    """返回该菜谱与硬约束的冲突代码列表（空=无冲突）。"""
+def in_meal_pool(r: Recipe, meal: str) -> bool:
+    """这道菜属于这一顿的候选池吗（docs/10 §5）—— **全项目唯一的判定处**。
+
+    - 早餐池：分类「早餐」+「主食」+ 主料里有蛋的菜（粥/面/饼/蛋类都算得上早饭）；
+    - 午/晚池：除早餐菜以外的都能用（热菜/凉菜/汤/主食）。
+
+    判定"含蛋"看的是**食材名**（`鸡蛋`/`皮蛋`…），不是菜名里的字 ——
+    按名字猜菜系是另一种"两处规则迟早漂"的开端。
+    """
+    if meal == "早餐":
+        return (r.category in ("早餐", "主食")
+                or any("蛋" in i.name for i in r.ingredients))
+    return r.category != "早餐"
+
+
+def recipe_conflicts(r: Recipe, c: UserConstraints, meal: Optional[str] = None) -> list[str]:
+    """返回该菜谱与硬约束的冲突代码列表（空=无冲突）。
+
+    给了 `meal` 就按**那一顿**的口径判：候选池归属（`in_meal_pool`）与单菜时长上限
+    （早餐默认 15 分钟）。不给 `meal` 时行为与 docs/10 之前**完全一致**（用 `max_time_min`），
+    所以老调用方一条都不用改。
+    """
     conflicts: list[str] = []
+    if meal is not None and not in_meal_pool(r, meal):
+        conflicts.append("meal")
     bad = r.all_allergen_names() & set(c.allergens)
     if bad:
         conflicts.append("allergen")
     if SPICE_ORDER.get(r.spice_level, 0) > SPICE_ORDER.get(c.spice_level, 0):
         conflicts.append("spice")
-    if r.time_min > c.max_time_min:
+    time_cap = c.max_time_min if meal is None else c.time_cap_for(meal)
+    if r.time_min > time_cap:
         conflicts.append("time")
     if getattr(c, "skill", "随便") == "新手" and r.difficulty == "较难":
         conflicts.append("difficulty")     # D4：新手不排功夫菜
@@ -59,18 +83,64 @@ def recipe_score(r: Recipe, c: UserConstraints) -> float:
     return score
 
 
-def retrieve_candidates(db: RecipeDB, c: UserConstraints) -> list[Recipe]:
-    """硬过滤（过敏/辣度/时长/不喜欢的菜）后按软评分降序。"""
+def retrieve_candidates(db: RecipeDB, c: UserConstraints,
+                        meal: Optional[str] = None) -> list[Recipe]:
+    """硬过滤（过敏/辣度/时长/不喜欢的菜）后按软评分降序。
+
+    `meal=None`（默认）就是 docs/10 之前的行为：不按餐分池、用全局 `max_time_min`。
+    """
     disliked = set(c.disliked_dishes)
     out = []
     for r in db.recipes:
-        if recipe_conflicts(r, c):
+        if recipe_conflicts(r, c, meal):
             continue
         if r.id in disliked:
             continue  # 客户明确不喜欢的菜 → 硬性排除
         out.append(r)
     out.sort(key=lambda r: (-recipe_score(r, c), r.time_min, r.cost_yuan))
     return out
+
+
+def pool_for_meal(candidates: list[Recipe], c: UserConstraints, meal: str) -> list[Recipe]:
+    """把调用方给的候选**并集**切成"这一顿能用的菜"（docs/10）。
+
+    刻意不调 `retrieve_candidates(db, c, meal)`：排菜拿到的候选是 graph 的 retrieve 节点
+    给过来的（测试里也常常是自己造的候选），这里只做切分，不去重新读库。
+    判定仍然复用 `recipe_conflicts(..., meal)` —— 池子归属规则只有一处。
+    """
+    return [r for r in candidates if not recipe_conflicts(r, c, meal)]
+
+
+def _where(day: int, meal: str, c: UserConstraints) -> str:
+    """"第 N 天"还是"第 N 天午餐" —— 多顿才说餐次，单顿时保持原来的措辞。"""
+    return f"第{day}天{meal}" if c.is_multi_meal() else f"第{day}天"
+
+
+def day_slots(plans: list[DayPlan], day_no: int) -> list[DayPlan]:
+    """这一天所有的餐（算"当天总花费"时必须用这个，预算是一整天的）。"""
+    return [p for p in plans if p.day == day_no]
+
+
+def slot_of(plans: list[DayPlan], day_no: int, meal: "Optional[str]" = None) -> "Optional[DayPlan]":
+    """取「这一天这一顿」的计划条目（docs/10）。
+
+    一天多顿之后**不能**再用 `next(p for p in plans if p.day == X)`：那会静默拿到**早餐** ——
+    于是"今晚换一道"去改了早上的粥，而界面上完全看不出来。取 DayPlan 一律走这里。
+    `meal=None` = 当天最后一顿（界面「今晚」页看的就是它）。
+    """
+    slots = day_slots(plans, day_no)
+    if not slots:
+        return None
+    if meal is None:
+        order = {m: i for i, m in enumerate(MEALS)}
+        return sorted(slots, key=lambda p: order.get(p.meal, len(MEALS)))[-1]
+    return next((p for p in slots if p.meal == meal), None)
+
+
+def with_slot(plans: list[DayPlan], target: "Optional[DayPlan]",
+              new_slot: DayPlan) -> list[DayPlan]:
+    """把 plans 里的 target 换成 new_slot，其余原样。按对象身份比较（不做深比较，也不会误伤同名的一天）。"""
+    return [new_slot if p is target else p.model_copy(deep=True) for p in plans]
 
 
 # ---------------------------------------------------------------- 确定性排菜
@@ -110,132 +180,148 @@ def _has_protein(r: Recipe) -> bool:
 
 
 def plan_deterministic(candidates: list[Recipe], db: RecipeDB, c: UserConstraints) -> tuple[list[DayPlan], list[ValidationIssue]]:
-    """贪心逐天排菜：不重复、每天尽量荤素搭配、满足日预算。
+    """贪心逐天**逐顿**排菜：一周内不重复、每顿尽量荤素搭配、满足**当天**预算。
 
-    返回 (每日计划, 附带警告)。可能因候选不足而少菜——由校验层报 warning。
+    docs/10 之后一天可能有早/午/晚多顿：
+
+    - 候选池与单菜时长上限**按餐分开**（早餐 ≤15 分钟，池子是早餐+主食+蛋类）；
+    - 结构规则（第一道偏主菜、第二道起补蔬菜/汤）**按餐各跑一遍**，规则本身没改；
+    - 预算仍然是"每人每天"，所以 `spent` 在一天内**跨餐累加** —— 不能每顿各花一份预算。
+
+    返回 (每一顿一条 DayPlan, 附带警告)。可能因候选不足而少菜——由校验层报 warning。
     """
     used_ids: set[str] = set()
-    days: list[DayPlan] = []
+    plans: list[DayPlan] = []
     warnings: list[ValidationIssue] = []
+    meals = c.active_meals()
     budget_per_day = None
     if c.budget_per_person_day is not None:
-        budget_per_day = c.budget_per_person_day * c.people  # 一天总预算
+        budget_per_day = c.budget_per_person_day * c.people  # 一天总预算（含当天所有餐）
 
-    remaining = [r for r in candidates]
-
-    # 硬性指定菜优先占位
+    # 硬性指定菜优先占位：放在当天**最后一顿**（一般是晚餐；只勾早餐时就是早餐）
     reserved: dict[int, list[str]] = {}
     for i, rid in enumerate(c.must_include_recipes):
-        reserved.setdefault(i % c.days, []).append(rid)
+        reserved.setdefault(i % max(c.days, 1), []).append(rid)
         used_ids.add(rid)
 
     for day_no in range(1, c.days + 1):
-        plan_day = DayPlan(day=day_no, dishes=[])
-        # 指定菜先入
-        for rid in reserved.get(day_no - 1, []):
-            r = db.by_id(rid)
-            if r:
-                plan_day.dishes.append(ChosenDish(recipe_id=r.id, reason=make_reason(r, c)))
-        day_used = {d.recipe_id for d in plan_day.dishes}
-        spent = _day_total_cost(plan_day, db, c)
+        spent = 0.0
+        for meal in meals:
+            plan_slot = DayPlan(day=day_no, meal=meal, dishes=[])
+            # 指定菜先入
+            if meal == meals[-1]:
+                for rid in reserved.get(day_no - 1, []):
+                    r = db.by_id(rid)
+                    if r is not None:
+                        plan_slot.dishes.append(ChosenDish(recipe_id=r.id, reason=make_reason(r, c)))
+                        spent += r.cost_yuan * c.people / 2.0
 
-        # 每一天尽量保证：第一道偏“主菜”(含蛋白)，第二道起补蔬菜/汤
-        pool = [r for r in remaining if r.id not in day_used and r.id not in used_ids]
-        prefer_protein = not any(_has_protein(db.by_id(d.recipe_id)) for d in plan_day.dishes if db.by_id(d.recipe_id))
-        slots = c.dishes_per_day - len(plan_day.dishes)
-        for _ in range(max(slots, 0)):
-            feasible = []
-            for r in pool:
-                if budget_per_day is not None and spent + r.cost_yuan * c.people / 2.0 > budget_per_day + 1e-6:
-                    continue
-                feasible.append(r)
-            if not feasible:
-                break
-            # 主菜优先取评分高且含蛋白的；第二道起优先非蛋白（素/汤）追求多样性
-            def pick_key(r: Recipe):
-                is_protein = _has_protein(r)
-                diversity_bonus = 0.0
-                if prefer_protein and is_protein:
-                    diversity_bonus = 3.0
-                if not prefer_protein and not is_protein:
-                    diversity_bonus = 1.5
-                return (-(recipe_score(r, c) + diversity_bonus), r.time_min)
+            # 每一顿都从"第一道偏主菜"重新开始（结构规则按餐跑）
+            prefer_protein = not any(_has_protein(db.by_id(d.recipe_id))
+                                     for d in plan_slot.dishes if db.by_id(d.recipe_id))
+            need = c.dishes_for(meal)
+            pool = pool_for_meal(candidates, c, meal)
+            day_used = set(plan_slot.recipe_ids())
+            for _ in range(max(need - len(plan_slot.dishes), 0)):
+                feasible = [r for r in pool
+                            if r.id not in day_used and r.id not in used_ids
+                            and (budget_per_day is None
+                                 or spent + r.cost_yuan * c.people / 2.0 <= budget_per_day + 1e-6)]
+                if not feasible:
+                    break
+                # 主菜优先取评分高且含蛋白的；第二道起优先非蛋白（素/汤）追求多样性
+                def pick_key(r: Recipe):
+                    is_protein = _has_protein(r)
+                    diversity_bonus = 0.0
+                    if prefer_protein and is_protein:
+                        diversity_bonus = 3.0
+                    if not prefer_protein and not is_protein:
+                        diversity_bonus = 1.5
+                    return (-(recipe_score(r, c) + diversity_bonus), r.time_min)
 
-            feasible.sort(key=pick_key)
-            chosen = feasible[0]
-            pool.remove(chosen)
-            if chosen.id not in used_ids:
+                feasible.sort(key=pick_key)
+                chosen = feasible[0]
+                pool.remove(chosen)
                 used_ids.add(chosen.id)
-            day_used.add(chosen.id)
-            plan_day.dishes.append(ChosenDish(recipe_id=chosen.id, reason=make_reason(chosen, c)))
-            spent += chosen.cost_yuan * c.people / 2.0
-            if _has_protein(chosen):
-                prefer_protein = False
-            else:
-                # 已有素菜则下轮优先蛋白，避免全天无肉
-                if not any(_has_protein(db.by_id(d.recipe_id)) for d in plan_day.dishes if db.by_id(d.recipe_id)):
-                    prefer_protein = True
+                day_used.add(chosen.id)
+                plan_slot.dishes.append(ChosenDish(recipe_id=chosen.id, reason=make_reason(chosen, c)))
+                spent += chosen.cost_yuan * c.people / 2.0
+                prefer_protein = not _has_protein(chosen)
 
-        days.append(plan_day)
-        if len(plan_day.dishes) < c.dishes_per_day:
-            warnings.append(
-                ValidationIssue(level="warning", code="shortage",
-                                message=f"第{day_no}天候选不足，只排了{len(plan_day.dishes)}道菜", day=day_no)
-            )
-    return days, warnings
+            plans.append(plan_slot)
+            if len(plan_slot.dishes) < need:
+                warnings.append(
+                    ValidationIssue(level="warning", code="shortage",
+                                    message=f"{_where(day_no, meal, c)}候选不足，"
+                                            f"只排了{len(plan_slot.dishes)}道菜", day=day_no)
+                )
+    return plans, warnings
 
 
 # ---------------------------------------------------------------- 校验
 
 def validate_plan(plans: list[DayPlan], db: RecipeDB, c: UserConstraints) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
-    seen_ids: dict[str, int] = {}  # recipe_id -> day
+    seen: dict[str, tuple[int, str]] = {}  # recipe_id -> (day, meal)
+
+    # 预算与人数都是**按天**的（docs/10 §2）：一天多顿时必须先把当天各餐加起来，
+    # 否则"每人每天 ¥45"会被当成"每顿 ¥45"，预算校验形同虚设。
+    cost_by_day: dict[int, float] = {}
+    people_by_day: dict[int, int] = {}
+    for p in plans:
+        cost_by_day[p.day] = cost_by_day.get(p.day, 0.0) + _day_total_cost(p, db, c)
+        people_by_day[p.day] = max(people_by_day.get(p.day, 0), p.people or c.people)
 
     for p in plans:
-        day_total = _day_total_cost(p, db, c)
+        where = _where(p.day, p.meal, c)
+        time_cap = c.time_cap_for(p.meal)
         for dish in p.dishes:
             r = db.by_id(dish.recipe_id)
             if r is None:
                 issues.append(ValidationIssue(level="error", code="unknown_recipe",
-                                              message=f"第{p.day}天引用了不存在的菜谱 {dish.recipe_id}", day=p.day))
+                                              message=f"{where}引用了不存在的菜谱 {dish.recipe_id}", day=p.day))
                 continue
             # 过敏原
             bad = r.all_allergen_names() & set(c.allergens)
             if bad:
                 issues.append(ValidationIssue(level="error", code="allergen",
-                                              message=f"第{p.day}天「{r.name}」含过敏原：{'、'.join(sorted(bad))}",
+                                              message=f"{where}「{r.name}」含过敏原：{'、'.join(sorted(bad))}",
                                               day=p.day, recipe_id=r.id))
             if SPICE_ORDER.get(r.spice_level, 0) > SPICE_ORDER.get(c.spice_level, 0):
                 issues.append(ValidationIssue(level="error", code="spice",
-                                              message=f"第{p.day}天「{r.name}」辣度({r.spice_level})超出你的耐受", day=p.day, recipe_id=r.id))
-            if r.time_min > c.max_time_min:
+                                              message=f"{where}「{r.name}」辣度({r.spice_level})超出你的耐受", day=p.day, recipe_id=r.id))
+            if r.time_min > time_cap:
                 issues.append(ValidationIssue(level="error", code="over_time",
-                                              message=f"第{p.day}天「{r.name}」需{r.time_min}分钟，超出上限{c.max_time_min}分钟", day=p.day, recipe_id=r.id))
+                                              message=f"{where}「{r.name}」需{r.time_min}分钟，超出上限{time_cap}分钟", day=p.day, recipe_id=r.id))
             if getattr(c, "skill", "随便") == "新手" and r.difficulty == "较难":
                 issues.append(ValidationIssue(level="warning", code="difficulty",
-                                              message=f"第{p.day}天「{r.name}」对新手偏难（{r.difficulty}）", day=p.day, recipe_id=r.id))
+                                              message=f"{where}「{r.name}」对新手偏难（{r.difficulty}）", day=p.day, recipe_id=r.id))
             # 客户明确不喜欢的菜
             if r.id in set(c.disliked_dishes):
                 issues.append(ValidationIssue(level="error", code="disliked",
-                                              message=f"第{p.day}天「{r.name}」是你明确不喜欢的菜", day=p.day, recipe_id=r.id))
-            # 重复
-            if dish.recipe_id in seen_ids:
+                                              message=f"{where}「{r.name}」是你明确不喜欢的菜", day=p.day, recipe_id=r.id))
+            # 重复（一周内不重样；同一天的两顿也算重复）
+            if dish.recipe_id in seen:
+                was = seen[dish.recipe_id]
                 issues.append(ValidationIssue(level="error", code="duplicate",
-                                              message=f"「{r.name}」在第{seen_ids[dish.recipe_id]}天和第{p.day}天重复了", day=p.day, recipe_id=r.id))
+                                              message=f"「{r.name}」在{_where(was[0], was[1], c)}和{where}重复了",
+                                              day=p.day, recipe_id=r.id))
             else:
-                seen_ids[dish.recipe_id] = p.day
-        # 预算
+                seen[dish.recipe_id] = (p.day, p.meal)
+        # 预算（当天合计，含当天所有餐）
         if c.budget_per_person_day is not None:
-            limit = c.budget_per_person_day * (p.people or c.people)
-            if day_total > limit + 1e-6:
+            limit = c.budget_per_person_day * people_by_day.get(p.day, c.people)
+            if cost_by_day.get(p.day, 0.0) > limit + 1e-6:
                 issues.append(ValidationIssue(level="error", code="over_budget",
-                                              message=f"第{p.day}天合计约 {day_total:.1f} 元，超出当日预算 {limit:.1f} 元", day=p.day))
-        # 目标覆盖（软）——「这天不做饭」的日子不检查
+                                              message=f"{_where(p.day, p.meal, c)}当天合计约 "
+                                                      f"{cost_by_day[p.day]:.1f} 元，超出当日预算 {limit:.1f} 元",
+                                              day=p.day))
+        # 目标覆盖（软）——「这顿不做饭」的日子不检查
         if c.goal != "随便" and p.dishes:
             day_goals = [r.goal_tags for dish in p.dishes if (r := db.by_id(dish.recipe_id))]
             if not any(c.goal in tg for tg in day_goals):
                 issues.append(ValidationIssue(level="warning", code="goal",
-                                              message=f"第{p.day}天没有契合「{c.goal}」目标的菜", day=p.day))
+                                              message=f"{where}没有契合「{c.goal}」目标的菜", day=p.day))
     return issues
 
 
@@ -304,16 +390,19 @@ def shopping_list(plans: list[DayPlan], db: RecipeDB, c: UserConstraints) -> lis
 # ---------------------------------------------------------------- 单道替换（客户反馈用）
 
 def pick_replacement(plans: list[DayPlan], day_no: int, old_id: str, db: RecipeDB,
-                     c: UserConstraints) -> Recipe | None:
-    """为某天挑一个替换菜：满足硬约束、全周不重复、不超当天预算。"""
+                     c: UserConstraints, meal: "Optional[str]" = None) -> Recipe | None:
+    """为某天某顿挑一个替换菜：满足硬约束、全周不重复、不超当天预算。"""
     used = {d.recipe_id for p in plans for d in p.dishes}
-    day = next((p for p in plans if p.day == day_no), None)
-    others = [d.recipe_id for d in day.dishes if d.recipe_id != old_id] if day else []
+    target = slot_of(plans, day_no, meal)
+    # 预算按**整天**算（docs/10）：把当天其它餐的花费也算进来
+    others = [d.recipe_id for p in day_slots(plans, day_no) for d in p.dishes
+              if not (target is not None and p is target and d.recipe_id == old_id)]
     day_others_cost = sum((db.by_id(rid).cost_yuan * c.people / 2.0)
-                          for rid in others if db.by_id(rid))
+                          for rid in set(others) if db.by_id(rid))
     limit = c.budget_per_person_day * c.people if c.budget_per_person_day is not None else None
 
-    for r in retrieve_candidates(db, c):  # 已按软偏好（含"喜欢"加权）排序
+    pool = retrieve_candidates(db, c, target.meal if target is not None else meal)
+    for r in pool:  # 已按软偏好（含"喜欢"加权）排序
         if r.id == old_id or r.id in used:
             continue
         if limit is not None and day_others_cost + r.cost_yuan * c.people / 2.0 > limit + 1e-6:
@@ -323,22 +412,21 @@ def pick_replacement(plans: list[DayPlan], day_no: int, old_id: str, db: RecipeD
 
 
 def swap_dish(plans: list[DayPlan], day_no: int, old_id: str, db: RecipeDB,
-              c: UserConstraints) -> tuple[list[DayPlan], Recipe | None]:
-    """只替换某天的一道菜，其余各天原样保留（点「换一道」或「不喜欢」时使用）。"""
-    rep = pick_replacement(plans, day_no, old_id, db, c)
+              c: UserConstraints, meal: "Optional[str]" = None) -> tuple[list[DayPlan], Recipe | None]:
+    """只替换某天某顿的一道菜，其余原样保留（点「换一道」或「不喜欢」时使用）。"""
+    rep = pick_replacement(plans, day_no, old_id, db, c, meal)
     if rep is None:
         return [p.model_copy(deep=True) for p in plans], None
-    new_plans: list[DayPlan] = []
-    for p in plans:
-        if p.day != day_no:
-            new_plans.append(p.model_copy(deep=True))
-            continue
-        dishes = [
-            ChosenDish(recipe_id=rep.id, reason=make_reason(rep, c)) if d.recipe_id == old_id else d
-            for d in p.dishes
-        ]
-        new_plans.append(DayPlan(day=p.day, meal=p.meal, dishes=dishes))
-    return new_plans, rep
+    target = slot_of(plans, day_no, meal)
+    if target is None:
+        return [p.model_copy(deep=True) for p in plans], None
+    dishes = [
+        ChosenDish(recipe_id=rep.id, reason=make_reason(rep, c)) if d.recipe_id == old_id else d
+        for d in target.dishes
+    ]
+    new_slot = DayPlan(day=target.day, meal=target.meal, dishes=dishes,
+                       skipped=target.skipped, people=target.people)
+    return with_slot(plans, target, new_slot), rep
 
 
 def refresh_result(result, db: RecipeDB):
@@ -374,20 +462,22 @@ def recipes_matching(db: RecipeDB, keyword: str) -> list[Recipe]:
 
 
 def replace_in_day(plans: list[DayPlan], day_no: int, old_id: str, new_recipe: Recipe,
-                   c: UserConstraints) -> list[DayPlan]:
-    """把某天的一道菜换成指定菜，其余各天原样保留。"""
-    out: list[DayPlan] = []
-    for p in plans:
-        if p.day != day_no:
-            out.append(p.model_copy(deep=True))
-            continue
-        dishes = [
-            ChosenDish(recipe_id=new_recipe.id, reason=make_reason(new_recipe, c))
-            if d.recipe_id == old_id else d
-            for d in p.dishes
-        ]
-        out.append(DayPlan(day=p.day, meal=p.meal, dishes=dishes, skipped=p.skipped))
-    return out
+                   c: UserConstraints, meal: "Optional[str]" = None) -> list[DayPlan]:
+    """把某天某顿的一道菜换成指定菜，其余原样保留。
+
+    `meal=None` = 当天最后一顿（单顿时就是那一天，与 docs/10 之前完全一致）。
+    """
+    target = slot_of(plans, day_no, meal)
+    if target is None:
+        return [p.model_copy(deep=True) for p in plans]
+    dishes = [
+        ChosenDish(recipe_id=new_recipe.id, reason=make_reason(new_recipe, c))
+        if d.recipe_id == old_id else d
+        for d in target.dishes
+    ]
+    new_slot = DayPlan(day=target.day, meal=target.meal, dishes=dishes,
+                       skipped=target.skipped, people=target.people)
+    return with_slot(plans, target, new_slot)
 
 
 def candidates_matching(plans: list[DayPlan], day_no: int, keyword: str, db: RecipeDB,
@@ -397,10 +487,10 @@ def candidates_matching(plans: list[DayPlan], day_no: int, keyword: str, db: Rec
     if not allowed:
         return []
     used = {d.recipe_id for p in plans for d in p.dishes if d.recipe_id != replace_id}
-    day = next((p for p in plans if p.day == day_no), None)
+    # 预算按**整天**算（docs/10）：当天其它餐的花费也要算进来
     others_cost = 0.0
-    if day is not None:
-        for d in day.dishes:
+    for slot in day_slots(plans, day_no):
+        for d in slot.dishes:
             if d.recipe_id == replace_id:
                 continue
             r = db.by_id(d.recipe_id)
@@ -417,27 +507,37 @@ def candidates_matching(plans: list[DayPlan], day_no: int, keyword: str, db: Rec
     return out
 
 
-def skip_day(plans: list[DayPlan], day_no: int) -> list[DayPlan]:
-    """「这天不做饭」：清空当天菜品（清单与花费自然跟着变）。"""
-    out: list[DayPlan] = []
-    for p in plans:
-        if p.day == day_no:
-            out.append(DayPlan(day=p.day, meal=p.meal, dishes=[], skipped=True))
-        else:
-            out.append(p.model_copy(deep=True))
-    return out
+def skip_day(plans: list[DayPlan], day_no: int, meal: "Optional[str]" = None) -> list[DayPlan]:
+    """「这顿不做饭」：清空那一顿的菜（清单与花费自然跟着变）。
+
+    docs/10：清的是**这一顿**（`meal=None` = 当天最后一顿，单顿时即那一天）。
+    """
+    target = slot_of(plans, day_no, meal)
+    if target is None:
+        return [p.model_copy(deep=True) for p in plans]
+    new_slot = DayPlan(day=target.day, meal=target.meal, dishes=[], skipped=True,
+                       people=target.people)
+    return with_slot(plans, target, new_slot)
 
 
 def restore_day(plans: list[DayPlan], day_no: int, db: RecipeDB,
-                c: UserConstraints) -> list[DayPlan]:
-    """把「这天不做饭」改回来：重新给这天挑菜，不与其他天重复、不超当天预算。"""
+                c: UserConstraints, meal: "Optional[str]" = None) -> list[DayPlan]:
+    """把「这顿不做饭」改回来：重新给这一顿挑菜，不与其他餐重复、不超当天预算。
+
+    docs/10：候选池与道数都按**这一顿**来（早餐池 + 早餐道数），
+    `meal=None` = 当天最后一顿（单顿时与 docs/10 之前完全一致）。
+    """
+    target = slot_of(plans, day_no, meal)
+    if target is None:
+        return [p.model_copy(deep=True) for p in plans]
     used = {d.recipe_id for p in plans for d in p.dishes}
     limit = c.budget_per_person_day * c.people if c.budget_per_person_day is not None else None
-    pool = [r for r in retrieve_candidates(db, c) if r.id not in used]
+    pool = pool_for_meal(retrieve_candidates(db, c), c, target.meal)
+    pool = [r for r in pool if r.id not in used]
     picked: list[ChosenDish] = []
     spent = 0.0
     need_protein = True
-    while len(picked) < c.dishes_per_day and pool:
+    while len(picked) < c.dishes_for(target.meal) and pool:
         pool.sort(key=lambda r: (-(recipe_score(r, c) + (3.0 if (need_protein and _has_protein(r)) else 0.0)),
                                  r.time_min))
         chosen = None
@@ -453,13 +553,9 @@ def restore_day(plans: list[DayPlan], day_no: int, db: RecipeDB,
         spent += chosen.cost_yuan * c.people / 2.0
         if _has_protein(chosen):
             need_protein = False
-    out: list[DayPlan] = []
-    for p in plans:
-        if p.day == day_no:
-            out.append(DayPlan(day=p.day, meal=p.meal, dishes=picked, skipped=False))
-        else:
-            out.append(p.model_copy(deep=True))
-    return out
+    new_slot = DayPlan(day=target.day, meal=target.meal, dishes=picked, skipped=False,
+                       people=target.people)
+    return with_slot(plans, target, new_slot)
 
 
 def _swap_by_rule(plans: list[DayPlan], db: RecipeDB, c: UserConstraints,
@@ -485,24 +581,23 @@ def _swap_by_rule(plans: list[DayPlan], db: RecipeDB, c: UserConstraints,
                     continue
                 if not _fits_day_budget(plans, p.day, d.recipe_id, cand, db, c):
                     continue
-                return (replace_in_day(plans, p.day, d.recipe_id, cand, c), p.day, old, cand)
+                return (replace_in_day(plans, p.day, d.recipe_id, cand, c, p.meal), p.day, old, cand)
     return None
 
 
 def _fits_day_budget(plans: list[DayPlan], day_no: int, replace_id: str, cand: Recipe,
                      db: RecipeDB, c: UserConstraints) -> bool:
+    """换成 cand 之后，**当天**（含当天所有餐）还超不超预算。"""
     if c.budget_per_person_day is None:
         return True
-    day = next((p for p in plans if p.day == day_no), None)
-    if day is None:
-        return True
     total = 0.0
-    for d in day.dishes:
-        if d.recipe_id == replace_id:
-            continue
-        r = db.by_id(d.recipe_id)
-        if r:
-            total += r.cost_yuan * c.people / 2.0
+    for slot in day_slots(plans, day_no):
+        for d in slot.dishes:
+            if d.recipe_id == replace_id:
+                continue
+            r = db.by_id(d.recipe_id)
+            if r:
+                total += r.cost_yuan * c.people / 2.0
     return total + cand.cost_yuan * c.people / 2.0 <= c.budget_per_person_day * c.people + 1e-6
 
 
@@ -562,35 +657,35 @@ def veg_swap(plans: list[DayPlan], db: RecipeDB,
 
 
 def fastest_day(plans: list[DayPlan], day_no: int, db: RecipeDB,
-                c: UserConstraints) -> tuple[list[DayPlan], list[Recipe]] | None:
-    """「回家晚了」：只把这一天换成最快能做完的组合（05 M1）。"""
-    day = next((p for p in plans if p.day == day_no), None)
-    if day is None:
+                c: UserConstraints, meal: "Optional[str]" = None) -> tuple[list[DayPlan], list[Recipe]] | None:
+    """「回家晚了」：只把这一顿换成最快能做完的组合（05 M1）。
+
+    docs/10：换的是**这一顿**（`meal=None` = 当天最后一顿），候选池与道数按餐来。
+    """
+    target = slot_of(plans, day_no, meal)
+    if target is None:
         return None
-    used = {d.recipe_id for p in plans for d in p.dishes if p.day != day_no}
-    pool = [r for r in retrieve_candidates(db, c) if r.id not in used]
+    used = {d.recipe_id for p in plans for d in p.dishes if p is not target}
+    pool = pool_for_meal(retrieve_candidates(db, c), c, target.meal)
+    pool = [r for r in pool if r.id not in used]
     pool.sort(key=lambda r: (r.time_min, -(recipe_score(r, c))))
     picked: list[Recipe] = []
     spent = 0.0
-    limit = c.budget_per_person_day * (day.people or c.people) if c.budget_per_person_day else None
+    people = target.people or c.people
+    limit = c.budget_per_person_day * people if c.budget_per_person_day else None
     for r in pool:
-        if len(picked) >= c.dishes_per_day:
+        if len(picked) >= c.dishes_for(target.meal):
             break
-        if limit is not None and spent + r.cost_yuan * (day.people or c.people) / 2.0 > limit + 1e-6:
+        if limit is not None and spent + r.cost_yuan * people / 2.0 > limit + 1e-6:
             continue
         picked.append(r)
-        spent += r.cost_yuan * (day.people or c.people) / 2.0
+        spent += r.cost_yuan * people / 2.0
     if not picked:
         return None
-    if day.dishes and max(r.time_min for r in picked) >= max(
-            (db.by_id(d.recipe_id).time_min for d in day.dishes if db.by_id(d.recipe_id)), default=999):
+    if target.dishes and max(r.time_min for r in picked) >= max(
+            (db.by_id(d.recipe_id).time_min for d in target.dishes if db.by_id(d.recipe_id)), default=999):
         return None       # 换不更快就没必要换
-    out: list[DayPlan] = []
-    for p in plans:
-        if p.day == day_no:
-            out.append(DayPlan(day=p.day, meal=p.meal, skipped=False, people=p.people,
-                               dishes=[ChosenDish(recipe_id=r.id, reason=f"快手：约 {r.time_min} 分钟就能上桌。")
-                                       for r in picked]))
-        else:
-            out.append(p.model_copy(deep=True))
-    return out, picked
+    new_slot = DayPlan(day=target.day, meal=target.meal, skipped=False, people=target.people,
+                       dishes=[ChosenDish(recipe_id=r.id, reason=f"快手：约 {r.time_min} 分钟就能上桌。")
+                               for r in picked])
+    return with_slot(plans, target, new_slot), picked

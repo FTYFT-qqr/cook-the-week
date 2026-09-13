@@ -151,6 +151,12 @@ class ConstraintsOut(BaseModel):
     cook_start: str = ""
     budget_per_person_day: Optional[float] = None
     pantry_items: list[str] = []
+    # 「定住/加一道」的菜：界面靠它渲染"定住了"，不是给开发者看的
+    must_include_recipes: list[str] = []
+    # 餐次（docs/10）：界面靠它们渲染"一天几顿、每顿几道"，缺了就会退回"只做晚餐"
+    meals: list[str] = ["晚餐"]
+    dishes_per_meal: dict[str, int] = {}
+    breakfast_max_time_min: int = 15
     # 界面靠它渲染"这道菜被定住了"（定住 = 排菜时不许换掉）：库里一直存着，DTO 也得给出去，
     # 否则 `USE_API=1` 时界面重建出来的方案会丢掉"定住"状态，看着像没定住。
     must_include_recipes: list[str] = []
@@ -163,7 +169,13 @@ class PlanCreateIn(BaseModel):
 
     people: int = Field(default=2, ge=1, le=20)
     days: int = Field(default=3, ge=1, le=7)
-    dishes_per_day: int = Field(default=2, ge=1, le=4)
+    dishes_per_day: int = Field(default=2, ge=1, le=5)
+    # 餐次（docs/10）：默认只做晚餐，与"全天菜单"之前的行为一致
+    meals: list[str] = Field(default_factory=lambda: ["晚餐"],
+                             description="这一周吃哪几顿，取值：早餐/午餐/晚餐")
+    dishes_per_meal: dict[str, int] = Field(default_factory=dict,
+                                            description="每餐几道菜；空则用 dishes_per_day")
+    breakfast_max_time_min: int = Field(default=15, ge=5, le=30)
     allergens: list[str] = Field(default_factory=list,
                                  description="只能填这几个：" + "、".join(ALLERGENS))
     spice_level: str = "不辣"

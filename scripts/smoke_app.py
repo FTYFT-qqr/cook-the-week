@@ -815,6 +815,89 @@ if at.checkbox and _need:
     check("重开一个会话，勾选还在", len(_checked5) == len(_need),
           f"{len(_checked5)} vs {len(_need)}")
 
+print("[21] 全天菜单：勾三餐 → 排出三餐 → 按餐分段渲染（docs/10）")
+
+
+def section_multi_meal() -> None:
+    """多餐只在 JSON 存储下可用（数据库的 plan_day 还是一条一天，迁移在 docs/10 第④步）。"""
+    if not nav_to(at, "create"):
+        check("能进排一周页", False)
+        return
+    check("切到排一周页无异常", not at.exception, str([str(e.value) for e in at.exception]))
+    meals_box = [m for m in at.multiselect if (m.key or "") == "meals"]
+    check("表单里有「吃哪几顿」多选", bool(meals_box))
+    if not meals_box:
+        return
+    check("默认是「只做晚餐」（空 或 只勾晚餐）",
+          meals_box[0].value in ([], ["晚餐"]), meals_box[0].value)
+    at.session_state["days"] = 2
+    meals_box[0].set_value(["早餐", "午餐", "晚餐"])
+    at.run()
+    check("勾三餐后无异常", not at.exception, str([str(e.value) for e in at.exception]))
+    check("出现「早/午/晚 几个菜」三个控件",
+          all(any((getattr(s, "key", "") or "") == f"dishes_{m}" for s in at.select_slider)
+              for m in ("早餐", "午餐", "晚餐")))
+    check("勾多顿时多出「早餐单菜耗时上限」",
+          any((getattr(s, "key", "") or "") == "breakfast_max_time" for s in at.slider))
+    for _m, _n in (("早餐", 1), ("午餐", 2), ("晚餐", 3)):
+        _box = [s for s in at.select_slider if (getattr(s, "key", "") or "") == f"dishes_{_m}"]
+        if _box:
+            _box[0].set_value(_n)
+    at.run()
+    run_btn = find_buttons(at, "生成菜单")
+    if run_btn:
+        run_btn[0].click()
+        at.run()
+    check("排三餐后无异常", not at.exception, str([str(e.value) for e in at.exception]))
+    res = at.session_state["result"]
+    slots = [(p.day, p.meal) for p in res.days]
+    check("排出来是 2 天 × 3 顿（6 顿）", len(slots) == 6 and len(set(slots)) == 6, slots)
+    check("每天都是 早→午→晚", all(
+        [p.meal for p in res.days if p.day == d] == ["早餐", "午餐", "晚餐"] for d in (1, 2)))
+    check("每餐道数各按各的（早1/午2/晚3）", all(
+        len(p.dishes) == {"早餐": 1, "午餐": 2, "晚餐": 3}[p.meal] for p in res.days),
+          [(p.meal, len(p.dishes)) for p in res.days])
+    _bf = [db.by_id(d.recipe_id) for p in res.days if p.meal == "早餐" for d in p.dishes]
+    check("早餐槽位排的都是早餐池里的菜（且 ≤15 分钟）",
+          all(r and (r.category in ("早餐", "主食") or any("蛋" in i.name for i in r.ingredients))
+              and r.time_min <= 15 for r in _bf), [r.name for r in _bf if r])
+    _lunch = res.slot(1, "午餐")
+    check("能按「第 1 天的午餐」取到槽位（不是早餐）",
+          _lunch is not None and _lunch.meal == "午餐" and len(_lunch.dishes) == 2)
+    nav_to(at, "plan")
+    check("本周计划页无异常（多餐）", not at.exception, str([str(e.value) for e in at.exception]))
+    txt3 = page_text(at)
+    check("整周总览按餐分段（早/午/晚都出现）",
+          all(m in txt3 for m in ("早餐", "午餐", "晚餐")), txt3[:160])
+    check("每日详情的标签仍然是 2 个「第 N 天」（不是 6 个）",
+          all(f"第 {i} 天" in txt3 for i in (1, 2)), txt3[:160])
+    nav_to(at, "tonight")
+    check("多餐时今晚页改叫「今天」", "今天" in page_text(at), page_text(at)[:120])
+    print(f"    三餐方案: {[(p.day, p.meal, len(p.dishes)) for p in res.days]}")
+
+
+if SMOKE_DB:
+    print("    (DB 模式下多餐被刻意禁用：plan_day 还是一条一天，迁移见 docs/10 第④步 —— 跳过)")
+else:
+    section_multi_meal()
+
+print("[22] 只做晚餐时这一页仍然叫「今晚」（加了多餐也不能改名）")
+if nav_to(at, "create"):
+    meals_box = [m for m in at.multiselect if (m.key or "") == "meals"]
+    if meals_box and not SMOKE_DB:
+        meals_box[0].set_value([])
+        at.run()
+        run_btn = find_buttons(at, "生成菜单")
+        if run_btn:
+            run_btn[0].click()
+            at.run()
+    _res1 = at.session_state["result"]
+    check("只做晚餐时每天就是一顿晚餐",
+          all(p.meal == "晚餐" for p in _res1.days), [(p.day, p.meal) for p in _res1.days])
+    nav_to(at, "tonight")
+    check("只做晚餐时页名还是「今晚」", "今晚" in page_text(at), page_text(at)[:120])
+
+
 def _tempfile_noise_guard() -> None:
     """兜底：把没删掉的临时目录再清一遍（正常情况下 `_patch_tempfile_permissions()` 已经解决了）。"""
     import glob

@@ -10,7 +10,7 @@ import io
 from dataclasses import dataclass, field
 
 from recipe_planner import store
-from recipe_planner.models import DayPlan, PlanResult, RecipeDB, ValidationIssue
+from recipe_planner.models import MEAL, DayPlan, PlanResult, RecipeDB, ValidationIssue
 
 
 # ---------------------------------------------------------------- 单天
@@ -80,11 +80,12 @@ class DayRow:
     dishes: list[str]
     minutes: int
     cost: float
+    meal: str = MEAL          # docs/10：一行 = 一天里的一顿（只做晚餐时就是那一天）
 
 
 @dataclass
 class PlanSummary:
-    days: int
+    days: int                 # **天数**（不是顿数；docs/10）
     dishes: int
     total_cost: float
     budget_total: float | None
@@ -98,6 +99,7 @@ class PlanSummary:
     allergen_issues: list[ValidationIssue] = field(default_factory=list)
     warnings: list[ValidationIssue] = field(default_factory=list)
     rows: list[DayRow] = field(default_factory=list)
+    slots: int = 0            # 顿数（多餐时 > days）
 
 
 def plan_summary(result: PlanResult, db: RecipeDB, start_date=None) -> PlanSummary:
@@ -105,15 +107,18 @@ def plan_summary(result: PlanResult, db: RecipeDB, start_date=None) -> PlanSumma
     liked_ids = set(c.liked_dishes)
     rows: list[DayRow] = []
     liked_hit = goal_hit = 0
-    for idx, p in enumerate(result.days):
+    for p in result.days:
         names = day_dish_names(p, db)
         rows.append(DayRow(
             day=p.day,
-            weekday=store.weekday_name(start_date, idx),
-            date_label=store.day_date_label(start_date, idx),
+            # 用**这一顿自己的天**取星期/日期，不能用 enumerate 序号：
+            # 一天多顿时序号会走到第二天去（第 1 天的午餐被写成周二的日期）。
+            weekday=store.weekday_name(start_date, p.day - 1),
+            date_label=store.day_date_label(start_date, p.day - 1),
             dishes=names,
             minutes=day_minutes(p, db),
             cost=day_cost(p, db, c.people),
+            meal=p.meal,
         ))
         for d in p.dishes:
             if d.recipe_id in liked_ids:
@@ -126,7 +131,8 @@ def plan_summary(result: PlanResult, db: RecipeDB, start_date=None) -> PlanSumma
     hardest = max(rows, key=lambda r: r.minutes) if rows else None
     hard = [i for i in result.issues if i.level == "error"]
     return PlanSummary(
-        days=len(result.days),
+        days=len({r.day for r in rows}),        # 天数（多餐时一天有好几行）
+        slots=len(rows),
         dishes=sum(len(r.dishes) for r in rows),
         total_cost=round(total, 2),
         budget_total=round(budget_total, 2) if budget_total else None,

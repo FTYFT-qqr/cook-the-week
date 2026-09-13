@@ -259,6 +259,10 @@ def _record_from_detail(detail: dict) -> PlanRecord:
             pantry_items=list(c.get("pantry_items") or []),
             # 「定住/加一道」的菜：界面靠它渲染"定住了"和换菜时的保留规则，必须带上
             must_include_recipes=list(c.get("must_include_recipes") or []),
+            # 餐次（docs/10）：缺了这两个字段，界面的"一天几顿"会退回"只做晚餐"
+            meals=list(c.get("meals") or ["晚餐"]),
+            dishes_per_meal=dict(c.get("dishes_per_meal") or {}),
+            breakfast_max_time_min=int(c.get("breakfast_max_time_min") or 15),
         ),
         candidate_count=0,
         days=[DayPlan(day=int(d.get("day") or 0),

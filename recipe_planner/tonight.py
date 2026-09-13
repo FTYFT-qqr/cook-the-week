@@ -19,7 +19,7 @@ from typing import Any, Optional
 
 from recipe_planner import reporting as rep
 from recipe_planner import store
-from recipe_planner.models import PlanRecord, RecipeDB
+from recipe_planner.models import MEAL, PlanRecord, RecipeDB
 
 STATES = ("no_plan", "week_over", "skipped", "done", "planned")
 
@@ -41,6 +41,7 @@ class TonightView:
     meta: str = ""              # "约 45 分钟 · 预计 ¥62"
     reason: str = ""            # 一句推荐理由
     day: int = 0                # 正在看的第几天（1 起）
+    meal: str = MEAL            # 正在看的是哪一顿（docs/10；只做晚餐时永远是晚餐）
     weekday: str = ""
     date_label: str = ""
     week_label: str = ""
@@ -60,6 +61,7 @@ class TonightView:
             "meta": self.meta,
             "reason": self.reason,
             "day": self.day,
+            "meal": self.meal,
             "weekday": self.weekday,
             "date_label": self.date_label,
             "week_label": self.week_label,
@@ -105,11 +107,14 @@ def view_day_index(start_date: Any, days: int, today: Optional[date] = None,
 
 
 def tonight_view(record: Optional[PlanRecord], db: RecipeDB, today: Optional[date] = None,
-                 now: Optional[datetime] = None, day: Optional[int] = None) -> TonightView:
+                 now: Optional[datetime] = None, day: Optional[int] = None,
+                 meal: Optional[str] = None) -> TonightView:
     """把一份方案存档翻译成「今晚」页要的东西。
 
     `day` 是"手动切到第 N 天"：给了就按那一天判状态（方案里没有这一天就忽略，仍按自动判定）。
-    判定顺序与文案只有这一份实现 —— 界面自己再推一遍"五种状态"才是最容易出错的写法。
+    `meal` 是"看哪一顿"（docs/10）：`None` = 当天**最后一顿** —— 只做晚餐时就是晚餐，
+    与 docs/10 之前完全一样。判定顺序与文案只有这一份实现 ——
+    界面自己再推一遍"五种状态"才是最容易出错的写法。
     """
     if record is None or not record.result.days:
         return TonightView(
@@ -121,19 +126,29 @@ def tonight_view(record: Optional[PlanRecord], db: RecipeDB, today: Optional[dat
     c = result.constraints
     start = record.start_date
     label = store.week_label(start)
+    # 日期逻辑要的是**天数**，不是顿数：一天三顿时 len(result.days)=21，
+    # 直接传进去会把"今天是第几天"算到第 8 天去。
+    days_span = max(p.day for p in result.days)
     summary = rep.plan_summary(result, db, start)
-    day_no, hint = view_day_index(start, len(result.days), today=today, now=now)
+    day_no, hint = view_day_index(start, days_span, today=today, now=now)
     if day is not None and any(p.day == day for p in result.days):
         day_no, hint = day, f"你手动切到了第 {day} 天"
-    day_plan = next((p for p in result.days if p.day == day_no), result.days[0])
-    row = next((r for r in summary.rows if r.day == day_no), summary.rows[0])
+    # 取"这一天这一顿"：多顿之后不能再用 `p.day == X`（那是取到早餐）
+    slots = result.slots_for(day_no)
+    if not slots:
+        slots = result.slots_for(result.days[0].day) or [result.days[0]]
+    wanted = [s for s in slots if s.meal == meal] if meal else []
+    day_plan = wanted[0] if wanted else slots[-1]
+    row = next((r for r in summary.rows if r.day == day_plan.day and r.meal == day_plan.meal),
+               summary.rows[0])
     done_days = set(record.done_days or [])
 
-    base = TonightView(state="planned", day=row.day, weekday=row.weekday,
+    base = TonightView(state="planned", day=row.day, meal=day_plan.meal, weekday=row.weekday,
                        date_label=row.date_label, week_label=label, hint=hint,
                        minutes=row.minutes, cost=row.cost, people=day_plan.people)
 
-    week_end = store.normalize_start(start) + timedelta(days=len(result.days) - 1)
+    week_end = store.normalize_start(start) + timedelta(days=days_span - 1)
+    multi = c.is_multi_meal()
     if week_end < (today or date.today()):
         base.state = "week_over"
         base.kicker = "这一周已经吃完了"
@@ -146,9 +161,10 @@ def tonight_view(record: Optional[PlanRecord], db: RecipeDB, today: Optional[dat
 
     if day_plan.skipped:
         base.state = "skipped"
-        base.kicker = f"第 {row.day} 天 {row.weekday} {row.date_label}"
-        base.headline = "今晚不做饭"
-        base.meta = "你标记过这天不做饭：不计花费，也不进买菜清单。"
+        base.kicker = (f"第 {row.day} 天{day_plan.meal} {row.weekday} {row.date_label}" if multi
+                       else f"第 {row.day} 天 {row.weekday} {row.date_label}")
+        base.headline = f"{day_plan.meal}不做饭" if multi else "今晚不做饭"
+        base.meta = "你标记过这顿不做饭：不计花费，也不进买菜清单。"
         base.next_steps = [_step("restore_day", "改回来做"), _step("view_week", "看这一周")]
         return base
 
@@ -158,9 +174,10 @@ def tonight_view(record: Optional[PlanRecord], db: RecipeDB, today: Optional[dat
     base.dishes = dishes
     base.reason = day_plan.dishes[0].reason if day_plan.dishes else ""
 
-    if day_no in done_days:
+    if record.is_done(day_plan.day, day_plan.meal):
         base.state = "done"
-        base.kicker = f"第 {row.day} 天 {row.weekday} {row.date_label}"
+        base.kicker = (f"第 {row.day} 天{day_plan.meal} {row.weekday} {row.date_label}" if multi
+                       else f"第 {row.day} 天 {row.weekday} {row.date_label}")
         base.headline = "、".join(row.dishes) or "（未排）"
         base.meta = "已经做过了。这几道怎么样？（说一句就够，下周会照你的口味排）"
         base.next_steps = [
@@ -172,13 +189,14 @@ def tonight_view(record: Optional[PlanRecord], db: RecipeDB, today: Optional[dat
         ]
         return base
 
-    base.kicker = f"今晚 · {row.weekday} {row.date_label}（第 {row.day} 天）"
+    base.kicker = (f"{day_plan.meal} · {row.weekday} {row.date_label}（第 {row.day} 天）" if multi
+                   else f"今晚 · {row.weekday} {row.date_label}（第 {row.day} 天）")
     base.headline = "、".join(row.dishes) or "（未排）"
     minutes_txt = f"约 {row.minutes} 分钟 · 预计 ¥{row.cost:.0f}"
     if day_plan.people:
         minutes_txt += f" · 按 {day_plan.people} 人算"
-    today_idx = store.today_index(start, len(result.days), today)
-    if c.cook_start and (today_idx is None or day_no == today_idx + 1):
+    today_idx = store.today_index(start, days_span, today)
+    if c.cook_start and (today_idx is None or day_plan.day == today_idx + 1):
         eta = eat_eta(c.cook_start, row.minutes)
         if eta:
             minutes_txt += f" · {eta}"

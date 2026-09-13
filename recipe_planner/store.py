@@ -224,6 +224,9 @@ def inputs_from_constraints(c: UserConstraints, start_date: Any = None) -> dict:
         "people": c.people,
         "days": c.days,
         "dishes_per_day": c.dishes_per_day,
+        "meals": list(c.active_meals()),                 # docs/10：这一周吃哪几顿
+        "dishes_per_meal": dict(c.dishes_per_meal or {}),  # 每餐几道菜（空=用 dishes_per_day）
+        "breakfast_max_time_min": c.breakfast_max_time_min,
         "allergens": list(c.allergens),
         "spice": c.spice_level,
         "taste_tags": list(c.taste_tags),

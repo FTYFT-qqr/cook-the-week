@@ -297,7 +297,7 @@ def apply_intent(intent: Intent, result: PlanResult, db: RecipeDB,
             day = day or 1
         day_plan = next((p for p in result.days if p.day == day), None)
         if day_plan is None:
-            return ApplyOutcome(f"这一周只有 {len(result.days)} 天，没有第 {day} 天。")
+            return ApplyOutcome(f"这一周只有 {len({p.day for p in result.days})} 天，没有第 {day} 天。")
         if any(kw in (db.by_id(d.recipe_id).name if db.by_id(d.recipe_id) else "")
                for d in day_plan.dishes):
             return ApplyOutcome(f"第 {day} 天已经有「{kw}」了，想换掉它的话直接点那道菜的「换一道」。")

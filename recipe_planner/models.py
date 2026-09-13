@@ -83,7 +83,7 @@ class RecipeDB(BaseModel):
 class UserConstraints(BaseModel):
     people: int = Field(default=2, ge=1, le=20)
     days: int = Field(default=3, ge=1, le=7)
-    dishes_per_day: int = Field(default=2, ge=1, le=4)  # 老字段：没指定每餐道数时用它
+    dishes_per_day: int = Field(default=2, ge=1, le=5)  # 老字段：没指定每餐道数时用它
     allergens: list[str] = []
     spice_level: str = "不辣"  # 期望辣度：不辣/微辣/辣（高于此排除）
     taste_tags: list[str] = []  # 期望口味偏好（尽量满足，软约束）

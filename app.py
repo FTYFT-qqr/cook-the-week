@@ -36,12 +36,17 @@ from recipe_planner import ui_state as ui
 from recipe_planner.core import (cheapest_swap, fastest_day, refresh_result,
                                  restore_day, swap_dish)
 from recipe_planner.db import load_db
+from recipe_planner.infra.settings import storage_kind as _storage_kind
 from recipe_planner.infra.settings import use_api as _use_api
 from recipe_planner.models import (
     ALLERGENS,
+    BREAKFAST_MAX_TIME_DEFAULT,
     DISPLAY_CATEGORIES,
+    DISH_MAX,
     GOALS,
     MEAL,
+    MEAL_DISH_DEFAULTS,
+    MEALS,
     SPICE_LEVELS,
     TASTE_TAGS,
     UserConstraints,
@@ -52,6 +57,12 @@ from recipe_planner.models import (
 # - 1：数据读写走 `store`/`profile` 末尾分派到的 HTTP 客户端，排菜交给服务端的任务，
 #      进度由服务端推（SSE），今晚状态也由服务端产出。
 USE_API = _use_api()
+
+# 多餐方案的**持久化**能力（docs/10 第④步）：JSON 后端一天可以有多行，天然支持；
+# 数据库后端的 `plan_day` 现在是 PRIMARY KEY(plan_id, day_no)，一天多顿存不进去 ——
+# 那正是"给 plan_day 加 meal 维度"那次迁移要解决的事。迁移没做之前，
+# 界面**只能**在 JSON 存储下让用户勾多餐（否则一点「生成菜单」就会撞唯一约束）。
+MEALS_AVAILABLE = (_storage_kind() == "json") and not USE_API
 
 if USE_API:
     PlanJob = api.PlanJob
@@ -269,6 +280,10 @@ for _k, _v in dict(
     people=2, days=3, spice="不辣", max_time=40, goal="随便", budget_week=0.0,
     allergens=[], taste=[], pantry_list=[], dishes_per_day=2,
     skill="随便", cook_start="18:30",
+    # docs/10：默认只做晚餐 —— 与"全天菜单"之前的行为**完全一致**（回归面为零的原因）
+    meals=[MEAL],
+    breakfast_max_time=BREAKFAST_MAX_TIME_DEFAULT,
+    **{f"dishes_{_m}": MEAL_DISH_DEFAULTS[_m] for _m in MEALS},
 ).items():
     st.session_state.setdefault(_k, _v)
 st.session_state.setdefault("start_date", store.next_monday())
@@ -286,6 +301,13 @@ def _sync_widgets_from_inputs(inp: dict) -> None:
     st.session_state["people"] = _people
     st.session_state["days"] = _days
     st.session_state["dishes_per_day"] = int(inp.get("dishes_per_day", 2))
+    # 餐次（docs/10）：老存档里没有这两个字段 → 回落到"只做晚餐 + 都用 dishes_per_day"
+    st.session_state["meals"] = list(inp.get("meals") or [MEAL])
+    _dpm = dict(inp.get("dishes_per_meal") or {})
+    for _m in MEALS:
+        st.session_state[f"dishes_{_m}"] = int(_dpm.get(_m) or inp.get("dishes_per_day", 2))
+    st.session_state["breakfast_max_time"] = int(
+        inp.get("breakfast_max_time_min", BREAKFAST_MAX_TIME_DEFAULT))
     st.session_state["allergens"] = list(inp.get("allergens") or [])
     st.session_state["spice"] = inp.get("spice", "不辣")
     st.session_state["taste"] = list(inp.get("taste_tags") or [])
@@ -298,11 +320,30 @@ def _sync_widgets_from_inputs(inp: dict) -> None:
     st.session_state["start_date"] = store.normalize_start(inp.get("start_date"))
 
 
+def _picked_meals(inp: dict) -> list[str]:
+    """这一周吃哪几顿（按 早→午→晚 排序；一个都没勾就回落到只做晚餐）。"""
+    picked = set(inp.get("meals") or [])
+    return [m for m in MEALS if m in picked] or [MEAL]
+
+
+def _dishes_per_meal(inp: dict) -> dict[str, int]:
+    """每餐几道菜：表单按餐各有一个值，老存档没有就统一用 `dishes_per_day`。"""
+    saved = dict(inp.get("dishes_per_meal") or {})
+    fallback = int(inp.get("dishes_per_day", 2))
+    return {m: int(saved.get(m) or fallback) for m in MEALS}
+
+
+def _form_meals() -> list[str]:
+    """表单里当前勾选的餐次（渲染文案用，例如"每天 N 顿"）。"""
+    picked = set(st.session_state.get("meals") or [])
+    return [m for m in MEALS if m in picked] or [MEAL]
+
+
 def build_constraints(inp: dict) -> UserConstraints:
     liked = prof.liked_names(KNOWN_NAMES)
     disliked = prof.disliked_names(KNOWN_NAMES)
     return UserConstraints(
-        people=inp["people"], days=inp["days"], dishes_per_day=inp["dishes_per_day"],
+        people=inp["people"], days=inp["days"], dishes_per_day=int(inp["dishes_per_day"]),
         allergens=inp.get("allergens", []), spice_level=inp.get("spice", "不辣"),
         taste_tags=inp.get("taste_tags", []), goal=inp.get("goal", "随便"),
         max_time_min=inp.get("max_time_min", 40),
@@ -313,6 +354,9 @@ def build_constraints(inp: dict) -> UserConstraints:
         must_include_recipes=list(inp.get("must_include") or []),  # 「定住 / 加一道」的菜
         liked_dishes=[NAME2ID[n] for n in liked if n in NAME2ID],
         disliked_dishes=[NAME2ID[n] for n in disliked if n in NAME2ID],
+        meals=_picked_meals(inp),                      # docs/10：吃哪几顿
+        dishes_per_meal=_dishes_per_meal(inp),         # 每餐几道菜
+        breakfast_max_time_min=int(inp.get("breakfast_max_time", BREAKFAST_MAX_TIME_DEFAULT)),
     )
 
 
@@ -577,12 +621,12 @@ def _extra_shopping(day_plan, db, extra_people: int) -> list[str]:
     return out[:6]
 
 
-def _quick_faster(day_no: int) -> None:
-    """回家晚了：只把今晚换成最快能做完的组合（不碰其他六天）。"""
+def _quick_faster(day_no: int, meal: str | None = None) -> None:
+    """回家晚了：只把这一顿换成最快能做完的组合（不碰其他餐）。"""
     result = st.session_state["result"]
     c = result.constraints
     prev_days = [p.model_copy(deep=True) for p in result.days]
-    got = fastest_day(result.days, day_no, db, c)
+    got = fastest_day(result.days, day_no, db, c, meal=meal)
     if got is None:
         st.session_state["tonight_relax"] = day_no
         ui.set_notice("info", "今晚这几道已经是最快的组合了，想更快可以放宽一点：")
@@ -601,10 +645,10 @@ def _quick_faster(day_no: int) -> None:
     st.rerun()
 
 
-def _quick_guests(day_no: int, extra: int) -> None:
-    """来客人了：只改今晚的人数与份量，并给一条临时补买提醒（不动整周清单）。"""
+def _quick_guests(day_no: int, extra: int, meal: str | None = None) -> None:
+    """来客人了：只改这一顿的人数与份量，并给一条临时补买提醒（不动整周清单）。"""
     result = st.session_state["result"]
-    day = next((p for p in result.days if p.day == day_no), None)
+    day = result.slot(day_no, meal)          # 不能用 p.day == X（多餐时会取到早餐）
     if day is None:
         return
     prev_days = [p.model_copy(deep=True) for p in result.days]
@@ -634,7 +678,9 @@ def _mark_done(day_no: int, done: bool = True) -> None:
 
 
 def render_tonight() -> None:
-    st.title("今晚")
+    # 只做晚餐时这一页仍然叫「今晚」（与以前一致）；勾了多顿时它就是"今天"
+    _inp_meals = _picked_meals(st.session_state.get("plan_inputs") or {})
+    st.title("今天" if len(_inp_meals) > 1 else "今晚")
     override = _tonight_day_override()
 
     # 状态④：还没有这一周的菜单 —— 全站唯一一次把表单摆到首屏（05 M1）。
@@ -774,10 +820,10 @@ def render_tonight() -> None:
         g1, g2, g3, _sp = st.columns([1, 1, 1, 3])
         with g1:
             if st.button("多 2 人", key="guests_2", type="primary", use_container_width=True):
-                _quick_guests(view.day, 2)
+                _quick_guests(view.day, 2, view.meal)
         with g2:
             if st.button("多 4 人", key="guests_4", use_container_width=True):
-                _quick_guests(view.day, 4)
+                _quick_guests(view.day, 4, view.meal)
         with g3:
             if st.button("取消", key="guests_cancel", use_container_width=True):
                 st.session_state["guests_for"] = None
@@ -786,8 +832,8 @@ def render_tonight() -> None:
         q1, q2, q3, _sp = st.columns([1, 1, 1, 3])
         with q1:
             if st.button("回家晚了", key="quick_faster", use_container_width=True,
-                         help="只把今晚换成最快能做完的组合"):
-                _quick_faster(view.day)
+                         help="只把这一顿换成最快能做完的组合"):
+                _quick_faster(view.day, view.meal)
         with q2:
             if st.button("来客人了", key="quick_guests", use_container_width=True,
                          help="只改今晚的人数与份量，其他天不动"):
@@ -869,20 +915,44 @@ def render_create() -> None:
                 if st.button("用这个场景", key=f"scene_btn_{key}", use_container_width=True):
                     for k, v in vals.items():
                         st.session_state[k] = v
+                    # 场景卡都是"只做晚餐、每顿 2 道"（与 docs/10 之前的表现一致）
+                    st.session_state["meals"] = [MEAL]
                     st.session_state["dishes_per_day"] = 2
+                    for _m in MEALS:
+                        st.session_state[f"dishes_{_m}"] = 2
                     st.rerun()
 
     st.markdown("### 我的需求")
     with st.form("planner_form"):
-        # ① 人数与天数（"每顿几个菜"属于同一类问题，并进这一组，P-07）
+        # ① 人数与天数
         st.markdown("#### 人数与天数")
-        g1 = st.columns(3)
+        g1 = st.columns(2)
         with g1[0]:
             people = st.number_input("几人吃", 1, 10, key="people")
         with g1[1]:
-            days = st.slider(f"排几天（每天 1 顿{MEAL}）", 1, 7, key="days")
-        with g1[2]:
-            dishes_per_day = st.select_slider("每顿几个菜", [1, 2, 3], key="dishes_per_day")
+            days = st.slider(f"排几天（每天 {len(_form_meals())} 顿）", 1, 7, key="days")
+
+        # ①.5 吃哪几顿（docs/10）：默认只做晚餐 —— 不勾别的就等于以前的行为
+        st.markdown("#### 吃哪几顿")
+        gm = st.columns(4)
+        with gm[0]:
+            meals = st.multiselect("这一周吃哪几顿", MEALS, key="meals",
+                                   placeholder=f"不选＝只做{MEAL}",
+                                   disabled=not MEALS_AVAILABLE)
+        if not MEALS_AVAILABLE:
+            st.caption("多餐（早/午/晚）现在只在 JSON 存储下可用（STORAGE=json）："
+                       "数据库后端的 plan_day 还是「一天一行」，一天多顿存不进去 —— "
+                       "那一步迁移记在 docs/10 的第④步，做完这里就会自动打开。")
+        _picked_form = [m for m in MEALS if m in set(meals or [])] or [MEAL]
+        for _i, _m in enumerate(_picked_form):
+            with gm[_i + 1]:
+                st.select_slider(f"{_m}几个菜", list(range(1, DISH_MAX + 1)), key=f"dishes_{_m}")
+        if len(_picked_form) > 1:
+            _bcol = st.columns(2)
+            with _bcol[0]:
+                st.slider("早餐单菜耗时上限（分钟）", 5, 30, key="breakfast_max_time")
+            with _bcol[1]:
+                st.caption("早餐默认只排 1 道快手菜；预算仍是**每人每天**，覆盖当天所有餐。")
 
         # ② 口味与忌口（四列填满，不留空洞，P-07）
         st.markdown("#### 口味与忌口")
@@ -949,8 +1019,14 @@ def render_create() -> None:
     if submitted:
         _people, _days = int(people), int(days)
         _week = float(budget_week) if budget_week and budget_week > 0 else 0.0
+        # 每餐几道菜（docs/10）：表单按餐各一个值；`dishes_per_day` 留成"当天最后一顿"的道数，
+        # 它是老字段，导出的"每顿 N 道菜"那句话还在用它
+        _dpm = {m: int(st.session_state.get(f"dishes_{m}") or 2) for m in MEALS}
         st.session_state["plan_inputs"] = dict(
-            people=_people, days=_days, dishes_per_day=int(dishes_per_day),
+            people=_people, days=_days, dishes_per_day=_dpm[_picked_form[-1]],
+            meals=list(_picked_form), dishes_per_meal=_dpm,
+            breakfast_max_time_min=int(st.session_state.get("breakfast_max_time",
+                                                            BREAKFAST_MAX_TIME_DEFAULT)),
             allergens=list(allergens), spice=spice, taste_tags=list(taste), goal=goal,
             skill=skill, cook_start=cook_start,
             max_time_min=int(max_time),
@@ -1090,7 +1166,10 @@ def render_plan() -> None:
     label = store.week_label(start_date)
     liked_now = prof.liked_names(KNOWN_NAMES)
     hated_now = prof.disliked_names(KNOWN_NAMES)
-    today_idx = store.today_index(start_date, len(result.days))
+    # 日期逻辑要的是**天数**不是顿数（docs/10）：一天三顿时 len(result.days)=21，
+    # 直接传会把"今天是第几天""标签页数量"全算错。
+    days_span = max(p.day for p in result.days)
+    today_idx = store.today_index(start_date, days_span)
 
     # ---- 顶部：方案名 + 日期范围 + 重排 / 改需求（05 M3）
     t1, t2, t3, _sp = st.columns([3, 1, 1, 1])
@@ -1200,13 +1279,19 @@ def render_plan() -> None:
     # ---- 整周总览：等宽天行，今天高亮、已过变淡（4.6-4 / E-01）
     st.markdown("### 整周总览")
     rows_html = []
-    for idx, row in enumerate(summary.rows):
+    _multi = c.is_multi_meal()
+    for row in summary.rows:
+        idx = row.day - 1                      # 按**天**算高亮，不能用行号（多餐时行号会串天）
         cls = "today" if (today_idx is not None and idx == today_idx) else (
             "past" if (today_idx is not None and idx < today_idx) else "")
-        mark = "今晚" if cls == "today" else ("已过" if cls == "past" else "")
+        mark = ("今晚" if c.active_meals()[-1] == row.meal else "今天") if cls == "today" else (
+            "已过" if cls == "past" else "")
+        when = f"第 {row.day} 天 {row.weekday} {row.date_label}"
+        if _multi:
+            when += f"　<b>{row.meal}</b>"
         rows_html.append(
             f"<div class='day-row {cls}'>"
-            f"<div class='day-when'>第 {row.day} 天 {row.weekday} {row.date_label}"
+            f"<div class='day-when'>{when}"
             + (f" · {mark}" if mark else "") + "</div>"
             f"<div class='day-dishes'>{'、'.join(row.dishes) or '（未排）'}</div>"
             f"<div class='day-meta'>{row.minutes} 分钟 · ¥{row.cost:.0f}</div></div>")
@@ -1216,50 +1301,56 @@ def render_plan() -> None:
     with st.expander("每日详情与逐道反馈（换一道 / 喜欢 / 不喜欢）", expanded=False):
         st.caption("换一道 = 只换今晚这道（不动口味偏好）；喜欢 = 以后多安排；"
                    "不喜欢 = 换掉并记住，以后不再出现。")
-        labels = [f"第 {i} 天" for i in range(1, len(result.days) + 1)]
+        # 一天一个标签页，页内再按餐分段（docs/10）：多餐时标签数必须仍然是**天数**
+        labels = [f"第 {i} 天" for i in range(1, days_span + 1)]
         _cur_tab = st.session_state.get("day_tabs")
         if _cur_tab is not None and _cur_tab not in labels:
             st.session_state["day_tabs"] = labels[0]
         day_tabs = st.tabs(labels, key="day_tabs", on_change="rerun")
-        for tab, plan_day in zip(day_tabs, result.days):
+        for tab, day_no in zip(day_tabs, range(1, days_span + 1)):
             with tab:
-                idx0 = plan_day.day - 1
+                idx0 = day_no - 1
                 is_past = today_idx is not None and idx0 < today_idx
-                if plan_day.skipped:
-                    st.markdown("<p class='line'>这天不做饭（你标记过：不计花费、也不进买菜清单）。</p>",
-                                unsafe_allow_html=True)
-                    if not is_past and st.button("改回来做", key=f"tab_unskip_{plan_day.day}",
-                                                 use_container_width=False):
-                        result.days = restore_day(result.days, plan_day.day, db, c)
-                        refresh_result(result, db)
-                        _commit_plan()
-                        ui.set_notice("swap", f"第 {plan_day.day} 天恢复做饭，其他天没动。")
-                        st.rerun()
-                    continue
-                for dish in plan_day.dishes:
-                    r = db.by_id(dish.recipe_id)
-                    if r is None:
+                for plan_day in result.slots_for(day_no):
+                    if _multi:
+                        st.markdown(f"<p class='line'><b>{plan_day.meal}</b></p>",
+                                    unsafe_allow_html=True)
+                    if plan_day.skipped:
+                        st.markdown("<p class='line'>这天不做饭（你标记过：不计花费、也不进买菜清单）。</p>",
+                                    unsafe_allow_html=True)
+                        if not is_past and st.button("改回来做", key=f"tab_unskip_{plan_day.day}_{plan_day.meal}",
+                                                     use_container_width=False):
+                            result.days = restore_day(result.days, plan_day.day, db, c,
+                                                      meal=plan_day.meal)
+                            refresh_result(result, db)
+                            _commit_plan()
+                            ui.set_notice("swap", f"第 {plan_day.day} 天恢复做饭，其他天没动。")
+                            st.rerun()
                         continue
-                    st.markdown(_dish_card(r, dish, r.name in liked_now, r.name in hated_now),
-                                unsafe_allow_html=True)
-                    if not is_past:
-                        picked = _dish_actions(plan_day.day, dish, r.name in liked_now,
-                                               r.name in hated_now,
-                                               dish.recipe_id in set(c.must_include_recipes))
-                        pending = picked or pending
-                minutes = rep.day_minutes(plan_day, db)
-                cost = rep.day_cost(plan_day, db, c.people)
-                order, has_slow = rep.cook_order(plan_day, db)
-                st.markdown(
-                    f"<p class='line'>这天合计约 {minutes} 分钟 · 预计 ¥{cost:.0f}"
-                    + (f"　·　按 {plan_day.people} 人算" if plan_day.people else "")
-                    + ("　·　有汤/炖菜可以先上火，实际用时更短" if has_slow else "")
-                    + ("　·　（这天已经过去了，只能看不能改）" if is_past else "") + "</p>",
-                    unsafe_allow_html=True)
-                if order:
-                    with st.expander("下锅顺序"):
-                        for line in order:
-                            st.markdown(f"- {line}")
+                    for dish in plan_day.dishes:
+                        r = db.by_id(dish.recipe_id)
+                        if r is None:
+                            continue
+                        st.markdown(_dish_card(r, dish, r.name in liked_now, r.name in hated_now),
+                                    unsafe_allow_html=True)
+                        if not is_past:
+                            picked = _dish_actions(plan_day.day, dish, r.name in liked_now,
+                                                   r.name in hated_now,
+                                                   dish.recipe_id in set(c.must_include_recipes))
+                            pending = picked or pending
+                    minutes = rep.day_minutes(plan_day, db)
+                    cost = rep.day_cost(plan_day, db, c.people)
+                    order, has_slow = rep.cook_order(plan_day, db)
+                    st.markdown(
+                        f"<p class='line'>这天合计约 {minutes} 分钟 · 预计 ¥{cost:.0f}"
+                        + (f"　·　按 {plan_day.people} 人算" if plan_day.people else "")
+                        + ("　·　有汤/炖菜可以先上火，实际用时更短" if has_slow else "")
+                        + ("　·　（这天已经过去了，只能看不能改）" if is_past else "") + "</p>",
+                        unsafe_allow_html=True)
+                    if order:
+                        with st.expander("下锅顺序"):
+                            for line in order:
+                                st.markdown(f"- {line}")
 
     if st.session_state.get("relax"):
         _relax_options(c, result.issues, swap_failed=True)
@@ -1316,9 +1407,14 @@ def render_plan() -> None:
         st.markdown(f"<p class='line'>口味档案：喜欢 {'、'.join(liked_now) or '—'}"
                     f"　｜　不喜欢 {'、'.join(hated_now) or '—'}</p>", unsafe_allow_html=True)
 
-    # ---- 处理反馈：只动这一天，不整周重排
+    # ---- 处理反馈：只动这一顿，不整周重排
     if pending:
         kind, day_no, rid = pending
+        # 按钮的 key 里没有餐次（`like_1_r05`），但**一周内菜不重复**，
+        # 所以用 rid 能唯一定位到"这一天里的哪一顿"（docs/10）。定位不到就按当天最后一顿。
+        _slot = next((p for p in result.days
+                      if p.day == day_no and any(d.recipe_id == rid for d in p.dishes)), None)
+        _meal = _slot.meal if _slot is not None else None
         name = _name_of(rid)
         prev_days = [p.model_copy(deep=True) for p in result.days]
         prev_profile = prof.load_profile()
@@ -1344,7 +1440,7 @@ def render_plan() -> None:
             st.rerun()
 
         if kind == "swap":
-            new_days, new_recipe = swap_dish(result.days, day_no, rid, db, c)
+            new_days, new_recipe = swap_dish(result.days, day_no, rid, db, c, _meal)
             if new_recipe:
                 result.days = new_days
                 refresh_result(result, db)
@@ -1359,7 +1455,7 @@ def render_plan() -> None:
         else:
             prof.set_feedback(name, "dislike", KNOWN_NAMES)
             undo_profile = prev_profile
-            new_days, new_recipe = swap_dish(result.days, day_no, rid, db, c)
+            new_days, new_recipe = swap_dish(result.days, day_no, rid, db, c, _meal)
             if new_recipe:
                 result.days = new_days
                 refresh_result(result, db)

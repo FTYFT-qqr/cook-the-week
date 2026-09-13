@@ -80,6 +80,15 @@ def _other_days_text(total: int, day: int) -> str:
     return f"其他 {n} 天没动" if n else "只有这一天"
 
 
+def _day_count(record: PlanRecord) -> int:
+    """这份方案一共几天。
+
+    docs/10：一天多顿时 `len(result.days)` 是**顿数**不是天数，
+    直接用会说出"其他二十天没动"这种话。
+    """
+    return len({p.day for p in record.result.days}) or len(record.result.days)
+
+
 def _undo_days(record: PlanRecord, days: list[DayPlan]) -> list[DayPlan]:
     """给撤销用：把改动前的这些天原样存下来。"""
     return [p.model_copy(deep=True) for p in days[:MAX_UNDO_SNAPSHOT]]
@@ -137,7 +146,7 @@ def skip(record: PlanRecord, db: RecipeDB, day: int) -> ActionOutcome:
     msg = f"已把第 {day} 天标记成不做饭"
     if dropped:
         msg += f"（去掉「{'、'.join(dropped)}」）"
-    msg += f"，{_other_days_text(len(record.result.days), day)}。"
+    msg += f"，{_other_days_text(_day_count(record), day)}。"
     return ActionOutcome(
         kind="skip", message=msg, days=days,
         extra={"skipped_day": day, "dropped": dropped},
@@ -308,7 +317,7 @@ def feedback(record: PlanRecord, db: RecipeDB, day: int, recipe_id: str, op: str
         if op == "lock":
             if recipe_id not in locked:
                 locked.append(recipe_id)
-            msg = f"已定住「{name}」，以后重排会保留它（{_other_days_text(len(record.result.days), day)}）。"
+            msg = f"已定住「{name}」，以后重排会保留它（{_other_days_text(_day_count(record), day)}）。"
         else:
             locked = [x for x in locked if x != recipe_id]
             msg = f"已取消定住「{name}」，重排时可以被换掉。"
@@ -331,7 +340,7 @@ def feedback(record: PlanRecord, db: RecipeDB, day: int, recipe_id: str, op: str
         if new_recipe is not None:
             msg = (f"已记住不喜欢「{name}」，第 {day} 天换成「{new_recipe.name}」，以后不再出现。")
         else:
-            msg = f"已记住不喜欢「{name}」（本次没有可替换的菜，{_other_days_text(len(record.result.days), day)}）。"
+            msg = f"已记住不喜欢「{name}」（本次没有可替换的菜，{_other_days_text(_day_count(record), day)}）。"
         return ActionOutcome(
             kind="dislike", message=msg, days=new_days if new_recipe else None,
             extra={"day": day, "recipe_id": recipe_id,

@@ -33,12 +33,24 @@ async def _commit() -> None:
         await session.commit()
 
 
-def _day_plan(record: PlanRecord, day: int):
-    return next((p for p in record.result.days if p.day == day), None)
+def _slot(record: PlanRecord, day: int, meal: Optional[str] = None):
+    """取「这一天这一顿」。
+
+    docs/10 起**只有这一条路**：`next(p for p in record.result.days if p.day == day)`
+    会静默拿到当天**第一顿**（早餐），于是早/午/晚显示成同一份菜 —— 界面看着完全正常，
+    却全是错的。所有"按天取一顿"的地方都必须走 `PlanResult.slot`。
+    """
+    return record.result.slot(day, meal)
 
 
-def _dishes_of(record: PlanRecord, day: int, db: RecipeDB) -> list[DishOut]:
-    plan_day = _day_plan(record, day)
+def _row_of(rows: list, day: int, meal: str):
+    """在概览行里取「这一天这一顿」那一行（多餐时一天有好几行，用 (天, 餐) 定位）。"""
+    return next((r for r in rows if r.day == day and r.meal == meal), None)
+
+
+def _dishes_of(record: PlanRecord, day: int, db: RecipeDB,
+               meal: Optional[str] = None) -> list[DishOut]:
+    plan_day = _slot(record, day, meal)
     if plan_day is None:
         return []
     locked = set(record.result.constraints.must_include_recipes)
@@ -54,6 +66,23 @@ def _dishes_of(record: PlanRecord, day: int, db: RecipeDB) -> list[DishOut]:
             reason=dish.reason,
             locked=dish.recipe_id in locked))
     return out
+
+
+def _day_out(record: PlanRecord, row, db: RecipeDB, with_order: bool = False) -> DayOut:
+    """把一个概览行（= 一天里的一顿）转成对外的 DayOut。
+
+    餐次必须原样带出去：`row.meal` 决定取哪一槽的菜，`done` 也必须按 (天, 餐) 问。
+    """
+    plan_day = _slot(record, row.day, row.meal)
+    order, has_slow = rep.cook_order(plan_day, db) if plan_day else ([], False)
+    return DayOut(day=row.day, meal=row.meal, weekday=row.weekday, date_label=row.date_label,
+                  skipped=bool(plan_day and plan_day.skipped),
+                  people=plan_day.people if plan_day else None,
+                  minutes=row.minutes, cost=row.cost,
+                  done=record.is_done(row.day, row.meal),
+                  dishes=_dishes_of(record, row.day, db, row.meal),
+                  cook_order=list(order) if with_order else [],
+                  has_parallel=has_slow if with_order else False)
 
 
 def _issue_out(issue) -> IssueOut:
@@ -130,13 +159,7 @@ async def plan_detail(record: PlanRecord = Depends(require_record),
     batch_of = {row["食材"]: 1 for row in first}
     batch_of.update({row["食材"]: 2 for row in second})
 
-    days = [DayOut(day=row.day, meal=row.meal, weekday=row.weekday, date_label=row.date_label,
-                   skipped=bool(dp and dp.skipped),
-                   people=dp.people if dp else None,
-                   minutes=row.minutes, cost=row.cost, done=record.is_done(row.day, row.meal),
-                   dishes=_dishes_of(record, row.day, db))
-            for row in summary.rows
-            for dp in [_day_plan(record, row.day)]]
+    days = [_day_out(record, row, db) for row in summary.rows]
 
     shopping = [
         ShoppingItemOut(name=it.name, category=it.category, amount=it.amount,
@@ -160,6 +183,7 @@ async def plan_detail(record: PlanRecord = Depends(require_record),
             breakfast_max_time_min=c.breakfast_max_time_min),
         days=days, shopping=shopping, summary=_summary_out(record, db),
         checked_items=sorted(checked), done_days=sorted(done),
+        done_slots=sorted(record.done_slots or []),
         issues=[_issue_out(i) for i in result.issues])
 
 
@@ -210,22 +234,22 @@ async def delete_plan(plan_id: str, confirm: bool = Query(False, description="�
 
 @router.get("/plans/{plan_id}/days/{day}", response_model=DayOut, tags=["plans"],
             responses={404: {"description": "方案或这一天不存在"}})
-async def day_detail(day: int, record: PlanRecord = Depends(require_record),
+async def day_detail(day: int, meal: Optional[str] = Query(
+                         default=None, description="哪一顿：早餐/午餐/晚餐；不给=当天最后一顿"),
+                     record: PlanRecord = Depends(require_record),
                      db: RecipeDB = Depends(get_db)) -> DayOut:
-    """单独取某一天（局部刷新用），带上「下锅顺序」。"""
-    summary = rep.plan_summary(record.result, db, record.start_date)
-    row = next((r for r in summary.rows if r.day == day), None)
-    if row is None:
+    """单独取某一天（局部刷新用），带上「下锅顺序」。
+
+    docs/10：一天可能有好几顿，所以要点名是哪一顿（不给 = 当天最后一顿，也就是"今晚"）。
+    """
+    plan_day = _slot(record, day, meal)
+    if plan_day is None:
         raise NotFoundError("这份方案里没有这一天。", next_steps=[step("view_plan", "看看这一周")])
-    plan_day = _day_plan(record, day)
-    order, has_slow = rep.cook_order(plan_day, db) if plan_day else ([], False)
-    return DayOut(day=row.day, weekday=row.weekday, date_label=row.date_label,
-                  skipped=bool(plan_day and plan_day.skipped),
-                  people=plan_day.people if plan_day else None,
-                  minutes=row.minutes, cost=row.cost,
-                  done=day in set(record.done_days or []),
-                  dishes=_dishes_of(record, day, db),
-                  cook_order=list(order), has_parallel=has_slow)
+    summary = rep.plan_summary(record.result, db, record.start_date)
+    row = _row_of(summary.rows, plan_day.day, plan_day.meal)
+    if row is None:
+        raise NotFoundError("这份方案里没有这一顿。", next_steps=[step("view_plan", "看看这一周")])
+    return _day_out(record, row, db, with_order=True)
 
 
 EXPORT_FORMATS = {

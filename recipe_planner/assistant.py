@@ -25,7 +25,9 @@ from recipe_planner.core import (
     replace_in_day,
     restore_day,
     skip_day,
+    slot_of,
     veg_swap,
+    where_text,
 )
 from recipe_planner.models import GOALS, TASTE_TAGS, PlanResult, RecipeDB, UserConstraints
 
@@ -284,64 +286,76 @@ def apply_intent(intent: Intent, result: PlanResult, db: RecipeDB,
         if not kw:
             return ApplyOutcome("你想换成什么？例如「周二换成鱼」。")
         day = intent.day
+        meal = None
         if day is None:
-            # 没指定天：看这道菜（关键词命中的）现在排在哪天，就换那天
+            # 没指定天：看这道菜（关键词命中的）现在排在哪天哪一顿，就换那顿
             for p in result.days:
                 for d in p.dishes:
                     r = db.by_id(d.recipe_id)
                     if r and kw in r.name:
-                        day = p.day
+                        day, meal = p.day, p.meal
                         break
                 if day:
                     break
             day = day or 1
-        day_plan = next((p for p in result.days if p.day == day), None)
+        # docs/10：一天多顿时必须落到**具体一顿**（不给就是当天最后一顿，一般是晚餐）
+        day_plan = slot_of(result.days, day, meal)
         if day_plan is None:
             return ApplyOutcome(f"这一周只有 {len({p.day for p in result.days})} 天，没有第 {day} 天。")
+        meal = day_plan.meal
+        place = where_text(day, meal, c)
         if any(kw in (db.by_id(d.recipe_id).name if db.by_id(d.recipe_id) else "")
                for d in day_plan.dishes):
-            return ApplyOutcome(f"第 {day} 天已经有「{kw}」了，想换掉它的话直接点那道菜的「换一道」。")
+            return ApplyOutcome(f"{place}已经有「{kw}」了，想换掉它的话直接点那道菜的「换一道」。")
         if not recipes_matching(db, kw):
             return ApplyOutcome(f"菜谱库里没有和「{kw}」相关的菜，换个说法试试（例如「鱼」「鸡」「豆腐」）。")
         target = day_plan.dishes[-1] if day_plan.dishes else None
         if target is None:
-            cands = candidates_matching(result.days, day, kw, db, c)
+            cands = candidates_matching(result.days, day, kw, db, c, meal=meal)
             if not cands:
-                return ApplyOutcome(f"第 {day} 天现在不做饭；想恢复做饭可以直接说「第 {day} 天照常做」。")
-            result.days = restore_day(result.days, day, db, c)
+                return ApplyOutcome(f"{place}现在不做饭；想恢复做饭可以直接说「第 {day} 天照常做」。")
+            result.days = restore_day(result.days, day, db, c, meal=meal)
             refresh_result(result, db)
-            return ApplyOutcome(f"第 {day} 天原本不做饭，已恢复并优先排上「{kw}」。", changed_days=[day])
-        cands = candidates_matching(result.days, day, kw, db, c, replace_id=target.recipe_id)
+            return ApplyOutcome(f"{place}原本不做饭，已恢复并优先排上「{kw}」。", changed_days=[day])
+        cands = candidates_matching(result.days, day, kw, db, c,
+                                    replace_id=target.recipe_id, meal=meal)
         if not cands:
             return ApplyOutcome(
-                f"找不到能换进第 {day} 天的「{kw}」——可能被忌口、单菜时长上限或当天预算挡住了，"
+                f"找不到能换进{place}的「{kw}」——可能被忌口、单菜时长上限或当天预算挡住了，"
                 "可以在下面放宽条件后再试。")
         new_recipe = cands[0]
         old_name = db.by_id(target.recipe_id).name if db.by_id(target.recipe_id) else "那道菜"
-        result.days = replace_in_day(result.days, day, target.recipe_id, new_recipe, c)
+        result.days = replace_in_day(result.days, day, target.recipe_id, new_recipe, c, meal)
         refresh_result(result, db)
-        return ApplyOutcome(f"已把第 {day} 天的「{old_name}」换成「{new_recipe.name}」"
-                            f"（只动这一天）。", changed_days=[day])
+        return ApplyOutcome(f"已把{place}的「{old_name}」换成「{new_recipe.name}」"
+                            f"（只动这一顿）。", changed_days=[day])
 
     if intent.action == "skip_day":
         day = intent.day
         if day is None:
             return ApplyOutcome("哪天不做饭？例如「周三不做饭」或「今天不做饭」。")
-        result.days = skip_day(result.days, day)
+        # docs/10：不给餐次 = 当天最后一顿（一般就是晚餐）；一天两顿时这样最符合"不做饭"的说法
+        slot = slot_of(result.days, day, None)
+        meal = slot.meal if slot else None
+        place = where_text(day, meal, c)
+        result.days = skip_day(result.days, day, meal=meal)
         refresh_result(result, db)
-        return ApplyOutcome(f"第 {day} 天已设为不做饭：不计花费、买菜清单里也去掉了这天的食材"
+        return ApplyOutcome(f"{place}已设为不做饭：不计花费、买菜清单里也去掉了这顿的食材"
                             f"（想改回来就说「第 {day} 天照常做」）。", changed_days=[day])
 
     if intent.action == "restore_day":
         day = intent.day
         if day is None:
             return ApplyOutcome("哪天要恢复做饭？例如「周三照常做」。")
-        result.days = restore_day(result.days, day, db, c)
+        slot = slot_of(result.days, day, None)
+        meal = slot.meal if slot else None
+        place = where_text(day, meal, c)
+        result.days = restore_day(result.days, day, db, c, meal=meal)
         refresh_result(result, db)
-        names = "、".join(db.by_id(d.recipe_id).name for d in
-                          next(p for p in result.days if p.day == day).dishes
+        back = slot_of(result.days, day, meal)
+        names = "、".join(db.by_id(d.recipe_id).name for d in (back.dishes if back else [])
                           if db.by_id(d.recipe_id))
-        return ApplyOutcome(f"第 {day} 天恢复做饭：{names or '（候选不足，暂时没排上）'}。",
+        return ApplyOutcome(f"{place}恢复做饭：{names or '（候选不足，暂时没排上）'}。",
                             changed_days=[day])
 
     if intent.action == "set_people":
@@ -363,10 +377,11 @@ def apply_intent(intent: Intent, result: PlanResult, db: RecipeDB,
         got = cheapest_swap(result.days, db, c)
         if got is None:
             return ApplyOutcome("这一周已经没有明显更省的换法了（再省就要动忌口或时长了）。")
-        new_plans, day, old, new_recipe, saving = got
+        new_plans, day, meal, old, new_recipe, saving = got
+        place = where_text(day, meal, c)
         result.days = new_plans
         refresh_result(result, db)
-        return ApplyOutcome(f"想省钱：把第 {day} 天的「{old.name}」换成「{new_recipe.name}」，"
+        return ApplyOutcome(f"想省钱：把{place}的「{old.name}」换成「{new_recipe.name}」，"
                             f"这周省了约 ¥{saving:.0f}（现在预计 ¥{result.estimated_cost_yuan:.0f}）。",
                             changed_days=[day])
 
@@ -376,11 +391,12 @@ def apply_intent(intent: Intent, result: PlanResult, db: RecipeDB,
         if got is None:
             tip = "每天都已经有荤菜了" if intent.action == "more_protein" else "这一周本来就没有太荤的菜"
             return ApplyOutcome(f"不用调了：{tip}。")
-        new_plans, day, old, new_recipe = got
+        new_plans, day, meal, old, new_recipe = got
+        place = where_text(day, meal, c)
         result.days = new_plans
         refresh_result(result, db)
         word = "加了点肉" if intent.action == "more_protein" else "换清爽些"
-        return ApplyOutcome(f"已把第 {day} 天的「{old.name}」换成「{new_recipe.name}」（{word}）。",
+        return ApplyOutcome(f"已把{place}的「{old.name}」换成「{new_recipe.name}」（{word}）。",
                             changed_days=[day])
 
     if intent.action in ("lock_dish", "unlock_dish", "add_dish"):

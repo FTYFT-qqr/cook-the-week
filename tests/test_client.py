@@ -345,6 +345,72 @@ def test_比对_不做饭与改回来():
     assert client._day_patches(skipped, server.result) == [(1, {"op": "restore"})]
 
 
+# ---- docs/10：一天多顿时必须**按 (天, 餐) 比对**，并且发出去的意图要点名那一顿 ----
+
+
+def _multi(days: list[DayPlan]) -> PlanRecord:
+    return PlanRecord(
+        id="p2", start_date="2026-09-14", label="9/14–9/20",
+        result=PlanResult(
+            constraints=UserConstraints(people=2, days=1, dishes_per_day=2,
+                                        meals=["早餐", "午餐", "晚餐"],
+                                        dishes_per_meal={"早餐": 1, "午餐": 1, "晚餐": 1}),
+            candidate_count=0, days=days, final=True))
+
+
+def test_比对_多餐时按顿比对且带上餐次():
+    """把早餐少排一道，只能生成"早餐"那一条 —— 以前会退化成"改晚餐"。"""
+    server = _multi([DayPlan(day=1, meal="早餐", dishes=[ChosenDish(recipe_id="r1")]),
+                     DayPlan(day=1, meal="午餐", dishes=[ChosenDish(recipe_id="r2")]),
+                     DayPlan(day=1, meal="晚餐", dishes=[ChosenDish(recipe_id="r3")])])
+    local = _multi([DayPlan(day=1, meal="早餐", dishes=[ChosenDish(recipe_id="r9")]),
+                    DayPlan(day=1, meal="午餐", dishes=[ChosenDish(recipe_id="r2")]),
+                    DayPlan(day=1, meal="晚餐", dishes=[ChosenDish(recipe_id="r3")])])
+    assert client._day_patches(server, local.result) == [
+        (1, {"op": "replace_day", "recipe_ids": ["r9"], "meal": "早餐"})]
+
+
+def test_比对_多餐时只改一顿的人数():
+    server = _multi([DayPlan(day=1, meal="早餐", dishes=[ChosenDish(recipe_id="r1")]),
+                     DayPlan(day=1, meal="晚餐", dishes=[ChosenDish(recipe_id="r3")])])
+    local = _multi([DayPlan(day=1, meal="早餐", dishes=[ChosenDish(recipe_id="r1")]),
+                    DayPlan(day=1, meal="晚餐", dishes=[ChosenDish(recipe_id="r3")], people=4)])
+    assert client._day_patches(server, local.result) == [
+        (1, {"op": "people", "people": 4, "meal": "晚餐"})]
+
+
+def test_比对_多餐时不做饭只关那一顿():
+    server = _multi([DayPlan(day=1, meal="早餐", dishes=[ChosenDish(recipe_id="r1")]),
+                     DayPlan(day=1, meal="晚餐", dishes=[ChosenDish(recipe_id="r3")])])
+    local = _multi([DayPlan(day=1, meal="早餐", dishes=[ChosenDish(recipe_id="r1")]),
+                    DayPlan(day=1, meal="晚餐", dishes=[], skipped=True)])
+    assert client._day_patches(server, local.result) == [(1, {"op": "skip", "meal": "晚餐"})]
+
+
+def test_服务端详情转成领域对象时三餐各归各位():
+    """界面吃的就是这一份转换结果 —— 它把三餐弄成一份，界面就会显示成一份。"""
+    detail = {
+        "id": "p9", "label": "9/14–9/20", "start_date": "2026-09-14",
+        "constraints": {"people": 2, "days": 1, "meals": ["早餐", "午餐", "晚餐"],
+                        "dishes_per_meal": {"早餐": 1, "午餐": 1, "晚餐": 2}},
+        "days": [
+            {"day": 1, "meal": "早餐", "dishes": [{"recipe_id": "r1"}]},
+            {"day": 1, "meal": "午餐", "dishes": [{"recipe_id": "r2"}]},
+            {"day": 1, "meal": "晚餐", "dishes": [{"recipe_id": "r3"}, {"recipe_id": "r4"}]},
+        ],
+        "done_slots": ["1|早餐"],
+    }
+    rec = client._record_from_detail(detail)
+
+    assert rec.result.constraints.active_meals() == ["早餐", "午餐", "晚餐"]
+    assert [p.meal for p in rec.result.slots_for(1)] == ["早餐", "午餐", "晚餐"]
+    assert [d.recipe_id for d in rec.result.slot(1, "早餐").dishes] == ["r1"]
+    assert [d.recipe_id for d in rec.result.slot(1, "午餐").dishes] == ["r2"]
+    assert [d.recipe_id for d in rec.result.slot(1, "晚餐").dishes] == ["r3", "r4"]
+    # "哪一顿做完了"必须还原，否则一刷新就丢
+    assert rec.is_done(1, "早餐") and not rec.is_done(1, "晚餐")
+
+
 # ---------------------------------------------------------------- 分派（子进程）
 
 

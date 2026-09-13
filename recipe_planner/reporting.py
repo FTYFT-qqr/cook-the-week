@@ -13,6 +13,33 @@ from recipe_planner import store
 from recipe_planner.models import MEAL, DayPlan, PlanResult, RecipeDB, ValidationIssue
 
 
+# ---------------------------------------------------------------- 抬头文案
+
+def menu_title(c, single: str = "一周晚餐菜单") -> str:
+    """整份菜单叫什么：只做晚餐时原样返回 `single`（三个出口的老写法不一样，各自保持不变）。
+
+    多餐时这三个出口统一叫「本周菜单」—— 只做早餐却说"晚餐菜单"是错的。
+    """
+    return single if c.active_meals() == [MEAL] else "本周菜单"
+
+
+def dishes_phrase(c) -> str:
+    """"每顿几道菜"：单餐时保持原来的措辞；多餐时按餐分别说清（早 1 / 午 2 / 晚 3）。
+
+    docs/10：多餐之后不能再拿 `dishes_per_day` 一句话概括 —— 那是**一天总数**的旧字段，
+    早/午/晚各自的道数写在 `dishes_per_meal` 里。
+    """
+    meals = c.active_meals()
+    if len(meals) == 1:
+        return f"每顿 {c.dishes_for(meals[0])} 道菜"
+    return "、".join(f"{m} {c.dishes_for(m)} 道" for m in meals)
+
+
+def _meal_mark(c, meal: str) -> str:
+    """打印/复制文本里要不要带上餐次：只做一顿就什么都不加。"""
+    return f"（{meal}）" if c.is_multi_meal() else ""
+
+
 # ---------------------------------------------------------------- 单天
 
 def day_minutes(plan: DayPlan, db: RecipeDB) -> int:
@@ -204,10 +231,11 @@ def printable_text(result: PlanResult, db: RecipeDB, start_date=None,
     summary = plan_summary(result, db, start_date)
     c = result.constraints
     label = store.week_label(start_date)
-    lines = [f"一周晚餐菜单（{label}）　{c.people} 人 · 每顿 {c.dishes_per_day} 道菜", ""]
+    lines = [f"{menu_title(c)}（{label}）　{c.people} 人 · {dishes_phrase(c)}", ""]
     for row in summary.rows:
         dishes = "、".join(row.dishes) or "（未排）"
-        lines.append(f"第 {row.day} 天 {row.weekday} {row.date_label}：{dishes}")
+        lines.append(f"第 {row.day} 天 {row.weekday}{_meal_mark(c, row.meal)} "
+                     f"{row.date_label}：{dishes}")
         lines.append(f"    合计约 {row.minutes} 分钟 · 约 ¥{row.cost:.0f}")
     lines += [
         "",
@@ -240,12 +268,15 @@ def optional_hint(row: dict) -> str:
 def share_text(result: PlanResult, db: RecipeDB, start_date=None) -> str:
     """E-08：分享给家人的干净视图 —— 只有日期、菜名、时间、金额，没有按钮、没有技术字样。"""
     summary = plan_summary(result, db, start_date)
-    lines = [f"这一周的晚饭（{store.week_label(start_date)}）", ""]
+    c = result.constraints
+    lines = [f"这一周的{'晚饭' if not c.is_multi_meal() else '饭'}"
+             f"（{store.week_label(start_date)}）", ""]
     for row in summary.rows:
+        when = f"{row.weekday} {row.date_label}{_meal_mark(c, row.meal)}"
         if not row.dishes:
-            lines.append(f"{row.weekday} {row.date_label}　这天不做饭")
+            lines.append(f"{when}　这天不做饭")
             continue
-        lines.append(f"{row.weekday} {row.date_label}　{'、'.join(row.dishes)}"
+        lines.append(f"{when}　{'、'.join(row.dishes)}"
                      f"　（约 {row.minutes} 分钟 · ¥{row.cost:.0f}）")
     lines += ["", "本周预计 ¥%.0f" % summary.total_cost
               + (" / 预算 ¥%.0f" % summary.budget_total if summary.budget_total else "")]
@@ -318,7 +349,7 @@ def printable_document(result: PlanResult, db: RecipeDB, start_date=None,
     return (
         "<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-        f"<title>一周晚餐菜单 · {store.week_label(start_date)}</title>"
+        f"<title>{menu_title(result.constraints)} · {store.week_label(start_date)}</title>"
         f"<style>{PRINT_CSS}</style></head><body>"
         f"{printable_html(result, db, start_date, checked)}"
         "</body></html>"
@@ -334,8 +365,9 @@ def printable_html(result: PlanResult, db: RecipeDB, start_date=None,
     summary = plan_summary(result, db, start_date)
     c = result.constraints
     label = store.week_label(start_date)
+    # 多餐时每天有好几行，只在"周几"后面标出是哪一顿（打印是黑白的，不加新样式）
     rows = "".join(
-        f"<tr><td>{r.weekday}</td><td>{r.date_label}</td>"
+        f"<tr><td>{r.weekday}{_meal_mark(c, r.meal)}</td><td>{r.date_label}</td>"
         f"<td>{'、'.join(r.dishes) or '—'}</td>"
         f"<td class='a4-n'>{r.minutes} 分钟</td><td class='a4-n'>¥{r.cost:.0f}</td></tr>"
         for r in summary.rows
@@ -349,8 +381,8 @@ def printable_html(result: PlanResult, db: RecipeDB, start_date=None,
     budget = f"预算 ¥{summary.budget_total:.0f}" if summary.budget_total else "未设预算"
     return (
         "<div class='a4'>"
-        "<div class='a4-title'>本周晚餐菜单</div>"
-        f"<div class='a4-sub'>{label}　{c.people} 人　每顿 {c.dishes_per_day} 道菜　"
+        "<div class='a4-title'>" + menu_title(c, single="本周晚餐菜单") + "</div>"
+        f"<div class='a4-sub'>{label}　{c.people} 人　{dishes_phrase(c)}　"
         f"共 {summary.dishes} 道</div>"
         "<table class='a4-table'>"
         "<thead><tr><th>周几</th><th>日期</th><th>菜名</th><th>用时</th><th>金额</th></tr></thead>"

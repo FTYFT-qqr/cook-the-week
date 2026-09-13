@@ -255,6 +255,9 @@ class PlanDetailOut(BaseModel):
     summary: SummaryOut
     checked_items: list[str] = []
     done_days: list[int] = []
+    # docs/10：一天多顿时"做完了"是**按顿**记的（`done_days` 是只做晚餐时的老表达）。
+    # 客户端要靠它还原 `PlanRecord.done_slots`，否则"第 3 天早餐做完了"一刷新就丢。
+    done_slots: list[str] = []
     issues: list[IssueOut] = []
 
 
@@ -301,23 +304,30 @@ class MutationOut(BaseModel):
 
 
 class DayPatchIn(BaseModel):
-    """`PATCH /plans/{id}/days/{day}` 的请求体（一次只做一件事）。"""
+    """`PATCH /plans/{id}/days/{day}` 的请求体（一次只做一件事）。
+
+    docs/10：一天可能有好几顿，所以 `meal` 是"对哪一顿下手"的**通用**参数
+    （不做饭/改回来/换份量/换快手组合/换一道/整组替换/标记做完 都认它）。
+    不给 = 老行为：只做晚餐时就是那一顿，多餐时是当天最后一顿。
+    """
 
     op: Literal["skip", "restore", "people", "faster", "swap", "replace_day", "done"]
-    people: Optional[int] = None          # op=people：这一天**总共**几人（绝对值）
+    people: Optional[int] = None          # op=people：这一顿**总共**几人（绝对值）
     recipe_id: Optional[str] = None       # op=swap：要换掉的那道
-    recipe_ids: Optional[list[str]] = None  # op=replace_day：这一天最终要有哪些菜（空数组=不做饭）
+    recipe_ids: Optional[list[str]] = None  # op=replace_day：这一顿最终要有哪些菜（空数组=不做饭）
     done: bool = True                     # op=done
-    meal: Optional[str] = None            # op=done：只标记**哪一顿**（docs/10）；不给=这一天
+    meal: Optional[str] = None            # 哪一顿：早餐/午餐/晚餐；不给=当天最后一顿
 
 
 class FeedbackIn(BaseModel):
     op: Literal["like", "dislike", "lock", "unlock"]
+    meal: Optional[str] = None            # 这道菜在哪一顿（docs/10）；不给=当天最后一顿
 
 
 class RateIn(BaseModel):
     day: int = Field(ge=1, le=7)
     score: int = Field(ge=0, le=2, description="2=好吃 / 1=一般 / 0=下次不做")
+    meal: Optional[str] = None            # 给哪一顿打分（docs/10）；不给=当天最后一顿
 
 
 class ChecksIn(BaseModel):

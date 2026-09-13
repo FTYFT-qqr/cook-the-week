@@ -537,12 +537,13 @@ def main() -> int:
           any(r.difficulty == "较难" for r in retrieve_candidates(db, cc_any)))
 
     got_save = cheapest_swap(res_f.days, db, cc_f)
-    check("E-05 省钱换菜能算出差额", got_save is None or got_save[4] > 0,
-          f"{got_save[4] if got_save else 'None'}")
+    check("E-05 省钱换菜能算出差额", got_save is None or got_save[5] > 0,
+          f"{got_save[5] if got_save else 'None'}")
     if got_save:
-        check("E-05 省钱换菜只动一天",
-              len({p.day for p in res_f.days if any(
-                  d.recipe_id == got_save[3].id for d in p.dishes)}) <= 1)
+        # 返回 (菜单, 第几天, 哪一顿, 旧菜, 新菜, 省了多少) —— docs/10 起多了"哪一顿"
+        check("E-05 省钱换菜只动一顿",
+              len([p for p in res_f.days if any(
+                  d.recipe_id == got_save[3].id for d in p.dishes)]) <= 1)
 
     rows_f = rep2.shopping_rows(res_f)
     b1, b2 = rep2.split_batches(rows_f)

@@ -59,28 +59,33 @@ async def _persist_plan(record: PlanRecord, outcome: actions.ActionOutcome, db: 
                          409: {"description": "当前状态下做不了（例如已经是最快的了）"}})
 async def patch_day(body: DayPatchIn, day: int, record: PlanRecord = Depends(require_record),
                     db: RecipeDB = Depends(get_db)) -> MutationOut:
-    """改这一天：不做饭 / 改回来 / 换份量 / 换快手组合 / 换一道 / 整组替换 / 标记做完。"""
+    """改这一顿：不做饭 / 改回来 / 换份量 / 换快手组合 / 换一道 / 整组替换 / 标记做完。
+
+    `body.meal` 对所有 op 都有效（docs/10）：一天多顿时"换一道"必须说清是哪一顿，
+    否则会去改**早餐**而界面上看不出来。
+    """
     op = body.op
+    meal = body.meal
     if op == "skip":
-        outcome = actions.skip(record, db, day)
+        outcome = actions.skip(record, db, day, meal)
     elif op == "restore":
-        outcome = actions.restore(record, db, day)
+        outcome = actions.restore(record, db, day, meal)
     elif op == "people":
         if body.people is None:
-            raise InvalidRequestError("改份量要告诉我这一天总共几个人。",
+            raise InvalidRequestError("改份量要告诉我这一顿总共几个人。",
                                       next_steps=[{"op": "retry_with_people", "label": "填上人数"}])
-        outcome = actions.set_people(record, db, day, body.people)
+        outcome = actions.set_people(record, db, day, body.people, meal)
     elif op == "faster":
-        outcome = actions.faster(record, db, day)
+        outcome = actions.faster(record, db, day, meal)
     elif op == "swap":
         if not body.recipe_id:
             raise InvalidRequestError("换菜要告诉我换掉哪一道。",
                                       next_steps=[{"op": "view_plan", "label": "看看这一周"}])
-        outcome = actions.swap(record, db, day, body.recipe_id)
+        outcome = actions.swap(record, db, day, body.recipe_id, meal)
     elif op == "replace_day":
-        outcome = actions.replace_day(record, db, day, list(body.recipe_ids or []))
+        outcome = actions.replace_day(record, db, day, list(body.recipe_ids or []), meal)
     elif op == "done":
-        outcome = actions.mark_done(record, day, body.done)
+        outcome = actions.mark_done(record, day, body.done, meal)
         await data.set_done(record.id, day, body.done, body.meal)
         log_id = await data.add_log(record.id, outcome.kind, outcome.message, outcome.extra)
         await _commit()
@@ -92,7 +97,7 @@ async def patch_day(body: DayPatchIn, day: int, record: PlanRecord = Depends(req
     updated = await _fresh(record, db)
     # 所有写入接口的 data 形状保持一致：day_detail + 各自的附加字段
     return _envelope(outcome, log_id,
-                     {"day_detail": _day_payload(updated or record, day, db), **outcome.extra})
+                     {"day_detail": _day_payload(updated or record, day, db, meal), **outcome.extra})
 
 
 @router.post("/plans/{plan_id}/dishes/{day}/{recipe_id}/feedback", response_model=MutationOut,
@@ -106,7 +111,7 @@ async def dish_feedback(body: FeedbackIn, day: int, recipe_id: str,
     - 喜欢：只写档案，**菜单一行不动**；不喜欢：写档案 + 换掉这一道；
     - 定住：只给这道菜加"必须保留"，其他菜不受影响。
     """
-    outcome = actions.feedback(record, db, day, recipe_id, body.op, profile)
+    outcome = actions.feedback(record, db, day, recipe_id, body.op, profile, body.meal)
     new_profile = None
 
     if body.op in ("like", "dislike"):
@@ -117,7 +122,8 @@ async def dish_feedback(body: FeedbackIn, day: int, recipe_id: str,
         await data.save_profile(new_profile)
 
     log_id = await _persist_plan(record, outcome, db)
-    payload: dict = {"day_detail": _day_payload(await _fresh(record, db) or record, day, db),
+    payload: dict = {"day_detail": _day_payload(await _fresh(record, db) or record,
+                                                day, db, body.meal),
                      **outcome.extra}
     if new_profile is not None:
         payload["profile"] = {"liked_dishes": new_profile.get("liked_dishes", []),
@@ -135,7 +141,8 @@ async def save_money(record: PlanRecord = Depends(require_record),
     log_id = await _persist_plan(record, outcome, db)
     updated = await _fresh(record, db)
     payload = dict(outcome.extra)
-    payload["day_detail"] = _day_payload(updated or record, outcome.extra.get("day", 1), db)
+    payload["day_detail"] = _day_payload(updated or record, outcome.extra.get("day", 1), db,
+                                         outcome.extra.get("meal"))
     return _envelope(outcome, log_id, payload)
 
 
@@ -143,19 +150,19 @@ async def save_money(record: PlanRecord = Depends(require_record),
 async def rate_day(body: RateIn, record: PlanRecord = Depends(require_record),
                    db: RecipeDB = Depends(get_db),
                    profile: dict = Depends(get_profile)) -> MutationOut:
-    """做完了打分：好吃 / 一般 / 下次不做。只写档案 + 这一天的"做过了"，菜单不变。"""
-    outcome = actions.rate(record, db, body.day, body.score)
+    """做完了打分：好吃 / 一般 / 下次不做。只写档案 + 这一顿的"做过了"，菜单不变。"""
+    outcome = actions.rate(record, db, body.day, body.score, body.meal)
     known = {r.name for r in db.recipes}
     new_profile = profile
     for name in outcome.extra["dishes"]:
         new_profile = prof.apply_rating_to_dict(new_profile, name, body.score, known,
                                                source="做完了打分", today=date.today())
     await data.save_profile(new_profile)
-    await data.set_done(record.id, body.day, True)
+    await data.set_done(record.id, body.day, True, body.meal)
     log_id = await data.add_log(record.id, outcome.kind, outcome.message, outcome.extra)
     await _commit()
     return _envelope(outcome, log_id, {"day": body.day, "score": body.score,
-                                       "dishes": outcome.extra["dishes"]})
+                                       "meal": body.meal, "dishes": outcome.extra["dishes"]})
 
 
 @router.get("/plans/{plan_id}/shopping/checks", tags=["shopping"])
@@ -182,21 +189,25 @@ async def _fresh(record: PlanRecord, db: RecipeDB) -> Optional[PlanRecord]:
     return await data.get_record(record.id)
 
 
-def _day_payload(record: PlanRecord, day: int, db: RecipeDB) -> dict:
-    """改动后这一天的样子（前端不用再拉整个方案）。"""
+def _day_payload(record: PlanRecord, day: int, db: RecipeDB,
+                 meal: Optional[str] = None) -> dict:
+    """改动后这一顿的样子（前端不用再拉整个方案）。"""
     import recipe_planner.reporting as rep
 
+    plan_day = record.result.slot(day, meal)      # docs/10：按天取一顿只有这一条路
+    if plan_day is None:
+        return {}
     summary = rep.plan_summary(record.result, db, record.start_date)
-    row = next((r for r in summary.rows if r.day == day), None)
+    row = next((r for r in summary.rows
+                if r.day == plan_day.day and r.meal == plan_day.meal), None)
     if row is None:
         return {}
-    plan_day = next((p for p in record.result.days if p.day == day), None)
-    order, has_slow = rep.cook_order(plan_day, db) if plan_day else ([], False)
-    return DayOut(day=row.day, weekday=row.weekday, date_label=row.date_label,
-                  skipped=bool(plan_day and plan_day.skipped),
-                  people=plan_day.people if plan_day else None,
+    order, has_slow = rep.cook_order(plan_day, db)
+    return DayOut(day=row.day, meal=row.meal, weekday=row.weekday, date_label=row.date_label,
+                  skipped=bool(plan_day.skipped),
+                  people=plan_day.people,
                   minutes=row.minutes, cost=row.cost,
-                  done=day in set(record.done_days or []),
+                  done=record.is_done(row.day, row.meal),
                   dishes=[{"recipe_id": d.recipe_id,
                            "name": (r.name if (r := db.by_id(d.recipe_id)) else ""),
                            "category": r.category if r else "",
@@ -204,5 +215,5 @@ def _day_payload(record: PlanRecord, day: int, db: RecipeDB) -> dict:
                            "time_min": r.time_min if r else 0,
                            "reason": d.reason,
                            "locked": d.recipe_id in set(record.result.constraints.must_include_recipes)}
-                          for d in (plan_day.dishes if plan_day else [])],
+                          for d in plan_day.dishes],
                   cook_order=list(order), has_parallel=has_slow).model_dump()

@@ -111,9 +111,22 @@ def pool_for_meal(candidates: list[Recipe], c: UserConstraints, meal: str) -> li
     return [r for r in candidates if not recipe_conflicts(r, c, meal)]
 
 
+def where_text(day: int, meal: "Optional[str]", c: UserConstraints, spaced: bool = True) -> str:
+    """「第 3 天」/「第 3 天午餐」—— 措辞规则**只写在这里**。
+
+    只做一顿时（或没给餐次）**不加餐次**，老措辞一个字都不改；
+    一天多顿时必须说清是哪一顿，否则回执写"已把第 3 天换成…"根本看不出动的是早餐还是晚餐。
+
+    `spaced`：界面/回执是"第 3 天"，校验消息（docs 早期就定了，有测试盯着）是"第3天"。
+    """
+    if not (meal and c.is_multi_meal()):
+        return f"第 {day} 天" if spaced else f"第{day}天"
+    return f"第 {day} 天{meal}" if spaced else f"第{day}天{meal}"
+
+
 def _where(day: int, meal: str, c: UserConstraints) -> str:
     """"第 N 天"还是"第 N 天午餐" —— 多顿才说餐次，单顿时保持原来的措辞。"""
-    return f"第{day}天{meal}" if c.is_multi_meal() else f"第{day}天"
+    return where_text(day, meal, c, spaced=False)
 
 
 def day_slots(plans: list[DayPlan], day_no: int) -> list[DayPlan]:
@@ -481,8 +494,12 @@ def replace_in_day(plans: list[DayPlan], day_no: int, old_id: str, new_recipe: R
 
 
 def candidates_matching(plans: list[DayPlan], day_no: int, keyword: str, db: RecipeDB,
-                        c: UserConstraints, replace_id: str | None = None) -> list[Recipe]:
-    """在「满足硬约束 + 全周不重复 + 不超当天预算」的前提下，找匹配关键词的候选菜。"""
+                        c: UserConstraints, replace_id: str | None = None,
+                        meal: "Optional[str]" = None) -> list[Recipe]:
+    """在「满足硬约束 + 全周不重复 + 不超当天预算」的前提下，找匹配关键词的候选菜。
+
+    docs/10：给了 `meal` 就只在**那一顿能用的菜**里找（否则「早餐来个鱼」会排上一道硬菜）。
+    """
     allowed = {r.id for r in recipes_matching(db, keyword)}
     if not allowed:
         return []
@@ -497,8 +514,11 @@ def candidates_matching(plans: list[DayPlan], day_no: int, keyword: str, db: Rec
             if r:
                 others_cost += r.cost_yuan * c.people / 2.0
     limit = c.budget_per_person_day * c.people if c.budget_per_person_day is not None else None
+    pool = retrieve_candidates(db, c)
+    if meal is not None:
+        pool = pool_for_meal(pool, c, meal)
     out: list[Recipe] = []
-    for r in retrieve_candidates(db, c):        # 已按软偏好（含"喜欢"加权）排序
+    for r in pool:                              # 已按软偏好（含"喜欢"加权）排序
         if r.id in used or r.id not in allowed:
             continue
         if limit is not None and others_cost + r.cost_yuan * c.people / 2.0 > limit + 1e-6:
@@ -559,10 +579,14 @@ def restore_day(plans: list[DayPlan], day_no: int, db: RecipeDB,
 
 
 def _swap_by_rule(plans: list[DayPlan], db: RecipeDB, c: UserConstraints,
-                  chooser) -> tuple[list[DayPlan], int, Recipe, Recipe] | None:
-    """通用：按 chooser(当天菜) 决定要换掉哪道，再找替换菜。"""
+                  chooser) -> tuple[list[DayPlan], int, str, Recipe, Recipe] | None:
+    """通用：按 chooser(当天菜) 决定要换掉哪道，再找替换菜。
+
+    docs/10：候选池按**那一顿**取 —— 否则「太油腻了」可能把晚餐的肉换成早餐的粥。
+    """
     used = {d.recipe_id for p in plans for d in p.dishes}
     for p in plans:
+        pool = pool_for_meal(retrieve_candidates(db, c), c, p.meal)
         for d in p.dishes:
             old = db.by_id(d.recipe_id)
             if old is None:
@@ -570,7 +594,7 @@ def _swap_by_rule(plans: list[DayPlan], db: RecipeDB, c: UserConstraints,
             kind = chooser(p, old)
             if kind is None:
                 continue
-            for cand in retrieve_candidates(db, c):
+            for cand in pool:
                 if cand.id in used or cand.id == old.id:
                     continue
                 if kind == "cheaper" and cand.cost_yuan >= old.cost_yuan * 0.7:
@@ -581,7 +605,8 @@ def _swap_by_rule(plans: list[DayPlan], db: RecipeDB, c: UserConstraints,
                     continue
                 if not _fits_day_budget(plans, p.day, d.recipe_id, cand, db, c):
                     continue
-                return (replace_in_day(plans, p.day, d.recipe_id, cand, c, p.meal), p.day, old, cand)
+                return (replace_in_day(plans, p.day, d.recipe_id, cand, c, p.meal),
+                        p.day, p.meal, old, cand)
     return None
 
 
@@ -601,21 +626,25 @@ def _fits_day_budget(plans: list[DayPlan], day_no: int, replace_id: str, cand: R
     return total + cand.cost_yuan * c.people / 2.0 <= c.budget_per_person_day * c.people + 1e-6
 
 
-def cheapest_swap(plans: list[DayPlan], db: RecipeDB,
-                  c: UserConstraints) -> tuple[list[DayPlan], int, Recipe, Recipe, float] | None:
-    """E-05：把最贵的一道换成更便宜的一道，并算出省了多少钱。"""
+def cheapest_swap(plans: list[DayPlan], db: RecipeDB, c: UserConstraints
+                  ) -> tuple[list[DayPlan], int, str, Recipe, Recipe, float] | None:
+    """E-05：把最贵的一道换成更便宜的一道，并算出省了多少钱。
+
+    docs/10：最贵的那道在**哪一顿**，就去**那一顿**的池子里找替代 ——
+    不能用全局池，否则会把晚餐的硬菜换成早餐的燕麦牛奶。返回值里也带上餐次。
+    """
     best = None
     for p in plans:
         for d in p.dishes:
             r = db.by_id(d.recipe_id)
-            if r is not None and (best is None or r.cost_yuan > best[1].cost_yuan):
-                best = (d, r)
-    if best is None or best[1].cost_yuan <= 0:
+            if r is not None and (best is None or r.cost_yuan > best[2].cost_yuan):
+                best = (p, d, r)
+    if best is None or best[2].cost_yuan <= 0:
         return None
-    d, old = best
-    day_no = next((p.day for p in plans if any(x.recipe_id == old.id for x in p.dishes)), 1)
+    slot, d, old = best
+    day_no, meal = slot.day, slot.meal
     used = {x.recipe_id for pp in plans for x in pp.dishes}
-    pool = [r for r in retrieve_candidates(db, c)
+    pool = [r for r in pool_for_meal(retrieve_candidates(db, c), c, meal)
             if r.id not in used and r.cost_yuan < old.cost_yuan * 0.7
             and _fits_day_budget(plans, day_no, old.id, r, db, c)]
     if not pool:
@@ -623,14 +652,8 @@ def cheapest_swap(plans: list[DayPlan], db: RecipeDB,
     pool.sort(key=lambda r: (r.cost_yuan, -recipe_score(r, c)))
     new_recipe = pool[0]
     saving = (old.cost_yuan - new_recipe.cost_yuan) * c.people / 2.0
-    return (replace_in_day(plans, day_no, old.id, new_recipe, c), day_no, old, new_recipe, saving)
-
-
-def best_day_no(plans: list[DayPlan], recipe: Recipe) -> int:
-    for p in plans:
-        if any(d.recipe_id == recipe.id for d in p.dishes):
-            return p.day
-    return 1
+    return (replace_in_day(plans, day_no, old.id, new_recipe, c, meal),
+            day_no, meal, old, new_recipe, saving)
 
 
 def best_day_no(plans: list[DayPlan], recipe: Recipe) -> int:

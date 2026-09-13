@@ -300,6 +300,9 @@ def _record_from_detail(detail: dict) -> PlanRecord:
                       label=detail.get("label") or "",
                       change_note=detail.get("change_note") or "",
                       done_days=list(detail.get("done_days") or []),
+                      # docs/10：多餐时"哪一顿做完了"只有 done_slots 说得清，
+                      # 不还原它，"做完了早餐"刷新一次就变回没做
+                      done_slots=list(detail.get("done_slots") or []),
                       checked_items=list(detail.get("checked_items") or []),
                       result=result)
 
@@ -438,29 +441,41 @@ def _patch_day(plan_id: str, day: int, op: str, **extra: Any) -> dict:
 
 
 def _day_patches(server: PlanRecord, result: PlanResult) -> list[tuple[int, dict]]:
-    """逐天比对"服务端那一周"和"界面这一周"，返回要发的单点操作（纯函数，可单测）。
+    """逐顿比对"服务端那一周"和"界面这一周"，返回要发的单点操作（纯函数，可单测）。
 
     只做**事实判断**（哪几道菜不一样、人数一不一样），不做规则判断 ——
     规则（哪些菜能换、忌口怎么校验、清单怎么合并）永远只在服务端。
+
+    docs/10：一天多顿时必须**按 (天, 餐) 比对**，而且每个操作都要带上 `meal`：
+    用 `{d.day: d}` 建索引的话，一天里的几顿会互相覆盖（只剩最后一顿），
+    于是"把早餐少排一道"会变成改晚餐。
+
+    `meal` 只在**当天真的有好几顿**时才放进请求体：只做晚餐时请求与 docs/10 之前一字不差
+    （服务端不给 `meal` 就是"当天最后一顿"，两者等价）。
     """
-    server_days = {d.day: d for d in server.result.days}
+    server_slots = {(d.day, d.meal): d for d in server.result.days}
+    per_day: dict[int, int] = {}
+    for d in server.result.days:
+        per_day[d.day] = per_day.get(d.day, 0) + 1
     out: list[tuple[int, dict]] = []
     for plan_day in result.days:
-        old = server_days.get(plan_day.day)
+        old = server_slots.get((plan_day.day, plan_day.meal))
         if old is None:
             continue
+        where = {"meal": plan_day.meal} if per_day.get(plan_day.day, 0) > 1 else {}
         if bool(plan_day.skipped) != bool(old.skipped):
             # 不做饭 / 改回来：由服务端重新挑菜，本地那一版不参与
-            out.append((plan_day.day, {"op": "skip" if plan_day.skipped else "restore"}))
+            out.append((plan_day.day, {"op": "skip" if plan_day.skipped else "restore", **where}))
             continue
         ids_now = [d.recipe_id for d in plan_day.dishes]
         ids_old = [d.recipe_id for d in old.dishes]
         if ids_now != ids_old:
-            out.append((plan_day.day, {"op": "replace_day", "recipe_ids": ids_now}))
+            out.append((plan_day.day, {"op": "replace_day", "recipe_ids": ids_now, **where}))
         elif plan_day.people != old.people:
             # 「来客人了」只改人数不改菜：人数是绝对值，None 表示回到这一周的基础人数
             out.append((plan_day.day, {"op": "people",
-                                       "people": plan_day.people or result.constraints.people}))
+                                       "people": plan_day.people or result.constraints.people,
+                                       **where}))
     return out
 
 
@@ -528,18 +543,22 @@ def save_plan(*_args: Any, **_kwargs: Any) -> PlanRecord:
         code="save_plan_not_allowed")
 
 
-def rate_day(record_id: str, day: int, score: int) -> dict:
-    """做完之后打分：服务端一次事务里记「这天做过了」+ 写档案（不会只成功一半）。"""
+def rate_day(record_id: str, day: int, score: int, meal: Optional[str] = None) -> dict:
+    """做完之后打分：服务端一次事务里记「这顿做过了」+ 写档案（不会只成功一半）。
+
+    docs/10：`meal` 指给哪一顿打分；不给 = 当天最后一顿（只做晚餐时就是那一顿）。
+    """
     out = _request("POST", f"/plans/{record_id}/rate",
-                   body={"day": int(day), "score": int(score)})
+                   body={"day": int(day), "score": int(score), "meal": meal})
     _invalidate()
     return out
 
 
-def dish_feedback(record_id: str, day: int, recipe_id: str, op: str) -> dict:
-    """菜单上对某一道菜的表态：like / dislike / lock / unlock。"""
+def dish_feedback(record_id: str, day: int, recipe_id: str, op: str,
+                  meal: Optional[str] = None) -> dict:
+    """菜单上对某一道菜的表态：like / dislike / lock / unlock（`meal` = 这道菜在哪一顿）。"""
     out = _request("POST", f"/plans/{record_id}/dishes/{int(day)}/{recipe_id}/feedback",
-                   body={"op": op})
+                   body={"op": op, "meal": meal})
     _invalidate()
     return out
 

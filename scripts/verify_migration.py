@@ -76,8 +76,15 @@ def main() -> int:
     json_plans = raw_plans.get("plans", []) if isinstance(raw_plans, dict) else raw_plans
     db_plans = {r.id: r for r in store.load_records()}
     print(f"[2] 方案：JSON {len(json_plans or [])} 份 → DB {len(db_plans)} 份")
-    check("方案条数一致", len(json_plans or []) == len(db_plans),
-          f"json={len(json_plans or [])} db={len(db_plans)}")
+    # 校验的是"**迁移没丢东西**"，不是"库里不许比 JSON 多"：
+    # 迁完之后用户接着在界面/服务端排的新方案只会进库，JSON 那份是冻结的迁移基线。
+    # 拿两边条数相等当条件的话，用户每排一次新方案这里就会红一次（假警报）。
+    missing = [j.get("id") for j in (json_plans or []) if j.get("id") not in db_plans]
+    check("JSON 里每一份方案都还在库里", not missing,
+          f"库里找不到：{missing}（JSON {len(json_plans or [])} 份 / DB {len(db_plans)} 份）")
+    if len(db_plans) > len(json_plans or []):
+        extra = sorted(set(db_plans) - {j.get("id") for j in (json_plans or [])})
+        print(f"    （库里有 {len(extra)} 份是迁移之后新排的，不参与比对：{extra}）")
     for item in json_plans or []:
         try:
             j = PlanRecord.model_validate(item)

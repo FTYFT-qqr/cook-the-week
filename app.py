@@ -34,7 +34,7 @@ from recipe_planner import reporting as rep
 from recipe_planner import store
 from recipe_planner import ui_state as ui
 from recipe_planner.core import (cheapest_swap, fastest_day, refresh_result,
-                                 restore_day, swap_dish)
+                                 restore_day, swap_dish, where_text)
 from recipe_planner.db import load_db
 from recipe_planner.infra.settings import storage_kind as _storage_kind
 from recipe_planner.infra.settings import use_api as _use_api
@@ -500,8 +500,9 @@ def _relax_options(c: UserConstraints, issues=(), swap_failed: bool = False) -> 
         new_budget = round(c.budget_per_person_day + 20, 2)
         opts.append(("budget", f"预算加到 ¥{new_budget:.0f}/人·天", new_budget))
     day_no = (st.session_state.get("relax") or {}).get("day")
+    day_meal = (st.session_state.get("relax") or {}).get("meal")
     if (swap_failed or "shortage" in codes) and day_no:
-        opts.append(("drop_dish", f"第 {day_no} 天少排一道菜", day_no))
+        opts.append(("drop_dish", f"{where_text(day_no, day_meal, c)}少排一道菜", day_no))
     if not opts:
         return
     st.markdown("<p class='line'>点一下就放宽，然后自动重排一版：</p>", unsafe_allow_html=True)
@@ -510,7 +511,7 @@ def _relax_options(c: UserConstraints, issues=(), swap_failed: bool = False) -> 
         with col:
             if st.button(label, key=f"relax_{kind}", use_container_width=True):
                 if kind == "drop_dish":
-                    _drop_a_dish(int(value))
+                    _drop_a_dish(int(value), day_meal)
                 else:
                     inp = dict(st.session_state["plan_inputs"] or {})
                     if kind == "time":
@@ -529,13 +530,16 @@ def _relax_options(c: UserConstraints, issues=(), swap_failed: bool = False) -> 
                 st.rerun()
 
 
-def _drop_a_dish(day_no: int) -> None:
+def _drop_a_dish(day_no: int, meal: str | None = None) -> None:
+    """少排一道菜：只动**这一顿**（docs/10：多餐时不能动到当天第一顿）。"""
     result = st.session_state.get("result")
     if result is None:
         return
-    day = next((p for p in result.days if p.day == day_no), None)
+    c = result.constraints
+    day = result.slot(day_no, meal)
     if day is None or len(day.dishes) <= 1:
         return
+    place = where_text(day_no, day.meal if c.is_multi_meal() else None, c)
     prev_days = [p.model_copy(deep=True) for p in result.days]
     dropped = _name_of(day.dishes[-1].recipe_id)
     day.dishes = day.dishes[:-1]
@@ -543,10 +547,10 @@ def _drop_a_dish(day_no: int) -> None:
     _commit_plan()
     st.session_state["relax"] = None
     st.session_state["stale"] = False
-    ui.set_notice("swap", f"第 {day_no} 天已去掉「{dropped}」，其余各天未改动。")
-    ui.push_undo(f"第 {day_no} 天去掉「{dropped}」",
+    ui.set_notice("swap", f"{place}已去掉「{dropped}」，其余各天未改动。")
+    ui.push_undo(f"{place}去掉「{dropped}」",
                  days=prev_days, record_id=st.session_state.get("record_id"))
-    ui.push_history(f"第 {day_no} 天去掉「{dropped}」")
+    ui.push_history(f"{place}去掉「{dropped}」")
 
 
 # ================================================================ 页面 1：今晚（M1，默认首页）
@@ -579,20 +583,22 @@ _RATE_TEXT = {"好吃": "已记住这几道好吃，以后会多安排。",
               "下次不做": "已记住不再做这几道。"}
 
 
-def _rate_tonight(day_no: int, score: int) -> None:
+def _rate_tonight(day_no: int, score: int, meal: str | None = None) -> None:
     """做完了打分（E-07）。
 
-    服务化模式下交给服务端的 `/rate`：它一次事务里同时记「这天做过了」和写档案，
+    服务化模式下交给服务端的 `/rate`：它一次事务里同时记「这一顿做过了」和写档案，
     不会出现"档案写了、标记没写"的半截状态；本地模式仍然是界面自己逐道写档案
     （用的是同一个纯函数规则）。撤销两边都靠档案快照，所以 undo 逻辑不用分叉。
+
+    docs/10：打分打的是**看的那一顿**（`meal`），不是整天 —— 不能把午餐的菜记成好吃。
     """
     label_ = {2: "好吃", 1: "一般", 0: "下次不做"}[score]
     rid = st.session_state.get("record_id")
     prev_profile = prof.load_profile()
     if USE_API:
-        text = api.rate_day(rid, day_no, score).get("message") or _RATE_TEXT[label_]
+        text = api.rate_day(rid, day_no, score, meal).get("message") or _RATE_TEXT[label_]
     else:
-        day_plan = next((p for p in st.session_state["result"].days if p.day == day_no), None)
+        day_plan = st.session_state["result"].slot(day_no, meal)
         for d in (day_plan.dishes if day_plan else []):
             rec_r = db.by_id(d.recipe_id)
             if rec_r is not None:
@@ -719,7 +725,7 @@ def render_tonight() -> None:
         _hero(view)
         return
 
-    day_plan = next((p for p in result.days if p.day == view.day), result.days[0])
+    day_plan = result.slot(view.day, view.meal) or result.days[0]
     _hero(view)
 
     # 状态⑤：这一周已经结束（05 M1 状态⑤）
@@ -749,10 +755,10 @@ def render_tonight() -> None:
         with b1:
             if st.button("改回来做", key=f"unskip_{view.day}", type="primary",
                          use_container_width=True):
-                result.days = restore_day(result.days, view.day, db, c)
+                result.days = restore_day(result.days, view.day, db, c, meal=view.meal)
                 refresh_result(result, db)
                 _commit_plan()
-                ui.set_notice("swap", f"第 {view.day} 天恢复做饭，其他天没动。")
+                ui.set_notice("swap", f"{where_text(view.day, view.meal, c)}恢复做饭，其他天没动。")
                 st.rerun()
         with b2:
             if st.button("看这一周", key="skipped_to_plan", use_container_width=True):
@@ -767,7 +773,7 @@ def render_tonight() -> None:
             with col:
                 if st.button(label_, key=f"rate_{score}", type="primary" if score == 2 else "secondary",
                              use_container_width=True):
-                    _rate_tonight(view.day, score)
+                    _rate_tonight(view.day, score, view.meal)
         b1, b2, _sp2 = st.columns([1, 1, 3])
         with b1:
             nxt = view.day % len(result.days) + 1
@@ -800,7 +806,7 @@ def render_tonight() -> None:
                 prev_days = [p.model_copy(deep=True) for p in result.days]
                 prev_profile = prof.load_profile()
                 prof.set_feedback(r.name, "dislike", KNOWN_NAMES, source="今晚页")
-                new_days, rep_recipe = swap_dish(result.days, view.day, r.id, db, c)
+                new_days, rep_recipe = swap_dish(result.days, view.day, r.id, db, c, view.meal)
                 if rep_recipe:
                     result.days = new_days
                     refresh_result(result, db)
@@ -1209,12 +1215,12 @@ def render_plan() -> None:
             if got is None:
                 ui.set_notice("info", "这一周已经没有明显更省的换法了。")
                 st.rerun()
-            new_plans, day_no_s, old_r, new_r, saving = got
+            new_plans, day_no_s, meal_s, old_r, new_r, saving = got
             prev_days = [p.model_copy(deep=True) for p in result.days]
             result.days = new_plans
             refresh_result(result, db)
             _commit_plan()
-            text = (f"把第 {day_no_s} 天的「{old_r.name}」换成「{new_r.name}」，"
+            text = (f"把{where_text(day_no_s, meal_s, c)}的「{old_r.name}」换成「{new_r.name}」，"
                     f"这周省了约 ¥{saving:.0f}（其他天没动）。")
             ui.set_notice("swap", text)
             ui.push_undo(text, days=prev_days, record_id=st.session_state.get("record_id"))
@@ -1412,9 +1418,10 @@ def render_plan() -> None:
         kind, day_no, rid = pending
         # 按钮的 key 里没有餐次（`like_1_r05`），但**一周内菜不重复**，
         # 所以用 rid 能唯一定位到"这一天里的哪一顿"（docs/10）。定位不到就按当天最后一顿。
-        _slot = next((p for p in result.days
-                      if p.day == day_no and any(d.recipe_id == rid for d in p.dishes)), None)
+        _slot = next((p for p in result.slots_for(day_no)
+                      if any(d.recipe_id == rid for d in p.dishes)), None)
         _meal = _slot.meal if _slot is not None else None
+        place = where_text(day_no, _meal, c)
         name = _name_of(rid)
         prev_days = [p.model_copy(deep=True) for p in result.days]
         prev_profile = prof.load_profile()
@@ -1444,10 +1451,10 @@ def render_plan() -> None:
             if new_recipe:
                 result.days = new_days
                 refresh_result(result, db)
-                text = f"已把第 {day_no} 天的「{name}」换成「{new_recipe.name}」（口味偏好未改动）"
+                text = f"已把{place}的「{name}」换成「{new_recipe.name}」（口味偏好未改动）"
             else:
                 text = f"没有能替换「{name}」的菜了。下面点一下放宽条件，我马上重排一版。"
-                relax_failed = {"day": day_no, "name": name}
+                relax_failed = {"day": day_no, "meal": _meal, "name": name}
         elif kind == "like":
             prof.set_feedback(name, "like", KNOWN_NAMES)
             undo_profile = prev_profile
@@ -1459,10 +1466,10 @@ def render_plan() -> None:
             if new_recipe:
                 result.days = new_days
                 refresh_result(result, db)
-                text = f"已记住不喜欢「{name}」，第 {day_no} 天换成「{new_recipe.name}」，以后不再出现"
+                text = f"已记住不喜欢「{name}」，{place}换成「{new_recipe.name}」，以后不再出现"
             else:
                 text = f"已记住不喜欢「{name}」（本次没有可替换的菜，其他天未改动）"
-                relax_failed = {"day": day_no, "name": name}
+                relax_failed = {"day": day_no, "meal": _meal, "name": name}
         ui.set_notice(kind, text)
         ui.push_undo(text, days=prev_days, profile=undo_profile,
                      record_id=st.session_state.get("record_id"))

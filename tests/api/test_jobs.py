@@ -265,11 +265,11 @@ async def test_runner_shutdown_is_clean(api):
     runner.shutdown()
 
 
-@pytest.mark.parametrize("stage", ["retrieve", "plan", "validate", "shopping", "answer"])
+@pytest.mark.parametrize("stage", ["queued", "retrieve", "plan", "validate", "shopping", "answer"])
 def test_stage_progress_is_monotonic(stage):
     from recipe_planner.progress import STAGE_PROGRESS
 
-    ordered = ["retrieve", "plan", "validate", "repair", "shopping", "answer"]
+    ordered = ["queued", "retrieve", "plan", "validate", "repair", "shopping", "answer"]
     values = [STAGE_PROGRESS[s] for s in ordered]
     assert values == sorted(values), "阶段进度必须单调递增"
     assert stage in STAGE_PROGRESS and 0 < STAGE_PROGRESS[stage] <= 1

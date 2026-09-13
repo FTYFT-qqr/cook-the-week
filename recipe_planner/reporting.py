@@ -272,6 +272,53 @@ def structure_line(result: PlanResult, db: RecipeDB) -> str:
     return "、".join(parts) if parts else "—"
 
 
+PRINT_CSS = """
+:root{ --line:#ECE7DF; }
+*{ box-sizing:border-box; }
+body{ margin:0; padding:18px; background:#FAF8F5; color:#111;
+      font-family:"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif; }
+.a4{ background:#fff; color:#111; border:1px solid var(--line); border-radius:12px;
+     padding:22px 24px; font-size:12pt; line-height:1.5; }
+.a4-title{ font-size:16pt; font-weight:700; }
+.a4-sub{ font-size:10pt; color:#555; margin:2px 0 10px; }
+.a4-title2{ font-size:13pt; font-weight:700; margin:14px 0 6px; }
+.a4-table{ width:100%; border-collapse:collapse; font-size:10.5pt; }
+.a4-table th,.a4-table td{ border:1px solid #999; padding:5px 7px; text-align:left; }
+.a4-table th{ background:#F2F2F2; font-weight:700; }
+.a4-n{ text-align:right; white-space:nowrap; }
+.a4-cols{ columns:2; column-gap:26px; font-size:10.5pt; }
+.a4-item{ margin-bottom:5px; break-inside:avoid; }
+.a4-amt{ color:#555; margin-left:6px; font-size:9.5pt; }
+.a4-foot{ margin-top:12px; padding-top:6px; border-top:1px solid #999; font-size:9.5pt; color:#444; }
+@media print{
+  /* 打印时只留 A4 那一块（版式与界面里的「带走清单 → A4 打印」一致，06 §V-12） */
+  body{ padding:0; background:#fff; }
+  body *{ visibility:hidden !important; }
+  .a4, .a4 *{ visibility:visible !important; }
+  .a4{ position:absolute; left:0; top:0; width:100%; border:0; padding:0; border-radius:0; }
+  @page{ size:A4; margin:14mm; }
+}
+"""
+
+
+def printable_document(result: PlanResult, db: RecipeDB, start_date=None,
+                       checked: set[str] | None = None) -> str:
+    """**可独立打开的** A4 单页（导出用）。
+
+    `printable_html()` 返回的只是一个 `<div class='a4'>` 片段 —— 它的样式在 Streamlit 页面里。
+    导出成一个文件就必须自己带上样式，否则打开是一堆没有样式的字。
+    样式与 `app.py` 的 `.a4-*` 保持一致（同一份版式，两个出口）。
+    """
+    return (
+        "<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        f"<title>一周晚餐菜单 · {store.week_label(start_date)}</title>"
+        f"<style>{PRINT_CSS}</style></head><body>"
+        f"{printable_html(result, db, start_date, checked)}"
+        "</body></html>"
+    )
+
+
 def printable_html(result: PlanResult, db: RecipeDB, start_date=None,
                    checked: set[str] | None = None) -> str:
     """A4 单页打印版式（第二篇 4.9 / V-12）：上半周菜单表格，下半两栏带方框清单。

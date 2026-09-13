@@ -1,4 +1,4 @@
-"""方案相关只读接口（docs/08 §6 / docs/09 P1-2）。
+"""方案相关接口（docs/08 §6 / docs/09 P1-2、P1-6）。
 
 路由顺序有讲究：`/plans/current` 必须声明在 `/plans/{plan_id}` **之前**，
 否则 "current" 会被当成 plan_id 匹配掉。
@@ -6,8 +6,10 @@
 from __future__ import annotations
 
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import Response
 
 from recipe_planner import reporting as rep
 from recipe_planner import store
@@ -16,7 +18,7 @@ from recipe_planner.models import PlanRecord, RecipeDB
 from recipe_planner.storage import async_adapters as data
 
 from ..deps import get_current_record, get_db, get_records, require_record
-from ..errors import NotFoundError, step
+from ..errors import InvalidRequestError, NotFoundError, step
 from ..schemas import (ConstraintsOut, DayOut, DishOut, IssueOut, PlanDetailOut, PlanListItem,
                        PlanListOut, ShoppingItemOut, SummaryOut, TonightOut)
 
@@ -160,3 +162,58 @@ async def day_detail(day: int, record: PlanRecord = Depends(require_record),
                   done=day in set(record.done_days or []),
                   dishes=_dishes_of(record, day, db),
                   cook_order=list(order), has_parallel=has_slow)
+
+
+EXPORT_FORMATS = {
+    "csv": ("text/csv; charset=utf-8", "买菜清单"),
+    "txt": ("text/plain; charset=utf-8", "买菜清单"),
+    "html": ("text/html; charset=utf-8", "本周晚餐菜单"),
+}
+
+
+def _download_name(start_date: str, fmt: str) -> str:
+    """下载文件名：用 ISO 日期，别用 "9/14–9/20" 这种带斜杠的周标签。
+
+    斜杠在 Windows 上是非法文件名字符，浏览器只能自己替换 —— 与其指望它，
+    不如给一个到哪都能存的文件名。中文要按 RFC 5987 编码，否则乱码。
+    """
+    day = (start_date or "").replace("-", "")[:8] or "本周"
+    base = f"{EXPORT_FORMATS[fmt][1]}-{day}.{fmt}"
+    return f"attachment; filename*=UTF-8''{quote(base)}"
+
+
+@router.get("/plans/{plan_id}/export/{fmt}", tags=["plans"],
+            responses={200: {"content": {"text/csv": {}, "text/plain": {}, "text/html": {}}},
+                       404: {"description": "方案不存在"},
+                       422: {"description": "不支持的格式"}})
+async def export_plan(fmt: str, record: PlanRecord = Depends(require_record),
+                      db: RecipeDB = Depends(get_db)) -> Response:
+    """带走这一周：`csv`（买菜清单，Excel 打开不乱码）/ `txt`（贴微信或备忘录）/ `html`（A4 打印）。
+
+    内容与界面里的「带走清单」**同一个来源**（`reporting`），所以从哪个口子拿走都一样。
+    """
+    fmt = fmt.lower()
+    if fmt not in EXPORT_FORMATS:
+        raise InvalidRequestError(
+            f"「{fmt}」这种格式我这边没有。",
+            next_steps=[step("pick_format", "可选：" + "、".join(EXPORT_FORMATS))])
+    media_type, _ = EXPORT_FORMATS[fmt]
+    checked = set(record.checked_items or [])
+
+    if fmt == "csv":
+        body = rep.shopping_csv(record.result, checked)
+    elif fmt == "txt":
+        body = rep.printable_text(record.result, db, record.start_date, checked)
+    else:
+        body = rep.printable_document(record.result, db, record.start_date, checked)
+
+    return Response(content=body, media_type=media_type,
+                    headers={"Content-Disposition": _download_name(record.start_date, fmt)})
+
+
+@router.get("/plans/{plan_id}/share", tags=["plans"])
+async def share_plan(record: PlanRecord = Depends(require_record),
+                     db: RecipeDB = Depends(get_db)) -> dict:
+    """分享给家人的干净文本（E-08）：只有日期、菜名、时间、金额，没有按钮和技术字样。"""
+    return {"text": rep.share_text(record.result, db, record.start_date),
+            "label": store.week_label(record.start_date)}

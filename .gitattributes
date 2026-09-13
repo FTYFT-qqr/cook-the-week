@@ -1,0 +1,12 @@
+# 换行一律 LF、编码一律 UTF-8（无 BOM）。
+#
+# 为什么要写死：这台机器上 `core.autocrlf=true`，源码里又全是中文 —— 而 PowerShell 5.1 的
+# `-Encoding UTF8`（写 BOM）与 `Path.write_text()`（写 CRLF）已经毁过一次文件（见
+# docs/07 §6 第 1 条）。把约定写进仓库，就不必依赖每个人本机的 git 配置。
+* text=auto eol=lf
+
+# 二进制资源别当文本处理
+*.png binary
+*.jpg binary
+*.ico binary
+*.db binary

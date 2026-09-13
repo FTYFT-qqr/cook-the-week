@@ -202,6 +202,32 @@ async def test_real_graph_degrades_without_api_key(api, client, runner_factory):
     assert all(d["dishes"] for d in detail["days"])
 
 
+async def test_must_include_recipe_really_makes_it_into_the_plan(api, client, runner_factory):
+    """「定住某道菜」必须真的生效：需求里的 must_include_recipes 要经任务落进方案里。
+
+    这条走**真流水线**（显式传 `graph_factory=None`）：假图不看约束，用它只能测出
+    "字符串传过去了"。没有密钥时真图走确定性兜底，不碰网络。
+    """
+    runner_factory(graph_factory=None)                # 显式不给假图 → 用真实 build_graph
+    r = await client.post("/api/v1/plans", json={"people": 2, "days": 3,
+                                                 "must_include_recipes": ["r5"]})
+    assert r.status_code == 202, r.text
+    job_id = r.json()["job_id"]
+    body = await wait_job(client, job_id, timeout=60)
+    assert body["status"] == "succeeded", body
+
+    row = await JobRepo.get(job_id)                   # 需求原样留在库里（排障要用）
+    assert row["request"]["must_include_recipes"] == ["r5"]
+
+    detail = (await client.get(f"/api/v1/plans/{body['plan_id']}")).json()
+    ids = [d["recipe_id"] for day in detail["days"] for d in day["dishes"]]
+    assert "r5" in ids, "定住的菜没进方案：这个字段在服务端没生效"
+    # 而且"定住"这个状态也要能被界面读到（否则界面显示不出"已定住"）
+    assert detail["constraints"]["must_include_recipes"] == ["r5"]
+    assert "r5" in {d["recipe_id"] for day in detail["days"]
+                    for d in day["dishes"] if d["locked"]}
+
+
 async def test_job_row_persists_state_in_db(api, client, fast_runner):
     job_id = (await client.post("/api/v1/plans", json={"days": 2})).json()["job_id"]
     await wait_job(client, job_id)

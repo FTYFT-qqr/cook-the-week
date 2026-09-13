@@ -277,6 +277,30 @@ class PlanRepo:
                 await s.delete(plan)
 
     @staticmethod
+    async def delete(session: AsyncSession, plan_id: str) -> bool:
+        """删掉一份方案，**显式**连子表一起删；返回是否真删到了。
+
+        为什么要一行行显式删，而不是 `session.delete(plan)` 或指望 `ON DELETE CASCADE`：
+        - SQLite 的外键约束**默认是关的**（本项目的 engine 里显式 `pragma foreign_keys=ON`
+          才有效），换到没开约束的环境就会留下一堆孤儿行（`plan_day` / 菜 / 清单 / 勾选 / 流水）；
+        - 显式删除与约束开不开无关，行为在任何后端都一样。
+
+        删除顺序按外键依赖从下往上：菜 → 天 → 清单 → 勾选 → 操作日志 → 方案本身。
+        """
+        plan = await _load_plan(session, plan_id)
+        if plan is None:
+            return False
+        await session.execute(delete(orm.PlanDish).where(orm.PlanDish.plan_id == plan_id))
+        await session.execute(delete(orm.PlanDay).where(orm.PlanDay.plan_id == plan_id))
+        await session.execute(delete(orm.ShoppingItem).where(orm.ShoppingItem.plan_id == plan_id))
+        await session.execute(delete(orm.ShoppingCheck).where(orm.ShoppingCheck.plan_id == plan_id))
+        await session.execute(delete(orm.ActionLog).where(orm.ActionLog.plan_id == plan_id))
+        await session.flush()
+        result = await session.execute(delete(orm.Plan).where(orm.Plan.id == plan_id))
+        await session.flush()
+        return bool(result.rowcount)
+
+    @staticmethod
     async def set_done(plan_id: Optional[str], day: int, done: bool = True) -> Optional[PlanRecord]:
         if not plan_id:
             return None

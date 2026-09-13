@@ -191,9 +191,17 @@ def profile_signature() -> str:
 
 # ---------------------------------------------------------------- 后端切换（docs/08 §7）
 # STORAGE=db 时用数据库实现覆盖上面的 JSON 实现；`app.py` 与现有测试一行都不用改。
+# USE_API=1 时进一步换成 HTTP 客户端（docs/09 P1-7）——它同样只换 IO 边界，
+# `apply_feedback_to_dict` / `apply_rating_to_dict` 这些**规则**仍然是上面那几份纯函数，
+# 所以两种模式下"点一下喜欢会发生什么"永远是同一套逻辑。
 from recipe_planner.infra import settings as _settings  # noqa: E402
 
-if _settings.storage_kind() == "db":  # pragma: no cover - 由环境变量决定
+if _settings.use_api():  # pragma: no cover - 由环境变量决定
+    from recipe_planner.client import (  # noqa: E402,F401,F811
+        bulk_feedback, clear_all, disliked_names, feedback_origin, liked_names,
+        load_profile, profile_signature, rate, rating_of, save_profile, set_feedback,
+    )
+elif _settings.storage_kind() == "db":  # pragma: no cover - 由环境变量决定
     from recipe_planner.storage.db_profile import (  # noqa: E402,F401,F811
         bulk_feedback, clear_all, disliked_names, feedback_origin, liked_names,
         load_profile, profile_signature, rate, save_profile, set_feedback,

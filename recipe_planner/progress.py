@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from recipe_planner.db import load_db
 from recipe_planner.graph import build_graph
@@ -56,10 +56,13 @@ class PlanJob:
     """一次排菜任务：可在后台推进，可随时取消。"""
 
     def __init__(self, constraints: UserConstraints, db: Optional[RecipeDB] = None,
-                 graph_factory: Optional[Callable] = None):
+                 graph_factory: Optional[Callable] = None, start_date: Any = None):
         self.constraints = constraints
         self.db = db or load_db()
         self._graph_factory = graph_factory or build_graph
+        # 本地模式不用它（存档周期由 `store.save_plan` 决定）；存在的唯一理由是让
+        # 界面能用**同一个调用**切换本地任务与服务端任务（docs/09 P1-7）。
+        self.start_date = start_date
 
         self.stage: str = PREPARING
         self.stages_seen: list[str] = []

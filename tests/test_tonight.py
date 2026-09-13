@@ -119,3 +119,41 @@ def test_view_day_index_without_range():
     assert view_day_index(START, 3, today=date(2026, 9, 1))[0] == 1
     assert "还没开始" in view_day_index(START, 3, today=date(2026, 9, 1))[1]
     assert "已经过去" in view_day_index(START, 3, today=date(2026, 10, 1))[1]
+
+
+# ---------------------------------------------------------------- 手动切到第 N 天
+
+def test_manual_day_switches_which_day_we_look_at():
+    """界面"手动切到第 2 天"：其余判定一行不变，只是看的那天换成第 2 天。"""
+    view = tonight_view(make_record(), DB, today=date(2026, 9, 14),
+                        now=datetime(2026, 9, 14, 18, 0), day=2)
+    assert view.day == 2                                  # 自动判定本来会是第 1 天
+    assert view.hint == "你手动切到了第 2 天"
+    assert view.state == "planned"
+    assert view.weekday == "周二" and view.date_label == "9/15"
+    assert view.headline == "番茄炒蛋、清炒时蔬"
+    assert view.kicker == "今晚 · 周二 9/15（第 2 天）"
+    assert "约 25 分钟" in view.meta and "¥14" in view.meta
+    assert {"start_cooking", "faster", "guests", "mark_done"} <= {s["op"] for s in view.next_steps}
+    # 没说切天时，仍是原来的自动判定
+    auto = tonight_view(make_record(), DB, today=date(2026, 9, 14),
+                        now=datetime(2026, 9, 14, 18, 0))
+    assert auto.day == 1 and auto.hint == ""
+
+
+def test_manual_day_ignores_numbers_outside_the_plan():
+    """方案里没有这一天就忽略它，仍按自动判定（不能越界指到不存在的一天）。"""
+    view = tonight_view(make_record(days=3), DB, today=date(2026, 9, 14), day=5)
+    assert view.day == 1 and view.hint == ""
+    assert view.state == "planned" and view.headline == "番茄炒蛋、清炒时蔬"
+
+
+def test_manual_day_keeps_the_other_states_working():
+    """切到"已经做过/不做饭"的那天，状态照样是 done / skipped（判定顺序没变）。"""
+    done = tonight_view(make_record(done=[2]), DB, today=date(2026, 9, 14), day=2)
+    assert done.state == "done" and done.day == 2
+    assert "已经做过了" in done.meta
+
+    skipped = tonight_view(make_record(skipped=[2]), DB, today=date(2026, 9, 14), day=2)
+    assert skipped.state == "skipped" and skipped.headline == "今晚不做饭"
+    assert skipped.hint == "你手动切到了第 2 天"

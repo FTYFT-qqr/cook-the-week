@@ -105,8 +105,12 @@ def view_day_index(start_date: Any, days: int, today: Optional[date] = None,
 
 
 def tonight_view(record: Optional[PlanRecord], db: RecipeDB, today: Optional[date] = None,
-                 now: Optional[datetime] = None) -> TonightView:
-    """把一份方案存档翻译成「今晚」页要的东西。"""
+                 now: Optional[datetime] = None, day: Optional[int] = None) -> TonightView:
+    """把一份方案存档翻译成「今晚」页要的东西。
+
+    `day` 是"手动切到第 N 天"：给了就按那一天判状态（方案里没有这一天就忽略，仍按自动判定）。
+    判定顺序与文案只有这一份实现 —— 界面自己再推一遍"五种状态"才是最容易出错的写法。
+    """
     if record is None or not record.result.days:
         return TonightView(
             state="no_plan", kicker="还没有这周的菜单", headline="先花 20 秒排一周",
@@ -119,6 +123,8 @@ def tonight_view(record: Optional[PlanRecord], db: RecipeDB, today: Optional[dat
     label = store.week_label(start)
     summary = rep.plan_summary(result, db, start)
     day_no, hint = view_day_index(start, len(result.days), today=today, now=now)
+    if day is not None and any(p.day == day for p in result.days):
+        day_no, hint = day, f"你手动切到了第 {day} 天"
     day_plan = next((p for p in result.days if p.day == day_no), result.days[0])
     row = next((r for r in summary.rows if r.day == day_no), summary.rows[0])
     done_days = set(record.done_days or [])

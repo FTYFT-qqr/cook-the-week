@@ -25,10 +25,10 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import date, datetime, timedelta
 
 import streamlit as st
 
+from recipe_planner import client as api
 from recipe_planner import profile as prof
 from recipe_planner import reporting as rep
 from recipe_planner import store
@@ -36,6 +36,7 @@ from recipe_planner import ui_state as ui
 from recipe_planner.core import (cheapest_swap, fastest_day, refresh_result,
                                  restore_day, swap_dish)
 from recipe_planner.db import load_db
+from recipe_planner.infra.settings import use_api as _use_api
 from recipe_planner.models import (
     ALLERGENS,
     DISPLAY_CATEGORIES,
@@ -45,7 +46,19 @@ from recipe_planner.models import (
     TASTE_TAGS,
     UserConstraints,
 )
-from recipe_planner.progress import PlanJob
+
+# USE_API（docs/09 P1-7）：数据源与进度来源的开关。
+# - 0（默认）：界面直连领域层，排菜在本进程的线程里跑，今晚状态在进程内算；
+# - 1：数据读写走 `store`/`profile` 末尾分派到的 HTTP 客户端，排菜交给服务端的任务，
+#      进度由服务端推（SSE），今晚状态也由服务端产出。
+USE_API = _use_api()
+
+if USE_API:
+    PlanJob = api.PlanJob
+    tonight_view = api.tonight_view
+else:
+    from recipe_planner.progress import PlanJob
+    from recipe_planner.tonight import tonight_view
 
 st.set_page_config(page_title="晚餐规划 · 一周菜单与买菜清单", page_icon="🍳", layout="wide")
 
@@ -213,6 +226,27 @@ db = load_db()
 KNOWN_NAMES = {r.name for r in db.recipes}
 NAME2ID = {r.name: r.id for r in db.recipes}
 
+# ---------------------------------------------------------------- 服务端连接守卫
+# 服务化之后，界面最可能的故障不是"某个操作失败"，而是"服务端根本没起来"。
+# 那种情况下每个请求都会失败，如果放任下去客户看到的是一屏英文异常 ——
+# 所以这里先探一次，探不到就用**一页人话**说清怎么办（05 §5.1：失败要给下一步）。
+if USE_API:
+    api.begin_rerun()          # 一次脚本运行 = 一次缓存周期（客户端不猜 TTL）
+    if not api.ping():
+        st.title("连不上排菜服务")
+        st.markdown(
+            "<div class='hero'><div class='hero-kicker'>界面现在走服务端</div>"
+            "<div class='hero-dishes'>排菜服务没起来</div>"
+            f"<div class='hero-meta'>界面连的是 {api.base_url()}。"
+            "在项目目录里执行下面这条命令把服务端启起来，再刷新这一页。</div></div>",
+            unsafe_allow_html=True)
+        st.code("python -m uvicorn recipe_planner.api.main:app "
+                "--host 127.0.0.1 --port 8000", language="powershell")
+        st.caption("不想走服务端：把环境变量 USE_API 设成 0 再启动界面，就回到直连模式。")
+        if st.button("启好了，重试", key="api_retry", type="primary"):
+            st.rerun()
+        st.stop()
+
 # ---------------------------------------------------------------- 示例场景（三张场景卡）
 SCENES = [
     ("light", "清淡减脂 3 天", "2 人 · 3 天 · 单菜 ≤40 分钟 · 本周 ¥270",
@@ -304,8 +338,14 @@ def _load_record(rec: store.PlanRecord) -> None:
 def _commit_plan() -> None:
     rid = st.session_state.get("record_id")
     result = st.session_state.get("result")
-    if rid and result is not None:
-        store.update_result(rid, result)
+    if not (rid and result is not None):
+        return
+    rec = store.update_result(rid, result)
+    # 服务化模式下服务端才是权威：清单、花费、忌口冲突、下锅顺序都是它重算的，
+    # 所以把会话里这一份换成它刚算好的那一份，免得"界面一套、库里一套"。
+    # 本地/DB 模式**不换**：界面手里那一份信息更全（候选数、耗时、trace），换了反而是净损失。
+    if USE_API and rec is not None and rec.result is not None:
+        st.session_state["result"] = rec.result
 
 
 # 首次打开：磁盘上有存档就直接呈现「我这一周」，而不是又一张空表单
@@ -467,16 +507,59 @@ def _drop_a_dish(day_no: int) -> None:
 
 
 # ================================================================ 页面 1：今晚（M1，默认首页）
-def _view_day_index(result, start_date) -> tuple[int, str]:
-    """今晚看哪一天（1 起）+ 一句说明。过了 22:00 默认切到明天（05 M1 边界）。"""
-    idx = store.today_index(start_date, len(result.days))
-    if idx is not None:
-        if datetime.now().hour >= 22 and idx + 1 < len(result.days):
-            return idx + 2, f"已经过了 22:00，下面先看明天（第 {idx + 2} 天）"
-        return idx + 1, ""
-    if store.normalize_start(start_date) > date.today():
-        return 1, "这一周还没开始，下面是第 1 天"
-    return 1, "这一周已经过去，下面是第 1 天"
+def _tonight_day_override() -> int | None:
+    """「手动切到第 N 天」这个界面状态（只有界面知道，所以留在界面）。"""
+    value = st.session_state.get("tonight_override")
+    try:
+        return int(value) if value else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _hero(view) -> None:
+    """主角卡（今晚页五个状态共用）。
+
+    **文案一个字都不在这里拼** —— kicker / headline / meta / reason 全部来自
+    `tonight_view`（本地模式跑在进程内，服务化模式由服务端产出但返回同一个对象）。
+    界面只负责摆版式，这样"这一周吃完了""今晚不做饭"这些说法永远只有一份。
+    """
+    st.markdown(
+        f"<div class='hero'><div class='hero-kicker'>{view.kicker}</div>"
+        f"<div class='hero-dishes'>{view.headline}</div>"
+        + (f"<div class='hero-meta'>{view.meta}</div>" if view.meta else "")
+        + (f"<div class='hero-reason'>{view.reason}</div>" if view.reason else "")
+        + "</div>", unsafe_allow_html=True)
+
+
+_RATE_TEXT = {"好吃": "已记住这几道好吃，以后会多安排。",
+              "一般": "已记下，下次不会特意多排。",
+              "下次不做": "已记住不再做这几道。"}
+
+
+def _rate_tonight(day_no: int, score: int) -> None:
+    """做完了打分（E-07）。
+
+    服务化模式下交给服务端的 `/rate`：它一次事务里同时记「这天做过了」和写档案，
+    不会出现"档案写了、标记没写"的半截状态；本地模式仍然是界面自己逐道写档案
+    （用的是同一个纯函数规则）。撤销两边都靠档案快照，所以 undo 逻辑不用分叉。
+    """
+    label_ = {2: "好吃", 1: "一般", 0: "下次不做"}[score]
+    rid = st.session_state.get("record_id")
+    prev_profile = prof.load_profile()
+    if USE_API:
+        text = api.rate_day(rid, day_no, score).get("message") or _RATE_TEXT[label_]
+    else:
+        day_plan = next((p for p in st.session_state["result"].days if p.day == day_no), None)
+        for d in (day_plan.dishes if day_plan else []):
+            rec_r = db.by_id(d.recipe_id)
+            if rec_r is not None:
+                prof.rate(rec_r.name, score, KNOWN_NAMES, source="做完了打分")
+        text = _RATE_TEXT[label_]
+    ui.set_notice("info", text)
+    ui.push_undo(text, profile=prev_profile, record_id=rid)
+    ui.push_history(text)
+    st.session_state["stale"] = True
+    st.rerun()
 
 
 def _extra_shopping(day_plan, db, extra_people: int) -> list[str]:
@@ -552,14 +635,13 @@ def _mark_done(day_no: int, done: bool = True) -> None:
 
 def render_tonight() -> None:
     st.title("今晚")
+    override = _tonight_day_override()
 
-    # 状态④：还没有这一周的菜单 —— 全站唯一一次把表单摆到首屏（05 M1）
+    # 状态④：还没有这一周的菜单 —— 全站唯一一次把表单摆到首屏（05 M1）。
+    # 判断条件是"从没填过需求"（而不是"没有存档"）：填完点生成之后，
+    # 正是这一页负责把菜真的排出来（见下面的 `_ensure_plan`）。
     if st.session_state["plan_inputs"] is None:
-        st.markdown(
-            "<div class='hero'><div class='hero-kicker'>还没有这周的菜单</div>"
-            "<div class='hero-dishes'>先花 20 秒排一周</div>"
-            "<div class='hero-meta'>填几口人、忌口和预算，我会排出这一周并给出买菜清单。</div>"
-            "</div>", unsafe_allow_html=True)
+        _hero(tonight_view(None, db))
         if st.button("帮我排一周", key="tonight_start", type="primary"):
             goto("create")
         return
@@ -570,37 +652,30 @@ def render_tonight() -> None:
         return
 
     c = result.constraints
-    start_date = st.session_state.get("plan_start") or st.session_state["start_date"]
-    summary = rep.plan_summary(result, db, start_date)
-    label = store.week_label(start_date)
-    day_no, hint = _view_day_index(result, start_date)
-    today_idx = store.today_index(start_date, len(result.days))
-    if st.session_state.get("tonight_override"):
-        day_no = int(st.session_state["tonight_override"])
-        hint = f"你手动切到了第 {day_no} 天"
+    # 这一页该显示什么（状态①–⑤、该看第几天、要说什么话）**只由 tonight_view 一处说了算**。
+    # 这里原来还有一份自己的判定，和 `tonight.py` 并存了两步；现在合并成一份 ——
+    # 服务化模式下它由服务端算好给过来（docs/08 §5：措辞统一由后端产出）。
+    record = store.get_record(st.session_state.get("record_id"))
+    view = tonight_view(record, db, day=override)
+
+    st.markdown(f"<p class='line'>方案 {view.week_label} · {c.people} 人"
+                + (f" · {view.hint}" if view.hint else "") + "</p>", unsafe_allow_html=True)
+    if override:
         if st.button("回到今晚", key="tonight_reset_day", use_container_width=True):
             st.session_state["tonight_override"] = None
             st.rerun()
-    day_plan = next((p for p in result.days if p.day == day_no), result.days[0])
-    row = next((r for r in summary.rows if r.day == day_no), summary.rows[0])
-    done_days = set(st.session_state.get("done_days") or [])
-    rid = st.session_state.get("record_id")
-    if not done_days and rid:
-        rec = store.get_record(rid)
-        done_days = set(rec.done_days) if rec is not None else set()
-        st.session_state["done_days"] = done_days
 
-    st.markdown(f"<p class='line'>方案 {label} · {c.people} 人"
-                + (f" · {hint}" if hint else "") + "</p>", unsafe_allow_html=True)
+    if view.state == "no_plan":
+        # 走到这里说明存档没了或这一版是空的（例如被删掉、被别的会话删掉）。
+        # 不硬往下走（下面要用 result.days[0]），把引导卡给回来 —— 状态永远可见（R7）。
+        _hero(view)
+        return
+
+    day_plan = next((p for p in result.days if p.day == view.day), result.days[0])
+    _hero(view)
 
     # 状态⑤：这一周已经结束（05 M1 状态⑤）
-    _week_end = store.normalize_start(start_date) + timedelta(days=len(result.days) - 1)
-    if _week_end < date.today():
-        st.markdown(
-            f"<div class='hero'><div class='hero-kicker'>这一周已经吃完了</div>"
-            f"<div class='hero-dishes'>{label} 的菜单在这里</div>"
-            "<div class='hero-meta'>要不要照上周再来一份，或者重新排一周？</div>"
-            "</div>", unsafe_allow_html=True)
+    if view.state == "week_over":
         w1, w2, _sp = st.columns([1, 1, 3])
         with w1:
             if st.button("照上周", key="tonight_reuse_prev", type="primary",
@@ -621,21 +696,15 @@ def render_tonight() -> None:
         return
 
     # 状态②：今天已跳过
-    if day_plan.skipped:
-        st.markdown(
-            f"<div class='hero'><div class='hero-kicker'>第 {row.day} 天 {row.weekday} "
-            f"{row.date_label}</div>"
-            "<div class='hero-dishes'>今晚不做饭</div>"
-            "<div class='hero-meta'>你标记过这天不做饭：不计花费，也不进买菜清单。</div>"
-            "</div>", unsafe_allow_html=True)
+    if view.state == "skipped":
         b1, b2, _sp = st.columns([1, 1, 3])
         with b1:
-            if st.button("改回来做", key=f"unskip_{day_no}", type="primary",
+            if st.button("改回来做", key=f"unskip_{view.day}", type="primary",
                          use_container_width=True):
-                result.days = restore_day(result.days, day_no, db, c)
+                result.days = restore_day(result.days, view.day, db, c)
                 refresh_result(result, db)
                 _commit_plan()
-                ui.set_notice("swap", f"第 {day_no} 天恢复做饭，其他天没动。")
+                ui.set_notice("swap", f"第 {view.day} 天恢复做饭，其他天没动。")
                 st.rerun()
         with b2:
             if st.button("看这一周", key="skipped_to_plan", use_container_width=True):
@@ -643,63 +712,29 @@ def render_tonight() -> None:
         return
 
     # 状态③：今天已做过（含 E-07 做完之后打一分）
-    if day_no in done_days:
-        names = "、".join(row.dishes) or "（未排）"
-        st.markdown(
-            f"<div class='hero'><div class='hero-kicker'>第 {row.day} 天 {row.weekday} "
-            f"{row.date_label}</div>"
-            f"<div class='hero-dishes'>{names}</div>"
-            "<div class='hero-meta'>已经做过了。这几道怎么样？（说一句就够，下周会照你的口味排）</div>"
-            "</div>", unsafe_allow_html=True)
+    if view.state == "done":
         r1, r2, r3, _sp = st.columns([1, 1, 1, 3])
         for col, (label_, score) in zip((r1, r2, r3),
                                         (("好吃", 2), ("一般", 1), ("下次不做", 0))):
             with col:
                 if st.button(label_, key=f"rate_{score}", type="primary" if score == 2 else "secondary",
                              use_container_width=True):
-                    prev_profile = prof.load_profile()
-                    for d in day_plan.dishes:
-                        rec_r = db.by_id(d.recipe_id)
-                        if rec_r is not None:
-                            prof.rate(rec_r.name, score, KNOWN_NAMES, source="做完了打分")
-                    text = {"好吃": "已记住这几道好吃，以后会多安排。",
-                            "一般": "已记下，下次不会特意多排。",
-                            "下次不做": "已记住不再做这几道。"}[label_]
-                    ui.set_notice("info", text)
-                    ui.push_undo(text, profile=prev_profile)
-                    ui.push_history(text)
-                    st.session_state["stale"] = True
-                    st.rerun()
+                    _rate_tonight(view.day, score)
         b1, b2, _sp2 = st.columns([1, 1, 3])
         with b1:
-            nxt = day_no % len(result.days) + 1
+            nxt = view.day % len(result.days) + 1
             if st.button("看看明天", key="done_next_day", use_container_width=True):
                 st.session_state["tonight_override"] = nxt
                 st.rerun()
         with b2:
             if st.button("再做一次", key="done_undo", use_container_width=True):
-                _mark_done(day_no, False)
+                _mark_done(view.day, False)
         return
 
-    # 状态①：今天有安排（主角）
-    hero_reason = day_plan.dishes[0].reason if day_plan.dishes else ""
-    _cook_eta = ""
-    if c.cook_start and (today_idx is None or day_no == today_idx + 1):
-        try:
-            _hh, _mm = (int(x) for x in c.cook_start.replace("：", ":").split(":"))
-            _eta = (datetime(2000, 1, 1, _hh, _mm) + timedelta(minutes=row.minutes)).strftime("%H:%M")
-            _cook_eta = f"　·　{c.cook_start} 开始做，约 {_eta} 能吃上"
-        except Exception:
-            _cook_eta = ""
-    st.markdown(
-        f"<div class='hero'><div class='hero-kicker'>今晚 · {row.weekday} {row.date_label}"
-        f"（第 {row.day} 天）</div>"
-        f"<div class='hero-dishes'>{'、'.join(row.dishes) or '（未排）'}</div>"
-        f"<div class='hero-meta'>约 {row.minutes} 分钟 · 预计 ¥{row.cost:.0f}"
-        + (f"　·　按 {day_plan.people} 人算" if day_plan.people else "")
-        + _cook_eta + "</div>"
-        + (f"<div class='hero-reason'>{hero_reason}</div>" if hero_reason else "")
-        + "</div>", unsafe_allow_html=True)
+    # 状态①：今天有安排 —— 英雄卡已经在上面画好了，这里只画每道菜与快改
+    if view.state != "planned":       # 兜底：真出了没见过的状态也别白屏（R7：状态永远可见）
+        _empty_state("这一页暂时没有可显示的内容，先去排一周。", "tonight_unknown")
+        return
 
     # 每道菜一行：菜名 + 这道不想吃（05 M1-3）
     for dish in day_plan.dishes:
@@ -717,7 +752,7 @@ def render_tonight() -> None:
                 prev_days = [p.model_copy(deep=True) for p in result.days]
                 prev_profile = prof.load_profile()
                 prof.set_feedback(r.name, "dislike", KNOWN_NAMES, source="今晚页")
-                new_days, rep_recipe = swap_dish(result.days, day_no, r.id, db, c)
+                new_days, rep_recipe = swap_dish(result.days, view.day, r.id, db, c)
                 if rep_recipe:
                     result.days = new_days
                     refresh_result(result, db)
@@ -733,16 +768,16 @@ def render_tonight() -> None:
                 st.rerun()
 
     # 两个整卡级快改（05 §1.2 A）
-    if st.session_state.get("guests_for") == day_no:
+    if st.session_state.get("guests_for") == view.day:
         st.markdown("<p class='line'>今晚来几位？（只影响今晚的份量）</p>",
                     unsafe_allow_html=True)
         g1, g2, g3, _sp = st.columns([1, 1, 1, 3])
         with g1:
             if st.button("多 2 人", key="guests_2", type="primary", use_container_width=True):
-                _quick_guests(day_no, 2)
+                _quick_guests(view.day, 2)
         with g2:
             if st.button("多 4 人", key="guests_4", use_container_width=True):
-                _quick_guests(day_no, 4)
+                _quick_guests(view.day, 4)
         with g3:
             if st.button("取消", key="guests_cancel", use_container_width=True):
                 st.session_state["guests_for"] = None
@@ -752,21 +787,21 @@ def render_tonight() -> None:
         with q1:
             if st.button("回家晚了", key="quick_faster", use_container_width=True,
                          help="只把今晚换成最快能做完的组合"):
-                _quick_faster(day_no)
+                _quick_faster(view.day)
         with q2:
             if st.button("来客人了", key="quick_guests", use_container_width=True,
                          help="只改今晚的人数与份量，其他天不动"):
-                st.session_state["guests_for"] = day_no
+                st.session_state["guests_for"] = view.day
                 st.rerun()
         with q3:
             if st.button("做完了", key="quick_done", use_container_width=True,
                          help="标记今天做完了，明天打开还记着"):
-                _mark_done(day_no, True)
+                _mark_done(view.day, True)
 
     # 开始做饭 → 展开下锅顺序（05 M1-5）
     order, has_slow = rep.cook_order(day_plan, db)
     if order:
-        if st.session_state.get("show_order_for") == day_no:
+        if st.session_state.get("show_order_for") == view.day:
             st.markdown("<p class='line'>照这个顺序来：</p>", unsafe_allow_html=True)
             for line in order:
                 st.markdown(f"- {line}")
@@ -777,11 +812,11 @@ def render_tonight() -> None:
                 st.session_state["show_order_for"] = None
                 st.rerun()
         elif st.button("开始做饭", key="order_show", type="primary"):
-            st.session_state["show_order_for"] = day_no
+            st.session_state["show_order_for"] = view.day
             st.rerun()
 
     # 换不动时的放宽选项（R4）
-    if st.session_state.get("tonight_relax") == day_no:
+    if st.session_state.get("tonight_relax") == view.day:
         _relax_options(c, result.issues, swap_failed=True)
     elif st.session_state.get("tonight_relax"):
         st.session_state["tonight_relax"] = None
@@ -943,7 +978,7 @@ def _ensure_plan():
 
     job = st.session_state.get("job")
     if job is None:
-        job = PlanJob(build_constraints(inp), db).start()
+        job = PlanJob(build_constraints(inp), db, start_date=inp.get("start_date")).start()
         st.session_state["job"] = job
     if not job.done:
         st.markdown("<div class='skeleton'></div><div class='skeleton'></div>",
@@ -963,20 +998,28 @@ def _ensure_plan():
 
     st.session_state["job"] = None
     if job.result is None:
+        _server_error = getattr(job, "error", None)      # USE_API=1 时这是服务端给的人话
         st.markdown("<p class='line bad'>这次没能排出菜单。下面点一下放宽条件再试：</p>",
                     unsafe_allow_html=True)
+        if _server_error:
+            st.caption(f"服务端说：{_server_error}")
         _relax_options(build_constraints(inp), [], swap_failed=True)
         st.session_state["stale"] = False
         st.stop()
 
-    prev_rec = store.latest_record()
     result = job.result
+    if getattr(job, "record", None) is not None:
+        # USE_API=1：这一版方案是**服务端的排菜任务直接存库**的，界面不该再存第二份；
+        # 回执里说的"上一版"是提交任务之前读到的那一份（客户端存下来的）。
+        prev_rec, rec = job.previous, job.record
+    else:
+        prev_rec = store.latest_record()
+        rec = store.save_plan(result, start_date=inp.get("start_date"),
+                              change_note="重新排了一版" if prev_rec else "首次生成")
     st.session_state["result"] = result
     st.session_state["stale"] = False
     st.session_state["check_epoch"] += 1
     st.session_state["done_days"] = set()
-    rec = store.save_plan(result, start_date=inp.get("start_date"),
-                          change_note="重新排了一版" if prev_rec else "首次生成")
     st.session_state["record_id"] = rec.id
     st.session_state["plan_start"] = rec.start_date
     st.session_state["revisit"] = None
@@ -1726,4 +1769,15 @@ _PAGE_RENDERERS = {
     "shopping": render_shopping,
     "profile": render_profile,
 }
-_PAGE_RENDERERS.get(st.session_state["page"], render_tonight)()
+try:
+    _PAGE_RENDERERS.get(st.session_state["page"], render_tonight)()
+except api.ClientError as exc:
+    # 服务端中途出问题（进程被杀、重启、超时）：给一页人话 + 可以点的下一步，
+    # 而不是把英文堆栈直接摔在客户脸上（05 §5.1）。开头的连接守卫只管"一开始就连不上"，
+    # 这里管"用着用着断了"。
+    st.error(exc.message)
+    if exc.next_steps:
+        st.markdown("可以试试：" + "、".join(str(s.get("label", "")) for s in exc.next_steps
+                                             if s.get("label")))
+    if st.button("重试", key="api_retry_page", type="primary"):
+        st.rerun()

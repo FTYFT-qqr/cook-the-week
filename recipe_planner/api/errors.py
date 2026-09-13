@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+from http import HTTPStatus
 from typing import Any, Optional
 
 from fastapi import FastAPI, Request
@@ -102,6 +103,17 @@ _HTTP_CODES = {
 }
 
 
+def _standard_phrase(status: int) -> str:
+    """这个状态码的标准英文短语（"Not Found" / "Method Not Allowed"）。
+
+    用来识别"这句 detail 是框架自己塞的英文"而不是我们写的中文说明。
+    """
+    try:
+        return HTTPStatus(status).phrase
+    except ValueError:                                   # pragma: no cover - 非标准状态码
+        return ""
+
+
 def problem_body(code: str, message: str, status: int, details: Optional[dict] = None,
                  rid: Optional[str] = None) -> dict:
     return {
@@ -154,6 +166,11 @@ def install_error_handlers(app: FastAPI) -> None:
     async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         code, message = _HTTP_CODES.get(exc.status_code, ("http_error", "这个请求没能完成。"))
         detail = exc.detail if isinstance(exc.detail, str) and exc.detail else None
+        # Starlette 自己抛的 404/405 带的是**英文标准短语**（"Not Found"、"Method Not Allowed"）。
+        # 原样透出去等于把英文甩给客户 —— 而这一层的全部意义就是"失败也要说人话"（05 §5.1）。
+        # 所以只有 detail 不是标准短语时才用它（那种情况是我们自己在代码里写的中文说明）。
+        if detail and detail == _standard_phrase(exc.status_code):
+            detail = None
         return problem_response(code, detail or message, exc.status_code,
                                 {"next_steps": [step("open_docs", "看看接口文档")]})
 

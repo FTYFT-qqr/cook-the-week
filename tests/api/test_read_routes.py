@@ -228,6 +228,81 @@ async def test_day_detail_out_of_range_is_404(api, client):
     assert "这一天" in r.json()["message"]
 
 
+async def test_plan_detail_exposes_locked_recipes(api, client, result_factory):
+    """「定住的菜」要能被界面读到 —— 界面靠它渲染"这道菜被定住了"。
+
+    少了这个字段，`USE_API=1` 时界面重建出来的方案会丢掉"定住"状态，看着像没定住。
+    """
+    record = await PlanRepo.save_plan(result_factory(must_include_recipes=["r3"]),
+                                      "2026-10-05", "带一道定住的菜")
+    body = (await client.get(f"/api/v1/plans/{record.id}")).json()
+    constraints = body["constraints"]
+    assert constraints["must_include_recipes"] == ["r3"]
+    # 定住的那道菜本身也要标着 locked（界面据此显示"定住"标签）
+    locked = {d["recipe_id"] for day in body["days"] for d in day["dishes"] if d["locked"]}
+    assert locked == {"r3"}
+    # 其余约束字段一个不少（没有因为加字段而变形）
+    assert constraints["people"] == 2 and constraints["days"] == 3
+    assert constraints["cook_start"] == "18:30"
+    # 没定住的方案：老字段仍然在，且是个空列表（向后兼容）
+    plain = (await client.get(f"/api/v1/plans/{api[2].id}")).json()
+    assert plain["constraints"]["must_include_recipes"] == []
+
+
+# ---------------------------------------------------------------- 某一版的今晚
+#
+# 界面允许"切到以前的某一版方案"，切完之后今晚页要展示的是**那一版**的今晚。
+# 判定逻辑与 /plans/current 同一份（tonight_view），只是看的方案不同。
+
+async def test_tonight_of_a_specific_plan_is_that_version(api, client, result_factory):
+    _, _, old = api
+    new = await PlanRepo.save_plan(result_factory(), "2026-09-21", "第二版")
+
+    current = (await client.get("/api/v1/plans/current")).json()
+    assert current["plan_id"] == new.id                    # current 永远是最新那一版
+    assert current["week_label"] == "9/21–9/27"
+
+    r = await client.get(f"/api/v1/plans/{old.id}/tonight")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["plan_id"] == old.id                       # 这一版自己的 id
+    assert body["week_label"] == "9/14–9/20"               # 文案描述的是旧那一版
+    assert body["state"] in {"planned", "week_over", "skipped", "done"}
+    assert set(body) == TONIGHT_KEYS, TONIGHT_KEYS ^ set(body)
+    if body["state"] in ("planned", "done"):
+        day = (await client.get(f"/api/v1/plans/{old.id}/days/{body['day']}")).json()
+        names = [d["name"] for d in day["dishes"]]
+        assert names and body["headline"] == "、".join(names)      # 菜名对得上这一天
+        assert body["weekday"] == day["weekday"]
+
+    # ?day=2 对指定方案同样生效（不用界面自己再推一遍状态）
+    switched = (await client.get(f"/api/v1/plans/{old.id}/tonight",
+                                 params={"day": 2})).json()
+    assert switched["day"] == 2 and switched["weekday"] == "周二"
+    assert "手动切到" in switched["hint"]
+
+    assert (await client.get("/api/v1/plans/deadbeef/tonight")).status_code == 404
+
+
+async def test_current_plan_day_query_switches_the_day(api, client):
+    """`GET /plans/current?day=2`：手动切天也走服务端同一份判定。"""
+    _, _, record = api
+    auto = (await client.get("/api/v1/plans/current")).json()
+    manual = (await client.get("/api/v1/plans/current", params={"day": 2})).json()
+    assert manual["plan_id"] == record.id
+    assert manual["day"] == 2 and manual["weekday"] == "周二"
+    assert "手动切到" in manual["hint"]
+    assert manual["state"] in {"planned", "week_over", "skipped", "done"}
+    if manual["state"] in ("planned", "done"):
+        assert "、".join(
+            d["name"] for d in
+            (await client.get(f"/api/v1/plans/{record.id}/days/2")).json()["dishes"]
+        ) == manual["headline"]
+    assert auto["day"] in range(1, 4)                      # 自动判定仍然是 1–3 天之一
+    # 越界的 day 由 FastAPI 挡掉（1–7），不是悄悄按自动判定糊过去
+    assert (await client.get("/api/v1/plans/current", params={"day": 9})).status_code == 422
+
+
 # ---------------------------------------------------------------- 档案
 
 async def test_profile_round_trip(client):
@@ -252,7 +327,8 @@ def test_openapi_is_available():
     paths = set(spec["paths"])
     assert {"/health", "/ready", "/api/v1/recipes", "/api/v1/plans",
             "/api/v1/plans/current", "/api/v1/plans/{plan_id}",
-            "/api/v1/plans/{plan_id}/days/{day}", "/api/v1/profile"} <= paths
+            "/api/v1/plans/{plan_id}/days/{day}", "/api/v1/plans/{plan_id}/tonight",
+            "/api/v1/profile"} <= paths
 
 
 @pytest.mark.parametrize("path", ["/health", "/ready", "/api/v1/recipes", "/api/v1/plans",

@@ -107,6 +107,24 @@ async def save_plan(result, start_date: Optional[str] = None, change_note: str =
     return store.save_plan(result, start_date, change_note)
 
 
+async def delete_record(plan_id: str) -> bool:
+    """删掉一份方案（连同它的子表行）；返回是否真删到了。
+
+    JSON 后端的同步门面 `store.delete_record` 不返回东西，所以先看一眼在不在，
+    这样两个后端对"删到了没有"的回答是一致的（路由据此区分 404 与成功）。
+    """
+    if _is_db():
+        from recipe_planner.storage.engine import session_scope
+
+        async with session_scope() as s:
+            return await PlanRepo.delete(s, plan_id)
+    from recipe_planner import store
+
+    existed = store.get_record(plan_id) is not None
+    store.delete_record(plan_id)
+    return existed
+
+
 async def save_profile(profile: dict) -> None:
     if _is_db():
         await ProfileRepo.save_profile(profile)

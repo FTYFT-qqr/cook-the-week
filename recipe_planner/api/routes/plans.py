@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 
 from recipe_planner import reporting as rep
@@ -18,11 +18,19 @@ from recipe_planner.models import PlanRecord, RecipeDB
 from recipe_planner.storage import async_adapters as data
 
 from ..deps import get_current_record, get_db, get_records, require_record
-from ..errors import InvalidRequestError, NotFoundError, step
-from ..schemas import (ConstraintsOut, DayOut, DishOut, IssueOut, PlanDetailOut, PlanListItem,
-                       PlanListOut, ShoppingItemOut, SummaryOut, TonightOut)
+from ..errors import ConfirmRequiredError, InvalidRequestError, NotFoundError, step
+from ..schemas import (ConstraintsOut, DayOut, DishOut, IssueOut, MutationOut, PlanDetailOut,
+                       PlanListItem, PlanListOut, ShoppingItemOut, SummaryOut, TonightOut)
 
 router = APIRouter()
+
+
+async def _commit() -> None:
+    """写接口必须在返回前提交（Session 中间件是响应发出**之后**才提交的）。"""
+    from recipe_planner.storage.engine import session_scope
+
+    async with session_scope() as session:          # 请求级会话，拿到的是同一个
+        await session.commit()
 
 
 def _day_plan(record: PlanRecord, day: int):
@@ -85,16 +93,24 @@ async def list_plans(records: list[PlanRecord] = Depends(get_records),
                        total=len(records), current_id=current_id)
 
 
+def _tonight_payload(record: Optional[PlanRecord], db: RecipeDB,
+                     day: Optional[int]) -> TonightOut:
+    """「今晚」页的响应体（`/plans/current` 与 `/plans/{id}/tonight` 共用，判定只有一份）。"""
+    payload = tonight_mod.tonight_view(record, db, day=day).to_dict()
+    payload["plan_id"] = record.id if record else None
+    return TonightOut(**payload)
+
+
 @router.get("/plans/current", response_model=TonightOut, tags=["plans"])
-async def current_plan(db: RecipeDB = Depends(get_db)) -> TonightOut:
+async def current_plan(db: RecipeDB = Depends(get_db),
+                       day: Optional[int] = Query(None, ge=1, le=7,
+                                                  description="手动切到第几天看")) -> TonightOut:
     """今晚页首页数据：状态①–⑤ + 今晚菜/时间/金额/理由/几点能吃上（**没有方案也返回 200**）。
 
     这里刻意不返回 404：没有方案是正常的"状态④"，不是错误 —— 前端要拿它渲染引导卡。
+    `day` 是"手动切到第 N 天"：状态判定仍然只有 `tonight` 这一份实现，界面不用自己再推一遍。
     """
-    record = await data.latest_record()
-    payload = tonight_mod.tonight_view(record, db).to_dict()
-    payload["plan_id"] = record.id if record else None
-    return TonightOut(**payload)
+    return _tonight_payload(await data.latest_record(), db, day)
 
 
 @router.get("/plans/{plan_id}", response_model=PlanDetailOut, tags=["plans"],
@@ -138,10 +154,56 @@ async def plan_detail(record: PlanRecord = Depends(require_record),
             people=c.people, days=c.days, dishes_per_day=c.dishes_per_day,
             allergens=c.allergens, spice_level=c.spice_level, taste_tags=c.taste_tags,
             goal=c.goal, max_time_min=c.max_time_min, skill=c.skill, cook_start=c.cook_start,
-            budget_per_person_day=c.budget_per_person_day, pantry_items=c.pantry_items),
+            budget_per_person_day=c.budget_per_person_day, pantry_items=c.pantry_items,
+            must_include_recipes=list(c.must_include_recipes or [])),
         days=days, shopping=shopping, summary=_summary_out(record, db),
         checked_items=sorted(checked), done_days=sorted(done),
         issues=[_issue_out(i) for i in result.issues])
+
+
+@router.get("/plans/{plan_id}/tonight", response_model=TonightOut, tags=["plans"],
+            responses={404: {"description": "方案不存在"}})
+async def plan_tonight(record: PlanRecord = Depends(require_record),
+                       db: RecipeDB = Depends(get_db),
+                       day: Optional[int] = Query(None, ge=1, le=7,
+                                                  description="手动切到第几天看")) -> TonightOut:
+    """**指定某一版方案**的「今晚」（界面"切到以前的某一版"之后要看的就是它）。
+
+    与 `/plans/current` 是同一份判定（`tonight_view`），只是看的是旧那一版，
+    所以响应形状完全一样，`plan_id` 是这一版自己的 id。
+    """
+    return _tonight_payload(record, db, day)
+
+
+@router.delete("/plans/{plan_id}", response_model=MutationOut, tags=["plans"],
+               responses={404: {"description": "方案不存在"},
+                          409: {"description": "缺 confirm=true"}})
+async def delete_plan(plan_id: str, confirm: bool = Query(False, description="必须显式传 true"),
+                      record: PlanRecord = Depends(require_record)) -> MutationOut:
+    """删掉这一版方案。**破坏性操作，必须二次确认**；子表（天/菜/清单/勾选/流水）一起删掉。
+
+    删除后无法找回，所以 `undo_hint` 给 `None`（见下）；`data.remaining` 是删完之后还剩几份方案。
+    """
+    if not confirm:
+        raise ConfirmRequiredError(
+            "删除后无法找回，其它版本不受影响。要删就带上 confirm=true。",
+            next_steps=[step("view_plan", "先看看这一周"),
+                        step("cancel", "算了，先不删")])
+    label = _label(record)
+    await data.delete_record(plan_id)
+    remaining = len(await data.load_records())
+    log_id = await data.add_log(None, "plan_delete", f"已删除「{label}」这一版方案",
+                                {"deleted_id": plan_id, "remaining": remaining})
+    await _commit()
+    # undo_hint=None 是**故意的**：删掉的数据找不回来（子表也一起没了），
+    # 给一个假的"可以撤销"比没有更糟 —— 用户点了才发现恢复不了。
+    return MutationOut(
+        kind="plan_delete",
+        message=f"已删除「{label}」这一版方案（其它版本没动，删除后无法找回）。",
+        data={"deleted_id": plan_id, "remaining": remaining},
+        action_log_id=log_id, undo_hint=None,
+        next_steps=[step("list_plans", "看看还有哪些方案"),
+                    step("create_plan", "重新排一周")])
 
 
 @router.get("/plans/{plan_id}/days/{day}", response_model=DayOut, tags=["plans"],

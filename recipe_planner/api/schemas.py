@@ -151,6 +151,9 @@ class ConstraintsOut(BaseModel):
     cook_start: str = ""
     budget_per_person_day: Optional[float] = None
     pantry_items: list[str] = []
+    # 界面靠它渲染"这道菜被定住了"（定住 = 排菜时不许换掉）：库里一直存着，DTO 也得给出去，
+    # 否则 `USE_API=1` 时界面重建出来的方案会丢掉"定住"状态，看着像没定住。
+    must_include_recipes: list[str] = []
 
 
 # ----------------------------------------------------------------- 任务（P1-5）
@@ -171,6 +174,8 @@ class PlanCreateIn(BaseModel):
     cook_start: str = ""
     budget_per_person_day: Optional[float] = Field(default=None, ge=0)
     pantry_items: list[str] = Field(default_factory=list)
+    must_include_recipes: list[str] = Field(default_factory=list,
+                                            description="定住必须保留的菜谱 id")
     start_date: Optional[str] = Field(default=None, description="这一周的第一天（默认下周一）")
     change_note: str = ""
 
@@ -306,8 +311,32 @@ class ChecksIn(BaseModel):
 
 
 class ProfilePatchIn(BaseModel):
-    op: Literal["like", "dislike", "remove"]
+    """`PUT /profile` 的请求体。
+
+    `clear_like` / `clear_dislike` 是"清空整个列表"，**不涉及具体菜名**，所以这两种
+    op 下 `names` 允许为空（路由也不会去菜谱库里校验菜名）。
+    """
+
+    op: Literal["like", "dislike", "remove", "clear_like", "clear_dislike"]
     names: list[str] = Field(default_factory=list)
+    # 这条偏好是在哪记的（「今晚页」/「本周计划」/「口味档案」…）。
+    # 界面上的「来源痕迹」要把这个显示成"8/10 在菜单里点的收藏"（05 M5），所以必须由客户端传进来。
+    source: str = Field(default="口味档案", max_length=20)
+
+
+class ProfileRestoreIn(BaseModel):
+    """`PUT /profile/restore` 的请求体：**整份**档案快照（界面撤销上一步时原样发回来）。
+
+    四个键与 `ProfileOut` 一一对应；`history` 在这里是**字典**（`{菜名: {since, source}}`），
+    因为要原样写回库，而不是给界面看的列表。
+    """
+
+    liked_dishes: list[str] = []
+    disliked_dishes: list[str] = []
+    # 形状与 profile.rate() 一致：{菜名: {"score": 0|1|2, "date": "MM/DD"}}
+    ratings: dict[str, Any] = {}
+    # {菜名: {"since": "MM/DD", "source": "在哪记的"}}
+    history: dict[str, Any] = {}
 
 
 # ----------------------------------------------------------------- 档案

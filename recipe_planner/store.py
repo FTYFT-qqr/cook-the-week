@@ -244,7 +244,14 @@ _json_today_index = today_index          # db_store 复用这段纯日期逻辑�
 
 from recipe_planner.infra import settings as _settings  # noqa: E402
 
-if _settings.storage_kind() == "db":  # pragma: no cover - 由环境变量决定
+# USE_API=1 要**优先**判断，而不是和 db 分支并列：服务化之后界面进程不应该再去碰数据库文件，
+# 所以这个分支必须盖住下面的 db 分支（否则界面会一边连 API 一边自己开库）。
+if _settings.use_api():  # pragma: no cover - 由环境变量决定
+    from recipe_planner.client import (  # noqa: E402,F401,F811
+        archive_summary, delete_record, get_record, latest_record, load_records,
+        previous_record, save_plan, set_checked, set_done, update_result,
+    )
+elif _settings.storage_kind() == "db":  # pragma: no cover - 由环境变量决定
     from recipe_planner.storage.db_store import (  # noqa: E402,F401,F811
         archive_old, archive_summary, delete_record, get_record, latest_record,
         load_records, previous_record, save_plan, set_checked, set_done,

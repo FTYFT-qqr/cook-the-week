@@ -3,6 +3,7 @@
 开关（docs/08-后端架构设计.md、docs/09-后端实现计划.md）：
 - STORAGE=db|json   数据从数据库读还是从 JSON 文件读（P0 的安全阀）
 - USE_API=0|1       界面直连领域层还是走 HTTP API（P1 的安全阀）
+- API_BASE_URL      USE_API=1 时界面连哪个服务端（默认本机 8000 端口）
 - AUTH_MODE=off|apikey   本机关闭认证；一旦局域网/公网可访问必须开
 - DATABASE_URL      默认 SQLite：data/app.db（P2 换 Postgres 只改这一行）
 - REDIS_URL         不配置则自动用内存实现（缓存/队列降级）
@@ -40,6 +41,22 @@ def auth_mode() -> str:
 
 def api_key() -> str:
     return _env("API_KEY")
+
+
+def api_base_url() -> str:
+    """`USE_API=1` 时界面连的服务端地址（docs/09 P1-7）。
+
+    默认本机 —— docs/08 §13 决策 1 是"本地部署"，所以默认值必须是能开箱即用的那个。
+    """
+    return _env("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+
+
+def api_timeout_sec() -> float:
+    """普通接口的超时。排菜任务**不占**这个值：它走 SSE 长连接，由任务自己的超时兜底。"""
+    try:
+        return max(1.0, float(_env("API_TIMEOUT_SEC", "30")))
+    except ValueError:
+        return 30.0
 
 
 def database_url() -> str:

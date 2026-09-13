@@ -102,7 +102,7 @@ def test_upgrade_head_creates_all_tables():
     tables = _tables_of(path)
     assert EXPECTED_TABLES <= tables, f"缺表: {EXPECTED_TABLES - tables}"
     assert migrate.VERSION_TABLE in tables
-    assert migrate.current_revision(_url(path)) == "0001"
+    assert migrate.current_revision(_url(path)) == "0002"
 
 
 def test_ensure_schema_is_idempotent():
@@ -110,7 +110,7 @@ def test_ensure_schema_is_idempotent():
     migrate.ensure_schema(_url(path))
     # 第二次：已有版本表 → 走 upgrade（已在 head，Alembic 空操作）
     assert migrate.ensure_schema(_url(path)) == "upgrade"
-    assert migrate.current_revision(_url(path)) == "0001"
+    assert migrate.current_revision(_url(path)) == "0002"
     assert EXPECTED_TABLES <= _tables_of(path)
 
 
@@ -126,7 +126,7 @@ def test_ensure_schema_stamps_legacy_create_all_db():
     action = migrate.ensure_schema(_url(path))
 
     assert action == "stamp"
-    assert migrate.current_revision(_url(path)) == "0001"
+    assert migrate.current_revision(_url(path)) == "0002"
     engine = create_engine(f"sqlite:///{path.as_posix()}")
     with engine.connect() as conn:
         assert conn.execute(text("select name from household where id='h1'")).scalar() == "我家"

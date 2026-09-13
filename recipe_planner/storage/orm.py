@@ -28,6 +28,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from recipe_planner.models import MEAL
+
 
 class Base(DeclarativeBase):
     pass
@@ -189,6 +191,14 @@ class PlanDay(Base):
     skipped: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     people_override: Mapped[int | None] = mapped_column(Integer)     # 「来客人了」
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # —— 餐次（docs/10）——
+    # 一天多顿时，"不做饭/做过了"要能按顿说：存成逗号分隔的餐次名（如 "早餐,午餐"）。
+    # 这样**不需要改主键**（`ALTER TABLE ADD COLUMN` 就够，不重建表 —— 对已有库最安全）。
+    # 空串 = 沿用老字段（`skipped` / `done_at` 表示"这一天"）。
+    skipped_meals: Mapped[str] = mapped_column(String(48), default="", server_default="",
+                                              nullable=False)
+    done_meals: Mapped[str] = mapped_column(String(48), default="", server_default="",
+                                           nullable=False)
 
     __table_args__ = (
         CheckConstraint("day_no between 1 and 7", name="plan_day_no_ck"),
@@ -210,6 +220,9 @@ class PlanDish(Base):
         String(64), ForeignKey("recipe.id", ondelete="RESTRICT"), nullable=False)
     reason: Mapped[str] = mapped_column(Text, default="", nullable=False)
     locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # 「定住」
+    # 这一道属于哪一顿（docs/10）。老数据由 server_default 补成晚餐 —— 不必回填。
+    meal: Mapped[str] = mapped_column(String(16), default=MEAL, server_default=MEAL,
+                                      nullable=False)
 
     __table_args__ = (
         ForeignKeyConstraint(["plan_id", "day_no"],

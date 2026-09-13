@@ -33,7 +33,7 @@ from typing import Any, Optional
 import httpx
 
 from recipe_planner.infra import settings
-from recipe_planner.models import (ChosenDish, DayPlan, PlanRecord, PlanResult,
+from recipe_planner.models import (MEAL, ChosenDish, DayPlan, PlanRecord, PlanResult,
                                    ShoppingItem, UserConstraints, ValidationIssue)
 
 PREFIX = "/api/v1"
@@ -132,12 +132,19 @@ def _http() -> httpx.Client:
         with _http_lock:
             if _http_client is None:
                 _http_client = httpx.Client(base_url=base_url(), headers=_headers(),
-                                            timeout=settings.api_timeout_sec())
+                                            timeout=settings.api_timeout_sec(),
+                                            trust_env=False)   # 见下面 _stream_http 的说明
     return _http_client
 
 
 def _stream_http() -> httpx.Client:
     """SSE 专用连接：**读超时设成 None**。
+
+    两个客户端都 `trust_env=False`：界面连的是**本机**服务端（docs/08 §13 决策 1 是本地部署），
+    而 `HTTP_PROXY`/`HTTPS_PROXY` 一旦设上（公司网络很常见），httpx 会**把 127.0.0.1 也走代理** ——
+    实测在这台机器上换个不存在的域名都会收到代理的 502，本地连接被无声地绕一圈甚至失败。
+    本地服务不该走系统代理，所以这里显式关掉。
+    
 
     阶段之间可能几秒没有新事件（例如在调模型），有读超时的话会误杀长连接。
     真正的上限由服务端自己兜（任务超时 + 15s 主动收流），客户端还会再加一道保险。
@@ -148,7 +155,8 @@ def _stream_http() -> httpx.Client:
             if _stream_client is None:
                 _stream_client = httpx.Client(
                     base_url=base_url(), headers=_headers(),
-                    timeout=httpx.Timeout(settings.api_timeout_sec(), read=None))
+                    timeout=httpx.Timeout(settings.api_timeout_sec(), read=None),
+                    trust_env=False)
     return _stream_client
 
 
@@ -265,7 +273,7 @@ def _record_from_detail(detail: dict) -> PlanRecord:
             breakfast_max_time_min=int(c.get("breakfast_max_time_min") or 15),
         ),
         candidate_count=0,
-        days=[DayPlan(day=int(d.get("day") or 0),
+        days=[DayPlan(day=int(d.get("day") or 0), meal=d.get("meal") or MEAL,
                       dishes=[ChosenDish(recipe_id=x.get("recipe_id", ""),
                                          reason=x.get("reason", ""))
                               for x in (d.get("dishes") or [])],
@@ -478,11 +486,15 @@ def update_result(record_id: Optional[str], result: PlanResult,
     return get_record(record_id)
 
 
-def set_done(record_id: Optional[str], day: int, done: bool = True) -> Optional[PlanRecord]:
-    """标记 / 取消「这天已经做过了」（M1 状态③）。"""
+def set_done(record_id: Optional[str], day: int, done: bool = True,
+             meal: Optional[str] = None) -> Optional[PlanRecord]:
+    """标记 / 取消「做过了」（M1 状态③）。
+
+    docs/10：给了 `meal` 就只记这一顿；不给就是"这一天"（老行为，只做晚餐时等价）。
+    """
     if not record_id:
         return None
-    _patch_day(record_id, day, "done", done=bool(done))
+    _patch_day(record_id, day, "done", done=bool(done), meal=meal)
     return get_record(record_id)
 
 

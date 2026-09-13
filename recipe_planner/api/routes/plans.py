@@ -130,10 +130,10 @@ async def plan_detail(record: PlanRecord = Depends(require_record),
     batch_of = {row["食材"]: 1 for row in first}
     batch_of.update({row["食材"]: 2 for row in second})
 
-    days = [DayOut(day=row.day, weekday=row.weekday, date_label=row.date_label,
+    days = [DayOut(day=row.day, meal=row.meal, weekday=row.weekday, date_label=row.date_label,
                    skipped=bool(dp and dp.skipped),
                    people=dp.people if dp else None,
-                   minutes=row.minutes, cost=row.cost, done=row.day in done,
+                   minutes=row.minutes, cost=row.cost, done=record.is_done(row.day, row.meal),
                    dishes=_dishes_of(record, row.day, db))
             for row in summary.rows
             for dp in [_day_plan(record, row.day)]]

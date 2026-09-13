@@ -876,15 +876,12 @@ def section_multi_meal() -> None:
     print(f"    三餐方案: {[(p.day, p.meal, len(p.dishes)) for p in res.days]}")
 
 
-if SMOKE_DB:
-    print("    (DB 模式下多餐被刻意禁用：plan_day 还是一条一天，迁移见 docs/10 第④步 —— 跳过)")
-else:
-    section_multi_meal()
+section_multi_meal()      # docs/10 第④步之后：两种存储都支持多餐了
 
 print("[22] 只做晚餐时这一页仍然叫「今晚」（加了多餐也不能改名）")
 if nav_to(at, "create"):
     meals_box = [m for m in at.multiselect if (m.key or "") == "meals"]
-    if meals_box and not SMOKE_DB:
+    if meals_box:
         meals_box[0].set_value([])
         at.run()
         run_btn = find_buttons(at, "生成菜单")

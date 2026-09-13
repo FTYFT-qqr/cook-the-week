@@ -81,10 +81,10 @@ async def patch_day(body: DayPatchIn, day: int, record: PlanRecord = Depends(req
         outcome = actions.replace_day(record, db, day, list(body.recipe_ids or []))
     elif op == "done":
         outcome = actions.mark_done(record, day, body.done)
-        await data.set_done(record.id, day, body.done)
+        await data.set_done(record.id, day, body.done, body.meal)
         log_id = await data.add_log(record.id, outcome.kind, outcome.message, outcome.extra)
         await _commit()
-        return _envelope(outcome, log_id, {"day": day, "done": body.done})
+        return _envelope(outcome, log_id, {"day": day, "done": body.done, "meal": body.meal})
     else:                                                  # pragma: no cover - Literal 兜住了
         raise InvalidRequestError("不认识的改动类型。")
 

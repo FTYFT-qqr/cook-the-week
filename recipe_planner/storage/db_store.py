@@ -45,8 +45,9 @@ def delete_record(record_id: str) -> None:
     run(PlanRepo.delete_record(record_id))
 
 
-def set_done(record_id: Optional[str], day: int, done: bool = True) -> Optional[PlanRecord]:
-    return run(PlanRepo.set_done(record_id, day, done))
+def set_done(record_id: Optional[str], day: int, done: bool = True,
+             meal: Optional[str] = None) -> Optional[PlanRecord]:
+    return run(PlanRepo.set_done(record_id, day, done, meal))
 
 
 def set_checked(record_id: Optional[str], names: list[str]) -> Optional[PlanRecord]:

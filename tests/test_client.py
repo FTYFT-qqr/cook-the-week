@@ -124,7 +124,9 @@ def test_空库_first_open(live):
 
 
 def test_连不上时给的是人话(monkeypatch):
-    monkeypatch.setenv("API_BASE_URL", "http://127.0.0.1:1")     # 一个必然拒绝连接的端口
+    # 用**永不解析**的域名而不是"127.0.0.1:1"：本机上连 1 端口会被接受然后一直不回应
+    # （Windows 栈的行为），于是 ping 要等到超时才失败 —— 拿它当"必然拒绝"是错的靶子。
+    monkeypatch.setenv("API_BASE_URL", "http://no-such-host.invalid:8000")
     client.reset()
     try:
         assert client.ping() is False

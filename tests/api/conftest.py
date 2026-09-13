@@ -200,7 +200,9 @@ async def wait_job(client, job_id: str, timeout: float = 15.0) -> dict:
         body = (await client.get(f"/api/v1/jobs/{job_id}")).json()
         if body["status"] in ("succeeded", "failed", "cancelled"):
             return body
-        await asyncio.sleep(0.05)
+        # 轮询间隔别太密：限流中间件是 60 次/分钟，0.05 秒一次（20 次/秒）几下就把桶抽干，
+        # 之后所有轮询都吃 429 —— 任务其实早就结束了，测试却以为它没结束。
+        await asyncio.sleep(0.5)
     raise AssertionError(f"任务 {job_id} 在 {timeout}s 内没有结束，最后状态：{body}")
 
 

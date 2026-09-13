@@ -21,7 +21,7 @@ from typing import Any, Optional
 from pydantic import BaseModel
 
 from recipe_planner.models import PlanRecord as PlanRecordModel
-from recipe_planner.models import PlanResult, UserConstraints
+from recipe_planner.models import PlanResult, UserConstraints, slot_key
 
 DEFAULT_PLANS_FILE = Path(__file__).resolve().parent.parent / "data" / "saved_plans.json"
 MAX_PLANS = 3  # 只留最近几份；方案历史与对比属于正式版后续能力
@@ -132,16 +132,27 @@ def delete_record(record_id: str) -> None:
     _write([r for r in load_records() if r.id != record_id])
 
 
-def set_done(record_id: Optional[str], day: int, done: bool = True) -> Optional[PlanRecord]:
-    """标记/取消「这天已经做过了」（M1 状态③）。"""
+def set_done(record_id: Optional[str], day: int, done: bool = True,
+             meal: Optional[str] = None) -> Optional[PlanRecord]:
+    """标记/取消「做过了」（M1 状态③）。
+
+    docs/10：给了 `meal` 就记**这一顿**（`done_slots`）；不给就沿用老行为 ——
+    记"这一天"（`done_days`），只做晚餐时两者等价。
+    """
     if not record_id:
         return None
     recs = load_records()
     for i, r in enumerate(recs):
         if r.id == record_id:
-            days = set(r.done_days)
-            days.add(day) if done else days.discard(day)
-            recs[i] = r.model_copy(update={"done_days": sorted(days)})
+            if meal is None:
+                days = set(r.done_days)
+                days.add(day) if done else days.discard(day)
+                recs[i] = r.model_copy(update={"done_days": sorted(days)})
+            else:
+                slots = set(r.done_slots or [])
+                key = slot_key(day, meal)
+                slots.add(key) if done else slots.discard(key)
+                recs[i] = r.model_copy(update={"done_slots": sorted(slots)})
             _write(recs)
             return recs[i]
     return None

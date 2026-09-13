@@ -80,12 +80,13 @@ async def update_result(plan_id: Optional[str], result, change_note: str = "") -
     return store.update_result(plan_id, result, change_note)
 
 
-async def set_done(plan_id: Optional[str], day: int, done: bool = True) -> Optional[PlanRecord]:
+async def set_done(plan_id: Optional[str], day: int, done: bool = True,
+                   meal: Optional[str] = None) -> Optional[PlanRecord]:
     if _is_db():
-        return await PlanRepo.set_done(plan_id, day, done)
+        return await PlanRepo.set_done(plan_id, day, done, meal)
     from recipe_planner import store
 
-    return store.set_done(plan_id, day, done)
+    return store.set_done(plan_id, day, done, meal)
 
 
 async def set_checked(plan_id: Optional[str], names: list[str]) -> Optional[PlanRecord]:

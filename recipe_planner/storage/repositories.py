@@ -16,6 +16,8 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recipe_planner.models import (
+    MEAL,
+    MEALS,
     ChosenDish,
     DayPlan,
     Ingredient as IngredientModel,
@@ -25,6 +27,7 @@ from recipe_planner.models import (
     RecipeDB,
     ShoppingItem,
     UserConstraints,
+    slot_key,
     ValidationIssue,
 )
 from recipe_planner.storage import orm
@@ -109,14 +112,55 @@ class RecipeRepo:
 
 # ---------------------------------------------------------------- 方案
 
+def _meals_csv(meals) -> str:
+    """餐次存成逗号分隔的短字符串（如 "早餐,午餐"）；空串表示"沿用老字段"。"""
+    return ",".join(dict.fromkeys(m for m in meals if m))
+
+
+def _csv_meals(text) -> list[str]:
+    return [x for x in str(text or "").split(",") if x]
+
+
+def _by_day(days: list[DayPlan]) -> dict[int, list[DayPlan]]:
+    """把"一天多顿"的 DayPlan 列表按天归并（顺序按天号）。"""
+    out: dict[int, list[DayPlan]] = {}
+    for day in days:
+        out.setdefault(day.day, []).append(day)
+    return dict(sorted(out.items()))
+
+
+def _day_people(slots: list[DayPlan]) -> Optional[int]:
+    """这一天的临时人数。
+
+    库里 `people_override` 是**按天**一个值，而界面上的「来客人了」是按顿改的 ——
+    现在存"最大的那个"并落在当天最后一顿（回读规则见 `_plan_to_record`）。
+    按顿记人数是 doc 10 之后的后续项，先记在这里不装作已经支持。
+    """
+    values = [x.people for x in slots if x.people]
+    return max(values) if values else None
+
+
 def _plan_to_record(plan: orm.Plan, days: list[orm.PlanDay], checks: list[str],
                     shop_rows: list[orm.ShoppingItem]) -> PlanRecord:
     day_models: list[DayPlan] = []
+    done_slots: list[str] = []
+    legacy_done: list[int] = []
     for d in sorted(days, key=lambda x: x.day_no):
-        dishes = [ChosenDish(recipe_id=x.recipe_id, reason=x.reason)
-                  for x in sorted(d.dishes, key=lambda y: y.seq)]
-        day_models.append(DayPlan(day=d.day_no, dishes=dishes, skipped=d.skipped,
-                                  people=d.people_override))
+        # 一天多顿（docs/10）：把这一天的菜按 meal 分回去；"不做饭/做过了"也按顿取
+        per_meal: dict[str, list[ChosenDish]] = {}
+        for x in sorted(d.dishes, key=lambda y: y.seq):
+            per_meal.setdefault(x.meal or MEAL, []).append(
+                ChosenDish(recipe_id=x.recipe_id, reason=x.reason))
+        skipped_meals = set(_csv_meals(d.skipped_meals))
+        done_meals = set(_csv_meals(d.done_meals))
+        if d.done_at is not None and not done_meals:
+            legacy_done.append(d.day_no)          # 老数据：这一天（当时只有晚餐）做过了
+        for meal in [m for m in MEALS if m in (set(per_meal) | skipped_meals | done_meals)] or [MEAL]:
+            day_models.append(DayPlan(
+                day=d.day_no, meal=meal, dishes=per_meal.get(meal, []),
+                skipped=meal in skipped_meals or (not skipped_meals and d.skipped),
+                people=d.people_override))
+        done_slots.extend(slot_key(d.day_no, m) for m in done_meals)
     c = UserConstraints(**plan.constraints)
     result = PlanResult(constraints=c, candidate_count=0, days=day_models,
                         shopping=[ShoppingItem(name=x.name, category=x.category,
@@ -127,7 +171,7 @@ def _plan_to_record(plan: orm.Plan, days: list[orm.PlanDay], checks: list[str],
     return PlanRecord(id=plan.id, created_at=_iso(plan.created_at),
                       start_date=plan.week_start.isoformat(),
                       label=_week_label(plan.week_start), change_note=plan.change_note,
-                      done_days=sorted(d.day_no for d in days if d.done_at is not None),
+                      done_days=sorted(legacy_done), done_slots=done_slots,
                       checked_items=sorted(checks), result=result)
 
 
@@ -210,16 +254,26 @@ class PlanRepo:
                             change_note=change_note, created_at=now)
             s.add(plan)
             await s.flush()
-            for idx, day in enumerate(result.days):
-                s.add(orm.PlanDay(plan_id=plan_id, day_no=day.day,
-                                  day_date=start + timedelta(days=idx), skipped=day.skipped,
-                                  people_override=day.people))
+            # docs/10：一天多顿时 plan_day 仍然**一天一行**（主键没变），
+            # 餐次落在这两处：菜的 meal 列 + 这一天的"哪几顿不做饭"
+            for day_no, slots in _by_day(result.days).items():
+                s.add(orm.PlanDay(
+                    plan_id=plan_id, day_no=day_no,
+                    day_date=start + timedelta(days=day_no - 1),
+                    skipped=any(x.skipped for x in slots),
+                    people_override=_day_people(slots),
+                    skipped_meals=_meals_csv([x.meal for x in slots if x.skipped])))
             await s.flush()
-            for day in result.days:
-                for seq, dish in enumerate(day.dishes, start=1):
-                    s.add(orm.PlanDish(plan_id=plan_id, day_no=day.day, seq=seq,
-                                       recipe_id=dish.recipe_id, reason=dish.reason,
-                                       locked=dish.recipe_id in set(result.constraints.must_include_recipes)))
+            locked = set(result.constraints.must_include_recipes)
+            for day_no, slots in _by_day(result.days).items():
+                seq = 0
+                for slot in slots:
+                    for dish in slot.dishes:
+                        seq += 1     # 同一天内跨餐连续编号（主键是 plan_id+day_no+seq）
+                        s.add(orm.PlanDish(plan_id=plan_id, day_no=day_no, seq=seq,
+                                           recipe_id=dish.recipe_id, reason=dish.reason,
+                                           meal=slot.meal,
+                                           locked=dish.recipe_id in locked))
             for it in result.shopping:
                 s.add(orm.ShoppingItem(plan_id=plan_id, name=it.name, category=it.category,
                                        amount_text=it.amount, needed=it.needed,
@@ -242,24 +296,31 @@ class PlanRepo:
             locked = set(result.constraints.must_include_recipes)
             # 天：更新而不是重建，保住 done_at
             existing_days = {d.day_no: d for d in await _days_of(s, plan_id)}
-            for day in result.days:
-                row = existing_days.get(day.day)
+            by_day = _by_day(result.days)
+            for day_no, slots in by_day.items():
+                row = existing_days.get(day_no)
                 if row is None:
-                    row = orm.PlanDay(plan_id=plan_id, day_no=day.day,
-                                      day_date=plan.week_start + timedelta(days=day.day - 1))
+                    row = orm.PlanDay(plan_id=plan_id, day_no=day_no,
+                                      day_date=plan.week_start + timedelta(days=day_no - 1))
                     s.add(row)
-                row.skipped, row.people_override = day.skipped, day.people
+                row.skipped = any(x.skipped for x in slots)
+                row.people_override = _day_people(slots)
+                row.skipped_meals = _meals_csv([x.meal for x in slots if x.skipped])
             for day_no in list(existing_days):
-                if day_no not in {d.day for d in result.days}:
+                if day_no not in by_day:
                     await s.delete(existing_days[day_no])
             await s.flush()
             await s.execute(delete(orm.PlanDish).where(orm.PlanDish.plan_id == plan_id))
             await s.flush()
-            for day in result.days:
-                for seq, dish in enumerate(day.dishes, start=1):
-                    s.add(orm.PlanDish(plan_id=plan_id, day_no=day.day, seq=seq,
-                                       recipe_id=dish.recipe_id, reason=dish.reason,
-                                       locked=dish.recipe_id in locked))
+            for day_no, slots in by_day.items():
+                seq = 0
+                for slot in slots:
+                    for dish in slot.dishes:
+                        seq += 1
+                        s.add(orm.PlanDish(plan_id=plan_id, day_no=day_no, seq=seq,
+                                           recipe_id=dish.recipe_id, reason=dish.reason,
+                                           meal=slot.meal,
+                                           locked=dish.recipe_id in locked))
             await s.execute(delete(orm.ShoppingItem).where(orm.ShoppingItem.plan_id == plan_id))
             await s.flush()
             for it in result.shopping:
@@ -301,14 +362,26 @@ class PlanRepo:
         return bool(result.rowcount)
 
     @staticmethod
-    async def set_done(plan_id: Optional[str], day: int, done: bool = True) -> Optional[PlanRecord]:
+    async def set_done(plan_id: Optional[str], day: int, done: bool = True,
+                       meal: Optional[str] = None) -> Optional[PlanRecord]:
+        """标记"做过了"。
+
+        docs/10：给了 `meal` 就只记**这一顿**（写在 `done_meals` 里）；
+        不给就沿用老行为 —— 记"这一天"（`done_at`），只做晚餐时两者等价。
+        """
         if not plan_id:
             return None
         async with session_scope() as s:
             row = await s.get(orm.PlanDay, (plan_id, day))
             if row is None:
                 return None
-            row.done_at = datetime.now(timezone.utc) if done else None
+            if meal is None:
+                row.done_at = datetime.now(timezone.utc) if done else None
+                row.done_meals = ""
+            else:
+                meals = set(_csv_meals(row.done_meals))
+                meals.add(meal) if done else meals.discard(meal)
+                row.done_meals = _meals_csv(sorted(meals))
             await s.flush()
             plan = await _load_plan(s, plan_id)
             return await _record(s, plan)

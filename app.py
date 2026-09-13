@@ -58,11 +58,10 @@ from recipe_planner.models import (
 #      进度由服务端推（SSE），今晚状态也由服务端产出。
 USE_API = _use_api()
 
-# 多餐方案的**持久化**能力（docs/10 第④步）：JSON 后端一天可以有多行，天然支持；
-# 数据库后端的 `plan_day` 现在是 PRIMARY KEY(plan_id, day_no)，一天多顿存不进去 ——
-# 那正是"给 plan_day 加 meal 维度"那次迁移要解决的事。迁移没做之前，
-# 界面**只能**在 JSON 存储下让用户勾多餐（否则一点「生成菜单」就会撞唯一约束）。
-MEALS_AVAILABLE = (_storage_kind() == "json") and not USE_API
+# 多餐方案的持久化（docs/10 第④步）：0002 迁移把餐次落在真正需要它的地方
+# （`plan_dish.meal` + `plan_day` 的"哪几顿"两列），JSON 与数据库两种后端现在都支持。
+# 老库要先跑一次 `python -m recipe_planner.storage.migrate`（幂等）把那三列加上。
+MEALS_AVAILABLE = True
 
 if USE_API:
     PlanJob = api.PlanJob
@@ -666,10 +665,13 @@ def _quick_guests(day_no: int, extra: int, meal: str | None = None) -> None:
     st.rerun()
 
 
-def _mark_done(day_no: int, done: bool = True) -> None:
-    """做完了 / 再做一次（M1 状态③，记录写进存档，明天打开还在）。"""
+def _mark_done(day_no: int, done: bool = True, meal: str | None = None) -> None:
+    """做完了 / 再做一次（M1 状态③，记录写进存档，明天打开还在）。
+
+    docs/10：给了 `meal` 就只记这一顿（做完了午饭不代表晚饭也做完了）。
+    """
     rid = st.session_state.get("record_id")
-    store.set_done(rid, day_no, done)
+    store.set_done(rid, day_no, done, meal=meal)
     st.session_state["done_days"] = set(store.get_record(rid).done_days) if rid else set()
     text = (f"已把第 {day_no} 天标记成做完了。" if done else f"第 {day_no} 天改回未做。")
     ui.set_notice("info", text)
@@ -774,7 +776,7 @@ def render_tonight() -> None:
                 st.rerun()
         with b2:
             if st.button("再做一次", key="done_undo", use_container_width=True):
-                _mark_done(view.day, False)
+                _mark_done(view.day, False, view.meal)
         return
 
     # 状态①：今天有安排 —— 英雄卡已经在上面画好了，这里只画每道菜与快改
@@ -842,7 +844,7 @@ def render_tonight() -> None:
         with q3:
             if st.button("做完了", key="quick_done", use_container_width=True,
                          help="标记今天做完了，明天打开还记着"):
-                _mark_done(view.day, True)
+                _mark_done(view.day, True, view.meal)
 
     # 开始做饭 → 展开下锅顺序（05 M1-5）
     order, has_slow = rep.cook_order(day_plan, db)
@@ -939,11 +941,9 @@ def render_create() -> None:
             meals = st.multiselect("这一周吃哪几顿", MEALS, key="meals",
                                    placeholder=f"不选＝只做{MEAL}",
                                    disabled=not MEALS_AVAILABLE)
-        if not MEALS_AVAILABLE:
-            st.caption("多餐（早/午/晚）现在只在 JSON 存储下可用（STORAGE=json）："
-                       "数据库后端的 plan_day 还是「一天一行」，一天多顿存不进去 —— "
-                       "那一步迁移记在 docs/10 的第④步，做完这里就会自动打开。")
         _picked_form = [m for m in MEALS if m in set(meals or [])] or [MEAL]
+        if len(_picked_form) > 1 and not USE_API and _storage_kind() == "db":
+            st.caption("老库要先跑一次迁移（幂等）：`python -m recipe_planner.storage.migrate`")
         for _i, _m in enumerate(_picked_form):
             with gm[_i + 1]:
                 st.select_slider(f"{_m}几个菜", list(range(1, DISH_MAX + 1)), key=f"dishes_{_m}")

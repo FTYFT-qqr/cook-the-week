@@ -92,6 +92,7 @@ class DishOut(BaseModel):
 
 class DayOut(BaseModel):
     day: int
+    meal: str = "晚餐"          # docs/10：一条 DayOut = 一天里的一顿
     weekday: str = ""
     date_label: str = ""
     skipped: bool = False
@@ -307,6 +308,7 @@ class DayPatchIn(BaseModel):
     recipe_id: Optional[str] = None       # op=swap：要换掉的那道
     recipe_ids: Optional[list[str]] = None  # op=replace_day：这一天最终要有哪些菜（空数组=不做饭）
     done: bool = True                     # op=done
+    meal: Optional[str] = None            # op=done：只标记**哪一顿**（docs/10）；不给=这一天
 
 
 class FeedbackIn(BaseModel):

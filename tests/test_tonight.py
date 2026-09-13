@@ -202,8 +202,13 @@ def test_manual_day_switches_which_day_we_look_at():
 
 
 def test_manual_day_ignores_numbers_outside_the_plan():
-    """方案里没有这一天就忽略它，仍按自动判定（不能越界指到不存在的一天）。"""
-    view = tonight_view(make_record(days=3), DB, today=date(2026, 9, 14), day=5)
+    """方案里没有这一天就忽略它，仍按自动判定（不能越界指到不存在的一天）。
+
+    这里必须把 `now` 一起注入：只给 `today` 的话，"过了 22:00 先看明天"那条规则会拿**真实当前时间**
+    来判断 —— 白天跑是绿的，晚上 22 点以后跑就变成第 2 天（这个用例真的这么红过一次）。
+    """
+    view = tonight_view(make_record(days=3), DB, today=date(2026, 9, 14),
+                        now=datetime(2026, 9, 14, 18, 0), day=5)
     assert view.day == 1 and view.hint == ""
     assert view.state == "planned" and view.headline == "番茄炒蛋、清炒时蔬"
 

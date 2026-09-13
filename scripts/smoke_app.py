@@ -451,28 +451,34 @@ if nav_to(at, "plan"):
         check("不喜欢只改动这一天", changed3 == [day2], f"target={day2} changed={changed3}")
         print(f"    不喜欢: {hated2}（第 {day2} 天换掉，其余天不变）")
 
-print("[8] 天标签页位置保留 & 边界（天数变少不崩溃）")
-check("day_tabs 已进入会话状态（选中态可持久）", "day_tabs" in at.session_state)
-try:
-    at.session_state["day_tabs"] = "第 2 天"
-    at.run()
-    check("停留在第 2 天不报错且菜单在", (not at.exception) and has_menu(at),
-          str([str(e.value) for e in at.exception]))
-except Exception as exc:  # AppTest 对部分元素状态不支持时跳过
-    print(f"    (跳过标签页状态注入: {type(exc).__name__})")
+print("[8] 本周计划：一天一段 + 一天里的早/午/晚各一张卡（docs/10 第⑦步）")
+nav_to(at, "plan")
+check("不再是「一天一个标签页」（改成竖着一路看下来）", "day_tabs" not in at.session_state,
+      "会话状态里还有 day_tabs")
+_txt_plan = page_text(at)
+_res_now = at.session_state["result"] if "result" in at.session_state else None
+_days_span = max((p.day for p in _res_now.days), default=0) if _res_now else 0
+check("每天一个段头（第 N 天，段头带当天合计）",
+      _txt_plan.count("class='day-head") >= 1 and "合计约" in _txt_plan,
+      _txt_plan.count("class='day-head"))
+check("段头数量 = 天数（不是顿数）",
+      _txt_plan.count("class='day-head") == _days_span,
+      f"段头 {_txt_plan.count(chr(39) + 'day-head')} / 天数 {_days_span}")
 
 nav_to(at, "plan")
 inp = at.session_state["plan_inputs"]
 if inp:
-    inp["days"] = 1                     # 天数从 3 变 1，之前停在第 2 天
+    inp["days"] = 1                     # 天数从 3 变 1
     at.session_state["plan_inputs"] = inp
     at.session_state["stale"] = True
     at.run()
     check("天数变少后不崩溃", not at.exception, str([str(e.value) for e in at.exception]))
     check("天数变少后菜单正常", has_menu(at))
-    check("只剩一天时标签为第 1 天", "第 1 天" in page_text(at) or True)
-    tabs_state = at.session_state["day_tabs"] if "day_tabs" in at.session_state else None
-    check("越界的标签选择已被纠正", tabs_state in (None, "第 1 天"), f"day_tabs={tabs_state!r}")
+    check("只剩一天时只有一个段头（不会留下第 2 天）",
+          page_text(at).count("class='day-head") == 1 and "第 2 天" not in page_text(at),
+          page_text(at).count("class='day-head"))
+    check("天数变少后标签类的界面状态不再存在（那套坑一起消失）",
+          "day_tabs" not in at.session_state)
 
 def _elems(at, kind):
     """AppTest 对元素类型的支持随版本变化：取不到就返回空，不让断言假失败。"""
@@ -580,7 +586,10 @@ txt = page_text(at)
 check("前排显示「本周花费」", "本周花费" in txt)
 check("前排显示「最费时」", "最费时" in txt)
 check("前排显示忌口结果", "忌口 / 过敏冲突" in txt)
-check("整周总览一屏可见（每天一行）", "整周总览" in txt and "分钟 · ¥" in txt)
+check("整周一览还在（等宽天行，收进折叠里了）", "day-wrap" in txt and "分钟 · ¥" in txt)
+check("本周计划主体是卡片：3 天各一个段头 + 各一张餐卡",
+      txt.count("class='day-head") == 3 and txt.count("class='meal-head'") == 3,
+      f"段头 {txt.count('day-head')} / 餐卡 {txt.count('meal-head')}")
 metric_labels = [m.label for m in at.metric]
 check("开发者视角已从常规界面撤出（05 §1.4）", "候选菜谱" not in metric_labels,
       metric_labels)
@@ -630,7 +639,7 @@ check("界面上没有「手机视图」开关了（V-14）",
       not any("手机视图" in (getattr(t, "label", "") or "") for t in _elems(at, "toggle")))
 check("手机底部导航已内置（按宽度自动显示）",
       any((b.key or "").startswith("navm_") for b in at.button))
-check("按天切换仍是同一套组件（tabs）", "day_tabs" in at.session_state)
+check("本周计划不用标签页了（一天一段的卡片）", "day_tabs" not in at.session_state)
 check("CSS 里含窄屏单列规则（V-16）",
       "max-width:640px" in page_text(at) or "max-width: 640px" in page_text(at))
 check("菜单仍渲染", has_menu(at))
@@ -867,10 +876,14 @@ def section_multi_meal() -> None:
     nav_to(at, "plan")
     check("本周计划页无异常（多餐）", not at.exception, str([str(e.value) for e in at.exception]))
     txt3 = page_text(at)
-    check("整周总览按餐分段（早/午/晚都出现）",
+    check("整周一览按餐分段（早/午/晚都出现）",
           all(m in txt3 for m in ("早餐", "午餐", "晚餐")), txt3[:160])
-    check("每日详情的标签仍然是 2 个「第 N 天」（不是 6 个）",
-          all(f"第 {i} 天" in txt3 for i in (1, 2)), txt3[:160])
+    check("本周计划：2 天各一个段头 + 一天三张餐卡（6 张）",
+          txt3.count("class='day-head") == 2 and txt3.count("class='meal-head'") == 6,
+          f"段头 {txt3.count('day-head')} / 餐卡 {txt3.count('meal-head')}")
+    check("每周段头说清是几顿、钱合计（不把三顿的分钟数加成一个「合计 89 分钟」）",
+          "3 顿 · 合计 ¥" in txt3 and "这天合计" not in txt3,
+          [l for l in txt3.split("\n") if "day-head" in l][:1])
     nav_to(at, "tonight")
     _tt = page_text(at)
     check("多餐时今晚页改叫「今天」", "今天" in _tt, _tt[:120])

@@ -170,6 +170,27 @@ st.markdown(
     .day-when{ flex:0 0 148px; font-size:15px; font-weight:600; color:var(--ink); }
     .day-dishes{ flex:1 1 auto; font-size:15px; color:var(--ink); }
     .day-meta{ flex:0 0 148px; text-align:right; font-size:13px; color:var(--ink2); }
+    /* 本周计划：一天一段，段内一顿一张卡（与主页的卡片同一套取值） */
+    .day-head{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+               border-bottom:2px solid var(--brand-line); padding-bottom:6px;
+               margin:18px 0 10px 0; }
+    .day-head.past{ opacity:.6; }
+    .day-head .d{ font-size:17px; font-weight:700; color:var(--ink); }
+    .day-head .m{ margin-left:auto; font-size:13px; color:var(--ink2); }
+    .day-badge{ font-size:12px; font-weight:600; color:#fff; background:var(--brand);
+                border-radius:999px; padding:2px 9px; }
+    .day-badge.past{ background:var(--soft); color:#4B5563; }
+    .meal-head{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+    .meal-name{ font-size:15px; font-weight:700; color:var(--brand-ink); letter-spacing:.03em; }
+    .meal-meta{ margin-left:auto; font-size:13px; color:var(--ink2); }
+    .meal-tag{ font-size:12px; font-weight:600; border-radius:999px; padding:2px 8px;
+               background:var(--soft); color:#4B5563; }
+    /* 餐卡里的菜不再各自再套一层框（框由这张卡提供），只留一条细分隔线 */
+    div[class*="st-key-mealcard_"] .dish-card{ border:0; border-top:1px dashed var(--line);
+                border-radius:0; background:transparent; min-height:0; padding:8px 0 0;
+                margin-bottom:2px; }
+    div[class*="st-key-mealcard_"] .dish-card.loved,
+    div[class*="st-key-mealcard_"] .dish-card.hated{ background:transparent; }
     /* 提示：一行文字，不用彩色横幅（V-08 / 4.6） */
     .line{ font-size:13px; color:var(--ink2); margin:.3rem 0; }
     .line.ok{ color:var(--ok); } .line.bad{ color:var(--danger); font-weight:600; }
@@ -1165,6 +1186,11 @@ def _ensure_plan():
     return result
 
 
+def _row_of(rows, day: int, meal: str):
+    """概览行里取「这一天这一顿」那一行（多餐时一天好几行，必须按 (天, 餐) 定位）。"""
+    return next((r for r in rows if r.day == day and r.meal == meal), None)
+
+
 def _dish_card(r, dish, is_loved: bool, is_hated: bool) -> str:
     """菜品卡：等高四段，芯片固定 3 个中性灰，状态用文字 + 底色（4.5 / V-06 / V-07）。"""
     state = ("<span class='state loved'>已收藏</span>" if is_loved
@@ -1181,7 +1207,26 @@ def _dish_card(r, dish, is_loved: bool, is_hated: bool) -> str:
         "</div>")
 
 
+def _meal_head(plan_day, db, c) -> None:
+    """一张餐卡的卡头：餐次 + 状态标签 + 这一顿自己的用时与金额（docs/10 第⑦步）。
+
+    金额按**这一顿**算（整天合计放在段头上）—— 多餐时把"这天合计"写在每张卡上，
+    三张卡会给出三个不一样的天数总计，看着就是错的。
+    """
+    minutes = rep.day_minutes(plan_day, db)
+    cost = rep.day_cost(plan_day, db, c.people)
+    tags = ""
+    if plan_day.skipped:
+        tags += "<span class='meal-tag'>这顿不做饭</span>"
+    meta = f"约 {minutes} 分钟 · ¥{cost:.0f}"
+    if plan_day.people:
+        meta += f" · 按 {plan_day.people} 人算"
+    st.markdown(f"<div class='meal-head'><span class='meal-name'>{plan_day.meal}</span>{tags}"
+                f"<span class='meal-meta'>{meta}</span></div>", unsafe_allow_html=True)
+
+
 def _dish_actions(plan_day: int, dish, is_loved: bool, is_hated: bool, locked: bool = False):
+    """每道菜的操作：换一道 / 定住 / 喜欢 / 不喜欢（E-02 定住，去掉 emoji）。"""
     """每道菜的操作：换一道 / 定住 / 喜欢 / 不喜欢（E-02 定住，去掉 emoji）。"""
     picked = None
     rid = dish.recipe_id
@@ -1334,81 +1379,92 @@ def render_plan() -> None:
 
     _notice_block(result)
 
-    # ---- 整周总览：等宽天行，今天高亮、已过变淡（4.6-4 / E-01）
-    st.markdown("### 整周总览")
-    rows_html = []
-    _multi = c.is_multi_meal()
-    for row in summary.rows:
-        idx = row.day - 1                      # 按**天**算高亮，不能用行号（多餐时行号会串天）
-        cls = "today" if (today_idx is not None and idx == today_idx) else (
-            "past" if (today_idx is not None and idx < today_idx) else "")
-        mark = ("今晚" if c.active_meals()[-1] == row.meal else "今天") if cls == "today" else (
-            "已过" if cls == "past" else "")
-        when = f"第 {row.day} 天 {row.weekday} {row.date_label}"
-        if _multi:
-            when += f"　<b>{row.meal}</b>"
-        rows_html.append(
-            f"<div class='day-row {cls}'>"
-            f"<div class='day-when'>{when}"
-            + (f" · {mark}" if mark else "") + "</div>"
-            f"<div class='day-dishes'>{'、'.join(row.dishes) or '（未排）'}</div>"
-            f"<div class='day-meta'>{row.minutes} 分钟 · ¥{row.cost:.0f}</div></div>")
-    st.markdown("<div class='day-wrap'>" + "".join(rows_html) + "</div>", unsafe_allow_html=True)
+    # ---- 整周一览：等宽天行，扫七天用它（收进折叠，主体让给下面的卡片）
+    with st.expander("整周一览（扫一眼七天）", expanded=False):
+        rows_html = []
+        _multi = c.is_multi_meal()
+        for row in summary.rows:
+            idx = row.day - 1                      # 按**天**算高亮，不能用行号（多餐时行号会串天）
+            cls = "today" if (today_idx is not None and idx == today_idx) else (
+                "past" if (today_idx is not None and idx < today_idx) else "")
+            mark = ("今晚" if c.active_meals()[-1] == row.meal else "今天") if cls == "today" else (
+                "已过" if cls == "past" else "")
+            when = f"第 {row.day} 天 {row.weekday} {row.date_label}"
+            if _multi:
+                when += f"　<b>{row.meal}</b>"
+            rows_html.append(
+                f"<div class='day-row {cls}'>"
+                f"<div class='day-when'>{when}"
+                + (f" · {mark}" if mark else "") + "</div>"
+                f"<div class='day-dishes'>{'、'.join(row.dishes) or '（未排）'}</div>"
+                f"<div class='day-meta'>{row.minutes} 分钟 · ¥{row.cost:.0f}</div></div>")
+        st.markdown("<div class='day-wrap'>" + "".join(rows_html) + "</div>", unsafe_allow_html=True)
 
-    # ---- 每日详情：默认折叠，点开看理由与逐道反馈（4.6-5 / E-04）
-    with st.expander("每日详情与逐道反馈（换一道 / 喜欢 / 不喜欢）", expanded=False):
-        st.caption("换一道 = 只换今晚这道（不动口味偏好）；喜欢 = 以后多安排；"
-                   "不喜欢 = 换掉并记住，以后不再出现。")
-        # 一天一个标签页，页内再按餐分段（docs/10）：多餐时标签数必须仍然是**天数**
-        labels = [f"第 {i} 天" for i in range(1, days_span + 1)]
-        _cur_tab = st.session_state.get("day_tabs")
-        if _cur_tab is not None and _cur_tab not in labels:
-            st.session_state["day_tabs"] = labels[0]
-        day_tabs = st.tabs(labels, key="day_tabs", on_change="rerun")
-        for tab, day_no in zip(day_tabs, range(1, days_span + 1)):
-            with tab:
-                idx0 = day_no - 1
-                is_past = today_idx is not None and idx0 < today_idx
-                for plan_day in result.slots_for(day_no):
-                    if _multi:
-                        st.markdown(f"<p class='line'><b>{plan_day.meal}</b></p>",
-                                    unsafe_allow_html=True)
-                    if plan_day.skipped:
-                        st.markdown("<p class='line'>这天不做饭（你标记过：不计花费、也不进买菜清单）。</p>",
-                                    unsafe_allow_html=True)
-                        if not is_past and st.button("改回来做", key=f"tab_unskip_{plan_day.day}_{plan_day.meal}",
-                                                     use_container_width=False):
-                            result.days = restore_day(result.days, plan_day.day, db, c,
-                                                      meal=plan_day.meal)
-                            refresh_result(result, db)
-                            _commit_plan()
-                            ui.set_notice("swap", f"第 {plan_day.day} 天恢复做饭，其他天没动。")
-                            st.rerun()
+    # ---- 主体：一天一段，段内**一顿一张卡**（docs/10 第⑦步，与主页同一套卡片语言）
+    st.caption("换一道 = 只换这一顿这道（不动口味偏好）；喜欢 = 以后多安排；"
+               "不喜欢 = 换掉并记住，以后不再出现。")
+    for day_no in range(1, days_span + 1):
+        day_slots = result.slots_for(day_no)
+        if not day_slots:
+            continue
+        is_past = today_idx is not None and day_no - 1 < today_idx
+        is_today = today_idx is not None and day_no - 1 == today_idx
+        # 周几/日期在概览行上（DayPlan 里没有），按 (天, 餐) 取，别用"当天第一行"（多餐会串）
+        head = _row_of(summary.rows, day_no, day_slots[0].meal) or summary.rows[0]
+        day_minutes = sum(rep.day_minutes(p, db) for p in day_slots)
+        day_cost = sum(rep.day_cost(p, db, c.people) for p in day_slots)
+        badge = ""
+        if is_today:
+            badge = "<span class='day-badge'>今天</span>"
+        elif is_past:
+            badge = "<span class='day-badge past'>已过</span>"
+        # 多餐时**不能**把三顿的分钟数加起来说"合计 89 分钟"（那是三顿饭的做菜时间，
+        # 不是一次站在灶前的时长），改成说清几顿、把钱合计出来；只做一顿时保持老措辞。
+        if c.is_multi_meal():
+            total_txt = f"{len(day_slots)} 顿 · 合计 ¥{day_cost:.0f}"
+        else:
+            total_txt = f"合计约 {day_minutes} 分钟 · ¥{day_cost:.0f}"
+        st.markdown(
+            f"<div class='day-head{' past' if is_past else ''}'>"
+            f"<span class='d'>第 {day_no} 天 {head.weekday} {head.date_label}</span>{badge}"
+            f"<span class='m'>{total_txt}"
+            + ("　·　已经过去了，只能看不能改" if is_past else "") + "</span></div>",
+            unsafe_allow_html=True)
+
+        for plan_day in day_slots:
+            with st.container(border=True, key=f"mealcard_{day_no}_{plan_day.meal}"):
+                _meal_head(plan_day, db, c)
+                if plan_day.skipped:
+                    st.markdown("<p class='line'>这顿不做饭（你标记过：不计花费、也不进买菜清单）。</p>",
+                                unsafe_allow_html=True)
+                    if not is_past and st.button("改回来做",
+                                                 key=f"card_unskip_{day_no}_{plan_day.meal}"):
+                        result.days = restore_day(result.days, day_no, db, c, meal=plan_day.meal)
+                        refresh_result(result, db)
+                        _commit_plan()
+                        ui.set_notice("swap", f"{where_text(day_no, plan_day.meal, c)}"
+                                              "恢复做饭，其他天没动。")
+                        st.rerun()
+                    continue
+                for dish in plan_day.dishes:
+                    r = db.by_id(dish.recipe_id)
+                    if r is None:
                         continue
-                    for dish in plan_day.dishes:
-                        r = db.by_id(dish.recipe_id)
-                        if r is None:
-                            continue
-                        st.markdown(_dish_card(r, dish, r.name in liked_now, r.name in hated_now),
-                                    unsafe_allow_html=True)
-                        if not is_past:
-                            picked = _dish_actions(plan_day.day, dish, r.name in liked_now,
-                                                   r.name in hated_now,
-                                                   dish.recipe_id in set(c.must_include_recipes))
-                            pending = picked or pending
-                    minutes = rep.day_minutes(plan_day, db)
-                    cost = rep.day_cost(plan_day, db, c.people)
-                    order, has_slow = rep.cook_order(plan_day, db)
-                    st.markdown(
-                        f"<p class='line'>这天合计约 {minutes} 分钟 · 预计 ¥{cost:.0f}"
-                        + (f"　·　按 {plan_day.people} 人算" if plan_day.people else "")
-                        + ("　·　有汤/炖菜可以先上火，实际用时更短" if has_slow else "")
-                        + ("　·　（这天已经过去了，只能看不能改）" if is_past else "") + "</p>",
-                        unsafe_allow_html=True)
-                    if order:
-                        with st.expander("下锅顺序"):
-                            for line in order:
-                                st.markdown(f"- {line}")
+                    st.markdown(_dish_card(r, dish, r.name in liked_now, r.name in hated_now),
+                                unsafe_allow_html=True)
+                    if not is_past:
+                        picked = _dish_actions(plan_day.day, dish, r.name in liked_now,
+                                               r.name in hated_now,
+                                               dish.recipe_id in set(c.must_include_recipes))
+                        pending = picked or pending
+                order, has_slow = rep.cook_order(plan_day, db)
+                if has_slow:
+                    st.markdown("<p class='line'>有汤/炖菜可以先上火，实际用时更短。</p>",
+                                unsafe_allow_html=True)
+                if order:
+                    with st.expander("下锅顺序"):
+                        for line in order:
+                            st.markdown(f"- {line}")
 
     if st.session_state.get("relax"):
         _relax_options(c, result.issues, swap_failed=True)

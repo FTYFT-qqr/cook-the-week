@@ -49,6 +49,29 @@ def _constraints_payload(body: PlanCreateIn) -> dict:
     return payload
 
 
+async def _with_profile(payload: dict) -> dict:
+    """把**服务端档案**里的喜欢 / 不喜欢合进这次排菜的需求。
+
+    docs/11 的 R5（多后端分叉）在这里有一个真洞：客户端提交任务时会主动把
+    `liked_dishes` / `disliked_dishes` 去掉（`client.create_plan` 的注释写着
+    "服务端自己读档案，不接受界面塞进来的偏好"），而服务端**从来没有读** ——
+    于是 `USE_API=1` 时「重排一版」排出来的菜单既不避开"不喜欢"的菜、也不优先"喜欢"的菜，
+    也就是"不喜欢 = 以后不再出现"这句承诺只在**点的那一下**成立、一重排就失效。
+    （`tests/api/test_plan_respects_profile.py` 就是被这条逼出来的。）
+
+    档案里存的是**菜名**，而 `UserConstraints.liked_dishes/disliked_dishes` 用**菜谱 id**
+    （`core.recipe_score` 比的是 `r.id`）—— 所以这里要按菜谱库把名字翻成 id，
+    与直连模式 `app.py:build_constraints` 的 `NAME2ID` 是同一件事。
+    """
+    profile = await data.load_profile()
+    db = await data.load_db()
+    name2id = {r.name: r.id for r in db.recipes}
+    for key in ("liked_dishes", "disliked_dishes"):
+        names = profile.get(key) or []
+        payload[key] = [name2id[n] for n in names if n in name2id]
+    return payload
+
+
 @router.post("/plans", response_model=JobAcceptedOut, status_code=202, tags=["jobs"],
              responses={202: {"description": "已排队，用 job_id 查进度"},
                         409: {"description": "同一个 Idempotency-Key 还在处理中"},
@@ -58,6 +81,7 @@ async def create_plan(body: PlanCreateIn) -> JobAcceptedOut:
     payload = _constraints_payload(body)
     payload["start_date"] = body.start_date
     payload["change_note"] = body.change_note
+    payload = await _with_profile(payload)      # 服务端自己读档案（见上面那条注释）
 
     repo = data.job_repo()
     before = await repo.active_count(kind="plan_week")

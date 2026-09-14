@@ -12,7 +12,7 @@
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime, timezone
 
 # ---------------------------------------------------------------- 清空单个列表
 
@@ -137,8 +137,13 @@ async def test_restore_brings_back_likes_and_ratings(api, client):
     assert history["番茄炒蛋"]["source"] == "菜单页"
     assert history["清炒时蔬"]["source"] == "做完了打分"
     # 口径说明：数据库后端的 since/date 是**这行记录的写入时间**（ProfileRepo 里由
-    # created_at 生成），所以恢复出来的日期是"今天"，不是快照里写的那个日期。
-    today = date.today().strftime("%m/%d")
+    # created_at 生成），所以恢复出来的日期是"写入那一刻"，不是快照里写的那个日期。
+    #
+    # **必须用写入方的口径（UTC）来算期望值**：`ProfileRepo` 写的是 `datetime.now(timezone.utc)`，
+    # 而本机是 UTC+8 —— 本地 00:00–08:00 这一段里"UTC 昨天/本地今天"，用 `date.today()`
+    # 断言会在这段时间里无缘无故变红（实测：本地 09-15 00:06 时它红了，白天一直绿）。
+    # 这与 docs/07 踩坑 #37 是同一类"测试跟着时钟变色"的问题。
+    today = datetime.now(timezone.utc).strftime("%m/%d")
     assert history["番茄炒蛋"]["since"] == today
     assert profile["ratings"]["清炒时蔬"]["date"] == today
 

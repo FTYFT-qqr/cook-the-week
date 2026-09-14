@@ -145,12 +145,34 @@ def _record(**kw) -> PlanRecord:
     return PlanRecord(id="p1", result=_result([DayPlan(day=3, meal="晚餐")]), **kw)
 
 
-def test_老存档的done_days表示当天所有餐都做过了():
-    """docs/10 之前一天只有晚餐，所以老数据 `done_days=[3]` 不能失效。"""
+def test_老存档的done_days按当天最后一顿解释():
+    """`done_days` 是"一天一顿"时代的写法，说的是**那一顿**（当时只有晚餐）。
+
+    docs/11 §4.1 P0-5：原来这里对**任意餐次**都返回 True，于是"我勾了今晚做完了"
+    会让早/午/晚三顿全变已做过 —— 状态不可信，等于把这个 App 的信任基础拆了。
+    新口径：老字段说的是"当天最后一顿"，与 `PlanResult.slot(day, None)` 一致。
+    """
     rec = _record(done_days=[3])
     assert rec.is_done(3, "晚餐") is True
-    assert rec.is_done(3, "早餐") is True
+    assert rec.is_done(3, "早餐") is False, "老存档说的是一天一顿的那一顿，不是三顿都做过了"
     assert rec.is_done(4, "晚餐") is False
+
+
+def test_多餐方案里老字段只落在最后一顿():
+    """一天三顿时 `done_days=[3]` 只表示晚餐 —— 老数据不能"升级"成三顿都做过。"""
+    rec = PlanRecord(id="p2", done_days=[3], result=_result([
+        DayPlan(day=3, meal="早餐"), DayPlan(day=3, meal="午餐"), DayPlan(day=3, meal="晚餐")]))
+    assert rec.is_done(3, "晚餐") is True
+    assert rec.is_done(3, "早餐") is False and rec.is_done(3, "午餐") is False
+    assert rec.done_meals_of(3, ["早餐", "午餐", "晚餐"]) == {"晚餐"}
+
+
+def test_只做早餐时老字段落在早餐上():
+    """`meal=None` 在"只做早餐"的方案里就是早餐（全项目同一条规则）。"""
+    rec = PlanRecord(id="p3", done_days=[1],
+                     result=_result([DayPlan(day=1, meal="早餐")]))
+    assert rec.last_meal_of(1) == "早餐"
+    assert rec.is_done(1, "早餐") is True
 
 
 def test_新存档按顿记():
@@ -172,7 +194,7 @@ def test_两种记法可以共存():
 def test_只做晚餐时早餐菜不进候选池():
     db = _load_json_db()
     breakfast = [r for r in db.recipes if r.category == "早餐"]
-    assert len(breakfast) == 8, "docs/10 §4 约定补 8 道早餐"
+    assert len(breakfast) >= 8, "早餐池要有足够的菜（docs/12 阶段一之后是 26 道）"
 
     only_dinner = retrieve_candidates(db, _c(meals=["晚餐"]))
     assert not [r for r in only_dinner if r.category == "早餐"], \
@@ -186,12 +208,23 @@ def test_勾了早餐时早餐菜就是候选():
     assert [r for r in with_breakfast if r.category == "早餐"], "勾了早餐却一道早餐都没有"
 
 
-def test_每道早餐都符合早餐的时长上限():
+def test_早餐时长上限是硬约束而不是数据问题():
+    """`docs/10`：早餐默认 **15 分钟**上限。
+
+    菜谱里可以有"要煮 20 分钟的粥"—— 那是真实数据，不该为了迁就上限把它删掉或谎报时长；
+    它只是在默认上限下**不进候选池**，用户把上限放宽就能看到（这条原来写成
+    "每道早餐菜都必须 ≤15 分钟"，加粥之后就会误报成回归失败）。
+    """
     db = _load_json_db()
-    c = _c(meals=["早餐", "晚餐"])
-    for r in db.recipes:
-        if r.category == "早餐":
-            assert r.time_min <= c.time_cap_for("早餐"), f"{r.name} 超了早餐时长上限"
+    porridge = next(r for r in db.recipes if r.name == "红薯粥")
+    assert porridge.time_min == 20
+
+    tight = _c(meals=["早餐"], breakfast_max_time_min=15)
+    assert "time" in recipe_conflicts(porridge, tight, meal="早餐")
+    assert porridge not in retrieve_candidates(db, tight, "早餐")
+
+    loose = _c(meals=["早餐"], breakfast_max_time_min=30)
+    assert porridge in retrieve_candidates(db, loose, "早餐")
 
 
 def test_八道早餐都进库了且id不重复():

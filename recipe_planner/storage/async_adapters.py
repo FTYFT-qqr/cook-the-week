@@ -241,3 +241,20 @@ def job_repo():
 
         return JobRepo
     return MemoryJobRepo
+
+
+async def commit() -> None:
+    """把**本次请求**的会话立刻提交（`session_scope()` 拿到的就是请求级那一个）。
+
+    全项目只有一处该用它，而且理由必须是同一条：**把活儿交给别人之前，数据得先落库**。
+    现在的唯一调用点是 `POST /plans` —— 任务行交给执行器之前必须先提交，
+    因为执行器在**另一条线程 + 另一个事件循环**里，未提交的写它根本看不见
+    （docs/11 §4.1 P0-3 的同一条根因：请求的会话原本是在响应之后才提交的）。
+
+    除此之外，写接口一律**只在请求末尾提交一次**（由 Session 中间件做）——
+    中途提交会让"报错但已生效"变成可能：响应 4xx/5xx 时中间件的回滚对已提交的写是空操作。
+    """
+    from recipe_planner.storage.engine import session_scope
+
+    async with session_scope() as session:
+        await session.commit()

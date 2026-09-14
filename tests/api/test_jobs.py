@@ -154,6 +154,71 @@ async def test_cancel_unknown_job_is_404(client):
     assert r.json()["code"] == "not_found"
 
 
+# ---------------------------------------------------------------- 提交顺序（docs/11 §4.1 P0-3）
+
+
+class _SubmitTimeRunner:
+    """在 `submit()` 的那一刻，从**另一条连接**去看任务行在不在。
+
+    执行器就是这样看库的：它在另一条线程 + 另一个事件循环里，未提交的写它看不见。
+    行还没提交就交给它 → 它把这个任务当成"不存在"丢掉 → 任务**永远停在 queued**
+    （界面一直显示"排队中"，用户以为在等）。这条用例是被一个真实的间歇性挂死逼出来的：
+    全量跑时 `test_timeout_marks_failed_timeout` / `test_client` 里的任务用例会红，
+    失败信息是"任务 X 在 20s 内没有结束，最后状态：queued"。
+    """
+
+    def __init__(self) -> None:
+        self.visible: list[bool] = []
+        self.timeout_sec = 60
+
+    def submit(self, job_id: str) -> None:
+        self.visible.append(_job_row_exists(job_id))
+
+    def cancel(self, job_id: str) -> bool:
+        return True
+
+    def is_running(self, job_id: str) -> bool:
+        return False
+
+    def queue_size(self) -> int:
+        return 0
+
+    def shutdown(self, timeout: float = 5.0) -> None:
+        pass
+
+
+def _job_row_exists(job_id: str) -> bool:
+    """从一条独立的 SQLite 连接去看这一行（＝执行器的视角）。"""
+    import os
+    import sqlite3
+
+    url = os.environ["DATABASE_URL"]
+    path = url.split("///", 1)[-1]
+    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+    try:
+        return con.execute("SELECT 1 FROM job WHERE id = ?", (job_id,)).fetchone() is not None
+    finally:
+        con.close()
+
+
+async def test_交给执行器之前任务行必须已经落库(api, client):
+    """`POST /plans` 必须先提交任务行、再把 job_id 交给执行器。
+
+    顺序反了不会报错、不会 500，只会让任务永远"排队中" —— 所以必须由测试钉死。
+    """
+    from recipe_planner.api.worker import set_runner
+
+    runner = _SubmitTimeRunner()
+    set_runner(runner)
+    try:
+        r = await client.post("/api/v1/plans", json={"days": 3})
+        assert r.status_code == 202, r.text
+    finally:
+        set_runner(None)
+    assert runner.visible == [True], (
+        "执行器在提交那一刻读不到任务行 —— 它会把任务当不存在丢掉，任务永远停在 queued")
+
+
 # ---------------------------------------------------------------- 超时与失败
 
 async def test_timeout_marks_failed_timeout(api, client, runner_factory):

@@ -10,14 +10,13 @@
 """
 from __future__ import annotations
 
-import json
 import shutil
 import sys
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
-from recipe_planner.infra import settings
-from recipe_planner.models import PlanRecord, PlanResult, RecipeDB
+from recipe_planner.infra import jsonfile, settings
+from recipe_planner.models import PlanRecord, PlanResult, RecipeDB, parse_slot_key
 from recipe_planner.storage import migrate, sync_bridge
 from recipe_planner.storage.repositories import PlanRepo, ProfileRepo, RecipeRepo
 
@@ -43,13 +42,18 @@ def _backup() -> Path:
 
 
 def _read_json(path: Path) -> dict:
+    """读源文件。
+
+    docs/11 §4.1 P0-2：**读不出来不能当成"内容为空"** —— 以前这里 `return {}`，
+    于是一个坏掉的 `saved_plans.json` 会打印"方案 0 份入库"然后**正常退出**，
+    看起来像"迁移成功了，只是没有方案"。现在读不出来就报错并留档。
+    """
     if not path.exists():
         return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        print(f"  ! 读不了 {path.name}: {exc}")
-        return {}
+        return jsonfile.read_json(path) or {}
+    except jsonfile.ArchiveBroken as exc:
+        raise SystemExit(f"源文件读不出来，先别迁移：{exc}") from exc
 
 
 def import_all() -> dict:
@@ -66,11 +70,13 @@ def import_all() -> dict:
     plans_raw = _read_json(DATA / "saved_plans.json")
     items = plans_raw.get("plans", []) if isinstance(plans_raw, dict) else plans_raw
     n_plans = 0
+    broken: list[str] = []
     for item in items or []:
         try:
             rec = PlanRecord.model_validate(item)
         except Exception as exc:
-            print(f"  ! 跳过一条损坏的方案: {exc}")
+            # 不能装作没看见：漏掉一份方案，用户以后只会发现"我那一周没了"
+            broken.append(f"{item.get('id', '?') if isinstance(item, dict) else '?'}: {exc}")
             continue
         if sync_bridge.run(PlanRepo.get_record(rec.id)) is not None:
             continue
@@ -85,10 +91,21 @@ def import_all() -> dict:
         if rec.done_days:
             for day in rec.done_days:
                 sync_bridge.run(PlanRepo.set_done(saved.id, day, True))
+        # docs/10 起"做完了"是按顿记的：漏了这一段，迁移之后多餐的"做完了"就全丢了
+        for slot in rec.done_slots or []:
+            parsed = parse_slot_key(slot)
+            if parsed is None:
+                broken.append(f"{rec.id}: 认不出的做完了标记 {slot!r}")
+                continue
+            sync_bridge.run(PlanRepo.set_done(saved.id, parsed[0], True, parsed[1]))
         if rec.checked_items:
             sync_bridge.run(PlanRepo.set_checked(saved.id, rec.checked_items))
         n_plans += 1
     print(f"方案 {n_plans} 份入库")
+    if broken:
+        print(f"  ! 有 {len(broken)} 处没导进去（下面每一条都要人看一眼）：")
+        for line in broken:
+            print(f"    - {line}")
 
     prof = _read_json(DATA / "customer_profile.json")
     if prof:
@@ -99,10 +116,11 @@ def import_all() -> dict:
 
     archived = sync_bridge.run(PlanRepo.archive_old(settings.plan_retention_weeks()))
     print(f"按保留策略归档 {archived} 份（超过 {settings.plan_retention_weeks()} 周）")
-    return {"recipes": n_recipes, "plans": n_plans, "backup": str(backup)}
+    return {"recipes": n_recipes, "plans": n_plans, "backup": str(backup), "broken": broken}
 
 
 if __name__ == "__main__":
     result = import_all()
     print("完成:", result)
-    sys.exit(0)
+    # 有东西没导进去就不能算成功（退出码非 0，脚本/人一眼能看出来）
+    sys.exit(2 if result["broken"] else 0)

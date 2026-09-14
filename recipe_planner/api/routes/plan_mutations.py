@@ -6,12 +6,15 @@
    测试会对比改动前后的数据库快照，多动了别的地方就是 bug。
 2. **响应即回执**：返回 `{kind, message, data, action_log_id, undo_hint, next_steps}`，
    `message` 是人话（05 §5.3 句式），`undo_hint` 是**精确逆操作**。
-3. **先落库再回话**：路由在返回前 `await session.commit()`，否则客户端可能看到 200 而库没变
-   （Session 中间件是在响应发出之后才提交的）。
+3. **先落库再回话，而且只提交一次、只提交在最末尾**（docs/11 §4.1 P0-3）：
+   Session 中间件是在响应发出**之后**才提交的，所以路由必须自己提交，否则客户端可能看到
+   200 而库没变。但提交**之后不能再有任何可能失败的事** —— 中间件的"按状态码回滚"对
+   已提交的写是空操作，于是"报错但已生效"就会发生（客户端收到 500，数据其实已经改了）。
+   所以规矩是：**先把活儿干完、把回执拼好，最后一句才是 `await _commit()`**。
+   （另一处例外是 `POST /plans`：它必须在**把任务交给执行器之前**提交，见 `routes/jobs.py`。）
 """
 from __future__ import annotations
 
-from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends
@@ -20,8 +23,8 @@ from recipe_planner import actions
 from recipe_planner import profile as prof
 from recipe_planner.models import PlanRecord, RecipeDB
 from recipe_planner.storage import async_adapters as data
-from recipe_planner.storage.engine import session_scope
 
+from .. import clock
 from ..deps import get_db, get_profile, require_record
 from ..errors import InvalidRequestError
 from ..schemas import (ChecksIn, DayOut, DayPatchIn, FeedbackIn, MutationOut, RateIn)
@@ -30,9 +33,8 @@ router = APIRouter()
 
 
 async def _commit() -> None:
-    """把本次请求的会话提交掉（写接口必须在返回前调用）。"""
-    async with session_scope() as session:          # 请求级会话，拿到的是同一个
-        await session.commit()
+    """提交本次请求（**只许在路由最后调用一次**，见模块开头的第 3 条）。"""
+    await data.commit()
 
 
 def _envelope(outcome: actions.ActionOutcome, log_id: Optional[int],
@@ -50,7 +52,6 @@ async def _persist_plan(record: PlanRecord, outcome: actions.ActionOutcome, db: 
         await data.update_result(record.id, result, note or "")
     log_id = await data.add_log(record.id, outcome.kind, outcome.message,
                                 {**outcome.extra, "undo_hint": outcome.undo or {}})
-    await _commit()
     return log_id
 
 
@@ -88,16 +89,22 @@ async def patch_day(body: DayPatchIn, day: int, record: PlanRecord = Depends(req
         outcome = actions.mark_done(record, day, body.done, meal)
         await data.set_done(record.id, day, body.done, body.meal)
         log_id = await data.add_log(record.id, outcome.kind, outcome.message, outcome.extra)
+        out = _envelope(outcome, log_id, {"day": day, "done": body.done, "meal": body.meal})
         await _commit()
-        return _envelope(outcome, log_id, {"day": day, "done": body.done, "meal": body.meal})
+        return out
     else:                                                  # pragma: no cover - Literal 兜住了
         raise InvalidRequestError("不认识的改动类型。")
 
     log_id = await _persist_plan(record, outcome, db)
     updated = await _fresh(record, db)
     # 所有写入接口的 data 形状保持一致：day_detail + 各自的附加字段
-    return _envelope(outcome, log_id,
-                     {"day_detail": _day_payload(updated or record, day, db, meal), **outcome.extra})
+    # 提交放在**最后一句**（docs/11 §4.1 P0-3）：拼回执这中间任何一步失败，
+    # 都不该留下"报错但已经改库"的痕迹。
+    out = _envelope(outcome, log_id,
+                    {"day_detail": _day_payload(updated or record, day, db, meal),
+                     **outcome.extra})
+    await _commit()
+    return out
 
 
 @router.post("/plans/{plan_id}/dishes/{day}/{recipe_id}/feedback", response_model=MutationOut,
@@ -129,7 +136,9 @@ async def dish_feedback(body: FeedbackIn, day: int, recipe_id: str,
         payload["profile"] = {"liked_dishes": new_profile.get("liked_dishes", []),
                              "disliked_dishes": new_profile.get("disliked_dishes", []),
                              "signature": prof.profile_signature_of(new_profile)}
-    return _envelope(outcome, log_id, payload)
+    out = _envelope(outcome, log_id, payload)
+    await _commit()
+    return out
 
 
 @router.post("/plans/{plan_id}/save-money", response_model=MutationOut, tags=["plans"],
@@ -143,7 +152,9 @@ async def save_money(record: PlanRecord = Depends(require_record),
     payload = dict(outcome.extra)
     payload["day_detail"] = _day_payload(updated or record, outcome.extra.get("day", 1), db,
                                          outcome.extra.get("meal"))
-    return _envelope(outcome, log_id, payload)
+    out = _envelope(outcome, log_id, payload)
+    await _commit()
+    return out
 
 
 @router.post("/plans/{plan_id}/rate", response_model=MutationOut, tags=["plans"])
@@ -156,13 +167,14 @@ async def rate_day(body: RateIn, record: PlanRecord = Depends(require_record),
     new_profile = profile
     for name in outcome.extra["dishes"]:
         new_profile = prof.apply_rating_to_dict(new_profile, name, body.score, known,
-                                               source="做完了打分", today=date.today())
+                                               source="做完了打分", today=clock.today())
     await data.save_profile(new_profile)
     await data.set_done(record.id, body.day, True, body.meal)
     log_id = await data.add_log(record.id, outcome.kind, outcome.message, outcome.extra)
+    out = _envelope(outcome, log_id, {"day": body.day, "score": body.score,
+                                      "meal": body.meal, "dishes": outcome.extra["dishes"]})
     await _commit()
-    return _envelope(outcome, log_id, {"day": body.day, "score": body.score,
-                                       "meal": body.meal, "dishes": outcome.extra["dishes"]})
+    return out
 
 
 @router.get("/plans/{plan_id}/shopping/checks", tags=["shopping"])
@@ -179,9 +191,10 @@ async def put_checks(body: ChecksIn, record: PlanRecord = Depends(require_record
     outcome = actions.set_checks(record, body.names)
     await data.set_checked(record.id, sorted(set(body.names)))
     log_id = await data.add_log(record.id, outcome.kind, outcome.message, outcome.extra)
+    out = _envelope(outcome, log_id, {"names": sorted(set(body.names)),
+                                      "total": outcome.extra["total"]})
     await _commit()
-    return _envelope(outcome, log_id, {"names": sorted(set(body.names)),
-                                       "total": outcome.extra["total"]})
+    return out
 
 
 async def _fresh(record: PlanRecord, db: RecipeDB) -> Optional[PlanRecord]:

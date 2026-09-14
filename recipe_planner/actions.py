@@ -20,9 +20,6 @@ from recipe_planner.core import (cheapest_swap, fastest_day, refresh_result, res
 from recipe_planner.models import (ChosenDish, DayPlan, PlanRecord, PlanResult, RecipeDB,
                                    UserConstraints)
 
-MAX_UNDO_SNAPSHOT = 7          # 一周最多 7 天
-
-
 class ActionError(Exception):
     """领域层的"这件事做不了"：人话 + 可点击的下一步（由 api/errors.py 转成 problem+json）。"""
 
@@ -107,21 +104,24 @@ def _day_count(record: PlanRecord) -> int:
     return len({p.day for p in record.result.days}) or len(record.result.days)
 
 
-def _undo_days(record: PlanRecord, days: list[DayPlan]) -> list[DayPlan]:
-    """给撤销用：把改动前的这些天原样存下来。"""
-    return [p.model_copy(deep=True) for p in days[:MAX_UNDO_SNAPSHOT]]
-
-
-def _replace_day_undo(plan_id: str, day: int, previous: list[DayPlan],
+def _replace_day_undo(plan_id: str, day: int, before: Optional[DayPlan],
                       meal: Optional[str] = None) -> dict:
     """精确逆操作：把**这一顿**恢复成改动前的样子（比"再换一次"可靠）。
 
     docs/10：逆操作也必须点名是哪一顿。不带 `meal` 的话，撤销"今晚换的一道"会落到早餐上 ——
     而且改的是菜、看不出痕迹，是最难查的一类错。
+
+    `before` 直接传**改动前的那一条 `DayPlan`**（调用方手里的 `plan_day`），不做二次查找。
+
+    docs/11 §4.1 P0-1：这里原来是"从一份按 `days[:7]` 截断的快照里再查一次槽位"。
+    一天三顿时 `days` 是**按天×餐**排列的 21 条，而快照只装得下前 7 条
+    （第 1 天三顿 + 第 2 天三顿 + 第 3 天早餐），于是第 3 天午餐之后**每一个**槽位都查不到，
+    `recipe_ids` 落成 `[]` —— 而 `replace_day([])` 的语义是"这一顿不做饭"。
+    用户点「撤销」以为在恢复，实际把那一顿的菜删了。21 个槽位里有 15 个会中招。
+    现在改成直接收下那一条，**不再有"查不到"这个分支**。
     """
-    slot = slot_of(previous, day, meal)
     body: dict = {"op": "replace_day",
-                  "recipe_ids": [d.recipe_id for d in (slot.dishes if slot else [])]}
+                  "recipe_ids": [d.recipe_id for d in (before.dishes if before else [])]}
     body.update(_meal_field(meal))                      # 多餐时才带 meal
     return {"label": "撤销", "method": "PATCH", "path": f"/api/v1/plans/{plan_id}/days/{day}",
             "body": body}
@@ -168,7 +168,6 @@ def skip(record: PlanRecord, db: RecipeDB, day: int,
     place = _place(c, plan_day.day, plan_day.meal if c.is_multi_meal() else None)
     if plan_day.skipped:
         raise ActionError("already_skipped", f"{place}本来就没安排做饭。")
-    before = _undo_days(record, record.result.days)
     dropped = [_name(db, d.recipe_id) for d in plan_day.dishes]
     days = skip_day(record.result.days, day, meal=meal)
     msg = f"已把{place}标记成不做饭"
@@ -178,7 +177,7 @@ def skip(record: PlanRecord, db: RecipeDB, day: int,
     return ActionOutcome(
         kind="skip", message=msg, days=days,
         extra={"skipped_day": day, "dropped": dropped, **_meal_field(meal)},
-        undo={**_replace_day_undo(record.id, day, before, meal), "label": "撤销：改回来做"})
+        undo={**_replace_day_undo(record.id, day, plan_day, meal), "label": "撤销：改回来做"})
 
 
 def restore(record: PlanRecord, db: RecipeDB, day: int,
@@ -189,7 +188,6 @@ def restore(record: PlanRecord, db: RecipeDB, day: int,
     place = _place(c, plan_day.day, plan_day.meal if c.is_multi_meal() else None)
     if not plan_day.skipped:
         raise ActionError("not_skipped", f"{place}本来就在做饭。")
-    before = _undo_days(record, record.result.days)
     days = restore_day(record.result.days, day, db, c, meal=meal)
     slot = slot_of(days, day, meal)
     picked = [_name(db, d.recipe_id) for d in (slot.dishes if slot else [])]
@@ -198,7 +196,7 @@ def restore(record: PlanRecord, db: RecipeDB, day: int,
     return ActionOutcome(
         kind="restore", message=msg, days=days,
         extra={"restored_day": day, "dishes": picked, **_meal_field(meal)},
-        undo=_replace_day_undo(record.id, day, before, meal))
+        undo=_replace_day_undo(record.id, day, plan_day, meal))
 
 
 def set_people(record: PlanRecord, db: RecipeDB, day: int, people: int,
@@ -213,7 +211,6 @@ def set_people(record: PlanRecord, db: RecipeDB, day: int, people: int,
     base = c.people
     if people < 1:
         raise ActionError("invalid_people", "人数至少要是 1 个人。", status=422)
-    before = _undo_days(record, record.result.days)
     target = plan_day.model_copy(deep=True)
     target.people = None if people == base else people
     days = with_slot(record.result.days, plan_day, target)
@@ -244,7 +241,6 @@ def faster(record: PlanRecord, db: RecipeDB, day: int,
         raise ActionError("already_fastest", f"{place}已经是最快的组合了，想更快得放宽一点。",
                           _relax_steps("time"), status=409)
     new_days, recipes = got
-    before = _undo_days(record, record.result.days)
     minutes = sum(r.time_min for r in recipes)
     names = "、".join(r.name for r in recipes)
     msg = (f"已把{place}换成快手组合：「{names}」，约 {minutes} 分钟就能上桌，"
@@ -253,7 +249,7 @@ def faster(record: PlanRecord, db: RecipeDB, day: int,
         kind="faster", message=msg, days=new_days,
         extra={"day": day, "dishes": [r.name for r in recipes], "minutes": minutes,
                **_meal_field(meal)},
-        undo=_replace_day_undo(record.id, day, before, meal))
+        undo=_replace_day_undo(record.id, day, plan_day, meal))
 
 
 def swap(record: PlanRecord, db: RecipeDB, day: int, recipe_id: str,
@@ -266,7 +262,6 @@ def swap(record: PlanRecord, db: RecipeDB, day: int, recipe_id: str,
         raise ActionError("dish_not_in_day", f"{place}没有这道菜。",
                           [{"op": "view_plan", "label": "看看这一周"}], status=404)
     old_name = _name(db, recipe_id)
-    before = _undo_days(record, record.result.days)
     new_days, new_recipe = swap_dish(record.result.days, day, recipe_id, db, c, meal)
     if new_recipe is None:
         raise ActionError(
@@ -277,7 +272,7 @@ def swap(record: PlanRecord, db: RecipeDB, day: int, recipe_id: str,
     return ActionOutcome(
         kind="swap", message=msg, days=new_days,
         extra={"day": day, "from": old_name, "to": new_recipe.name, **_meal_field(meal)},
-        undo=_replace_day_undo(record.id, day, before, meal))
+        undo=_replace_day_undo(record.id, day, plan_day, meal))
 
 
 def replace_day(record: PlanRecord, db: RecipeDB, day: int,
@@ -296,7 +291,6 @@ def replace_day(record: PlanRecord, db: RecipeDB, day: int,
                           [{"op": "view_plan", "label": "看看这一周"}], status=422)
     if len(set(recipe_ids)) != len(recipe_ids):
         raise ActionError("duplicate_recipe", "同一顿里不能重复同一道菜。", status=422)
-    before = _undo_days(record, record.result.days)
     old_reasons = {d.recipe_id: d.reason for p in record.result.days for d in p.dishes}
     target = plan_day.model_copy(deep=True)
     target.skipped = not recipe_ids
@@ -309,7 +303,7 @@ def replace_day(record: PlanRecord, db: RecipeDB, day: int,
         message=(f"已把{place}换成「{'、'.join(names)}」，{_other_days_text(_day_count(record), day)}。"
                  if names else f"已把{place}标记成不做饭，{_other_days_text(_day_count(record), day)}。"),
         days=days, extra={"day": day, "dishes": names, **_meal_field(meal)},
-        undo=_replace_day_undo(record.id, day, before, meal))
+        undo=_replace_day_undo(record.id, day, plan_day, meal))
 
 
 def mark_done(record: PlanRecord, day: int, done: bool = True,
@@ -381,7 +375,6 @@ def feedback(record: PlanRecord, db: RecipeDB, day: int, recipe_id: str, op: str
             undo=_profile_undo(record.id, recipe_id, day, previous_profile))
 
     if op == "dislike":
-        before = _undo_days(record, record.result.days)
         new_days, new_recipe = swap_dish(record.result.days, day, recipe_id, db, c, meal)
         if new_recipe is not None:
             msg = (f"已记住不喜欢「{name}」，{place}换成「{new_recipe.name}」，以后不再出现。")
@@ -429,14 +422,18 @@ def save_money(record: PlanRecord, db: RecipeDB) -> ActionOutcome:
                           [{"op": "relax_budget", "label": "预算放宽一点"}])
     new_days, day_no, meal, old_r, new_r, saving = got
     place = _place(c, day_no, meal)
-    before = _undo_days(record, record.result.days)
+    # 撤销要的是**被动的那一顿改动前**的样子 —— 它在原菜单里直接查，不做截断快照。
+    prev = slot_of(record.result.days, day_no, meal)
+    if prev is None:                       # pragma: no cover - 防御：day_no/meal 就是这份菜单里挑出来的
+        raise ActionError("undo_snapshot_missing", "这一顿的改动记录没取到，暂时不能撤销。",
+                          [{"op": "view_plan", "label": "看看这一周"}])
     msg = (f"已把{place}的「{old_r.name}」换成「{new_r.name}」，"
            f"这周省了约 ¥{saving:.0f}（{_other_days_text(_day_count(record), day_no)}）。")
     return ActionOutcome(
         kind="save", message=msg, days=new_days,
         extra={"day": day_no, "meal": meal, "from": old_r.name, "to": new_r.name,
                "saving_yuan": round(saving, 2)},
-        undo=_replace_day_undo(record.id, day_no, before, meal))
+        undo=_replace_day_undo(record.id, day_no, prev, meal))
 
 
 # ---------------------------------------------------------------- 买菜清单

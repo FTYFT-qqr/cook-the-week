@@ -280,7 +280,14 @@ def main() -> int:
     res.days, _rep = swap_dish(res.days, target_day, target_rid, db, cc)
     _refresh(res, db)
     check("刷新后清单非空", len(res.shopping) > 0)
-    check("刷新后费用已重算", res.estimated_cost_yuan != old_cost or True)
+    expected_cost = round(sum(db.by_id(d.recipe_id).cost_yuan * cc.people / 2.0
+                              for p in res.days for d in p.dishes
+                              if db.by_id(d.recipe_id)), 2)
+    # 口径：总费用 = 菜单里每道菜的成本 × 人数 / 2（菜谱是 2 人份基准）。
+    # 原来是 `!= old_cost or True` —— 恒真，等于没检查（docs/11 §3.3 质量问题 2）。
+    check("刷新后费用已重算（等于按菜单重算的值）",
+          res.estimated_cost_yuan == expected_cost,
+          f"{old_cost} → {res.estimated_cost_yuan}，按菜单重算得 {expected_cost}")
     check("刷新后校验无硬错误", res.final, "; ".join(i.message for i in res.issues if i.level == "error"))
     menu_ings = {
         ing.name
@@ -339,10 +346,25 @@ def main() -> int:
               len(store.load_records()) == store.MAX_PLANS)
         check("存档文件写在指定路径", tmp_plans.exists() and tmp_plans.stat().st_size > 100)
 
+        # 留档文件会在多次运行之间累积，所以只比对"这一次新产生的那一个"
+        broken_before = set(plan_dir.glob("plans.json.broken-*"))
         tmp_plans.write_text("{ 这不是合法 json", encoding="utf-8")
-        check("坏掉的存档文件不会让页面崩", store.load_records() == [])
+        try:
+            store.load_records()
+            check("坏掉的存档必须报错（不能当成空存档）", False, "居然被读成了空存档")
+        except store.ArchiveBroken as exc:
+            check("坏掉的存档必须报错（不能当成空存档）", True, str(exc)[:40])
+        new_broken = sorted(set(plan_dir.glob("plans.json.broken-*")) - broken_before)
+        check("坏文件被原样留档（下一个保存覆盖不到它）",
+              len(new_broken) == 1
+              and new_broken[0].read_text(encoding="utf-8") == "{ 这不是合法 json",
+              str([b.name for b in new_broken]))
         tmp_plans.write_text('{"version":1,"plans":[{"id":"x"}]}', encoding="utf-8")
-        check("缺字段的单条被跳过而不是整体崩", store.load_records() == [])
+        try:
+            store.load_records()
+            check("缺字段的单条也要报错（照旧写回去就等于删掉那份方案）", False, "居然被读成了空存档")
+        except store.ArchiveBroken as exc:
+            check("缺字段的单条也要报错（照旧写回去就等于删掉那份方案）", True, str(exc)[:40])
     os.environ.pop("RECIPE_PLAN_FILE", None)
 
     check("周期标签能跨月", store.week_label("2026-08-31") == "8/31–9/6", store.week_label("2026-08-31"))
@@ -537,7 +559,9 @@ def main() -> int:
           any(r.difficulty == "较难" for r in retrieve_candidates(db, cc_any)))
 
     got_save = cheapest_swap(res_f.days, db, cc_f)
-    check("E-05 省钱换菜能算出差额", got_save is None or got_save[5] > 0,
+    # 这份约束（预算 80/人/天、3 天每顿 2 道）里一定存在更省的换法；`is None` 也算过
+    # 就是恒真断言（docs/11 §3.3 质量问题 2）—— 真要是 None，说明"省钱"这个功能坏了。
+    check("E-05 省钱换菜能算出差额", got_save is not None and got_save[5] > 0,
           f"{got_save[5] if got_save else 'None'}")
     if got_save:
         # 返回 (菜单, 第几天, 哪一顿, 旧菜, 新菜, 省了多少) —— docs/10 起多了"哪一顿"

@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 import httpx
 import pytest
 
@@ -301,6 +303,40 @@ async def test_current_plan_day_query_switches_the_day(api, client):
     assert auto["day"] in range(1, 4)                      # 自动判定仍然是 1–3 天之一
     # 越界的 day 由 FastAPI 挡掉（1–7），不是悄悄按自动判定糊过去
     assert (await client.get("/api/v1/plans/current", params={"day": 9})).status_code == 422
+
+
+# ---------------------------------------------------------------- 日历的四种位置（docs/11 §3.3 P1-6）
+
+async def _tonight_at(client, monkeypatch, when: datetime) -> dict:
+    """把接口层的"现在"挪到某一刻，再看今晚页。"""
+    from recipe_planner.api import clock
+
+    monkeypatch.setattr(clock, "now", lambda: when)
+    monkeypatch.setattr(clock, "today", lambda: when.date())
+    r = await client.get("/api/v1/plans/current")
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+@pytest.mark.parametrize("when,state,day,needle", [
+    (datetime(2026, 9, 10, 18, 0), "planned", 1, "还没开始"),     # 种子周之前
+    (datetime(2026, 9, 14, 18, 0), "planned", 1, ""),             # 周一傍晚（种子周第一天）
+    (datetime(2026, 9, 14, 23, 0), "planned", 2, "22:00"),        # 过了 22:00 先看明天
+    (datetime(2026, 9, 20, 18, 0), "week_over", 1, "已经吃完"),   # 种子周之后
+])
+async def test_今晚状态在日历的四种位置都对(client, monkeypatch, when, state, day, needle):
+    """种子周是 **9/14–9/16**（周一排 3 天）。
+
+    这四种位置原来靠"真实今天"判定，而种子周是写死的 —— 过了 2026-09-21，
+    同一个 `planned` 会集体变成 `week_over`，也就是**同一份代码、同一批断言随日历变色**。
+    现在接口层的时间来自 `recipe_planner/api/clock.py`，测试把它钉死，断言也就能写确切。
+    """
+    body = await _tonight_at(client, monkeypatch, when)
+    assert body["state"] == state, body
+    assert body["day"] == day, body
+    if needle:
+        text = body["kicker"] + body["hint"] + body["meta"]
+        assert needle in text, text
 
 
 # ---------------------------------------------------------------- 档案

@@ -62,6 +62,11 @@ async def create_plan(body: PlanCreateIn) -> JobAcceptedOut:
     repo = data.job_repo()
     before = await repo.active_count(kind="plan_week")
     job = await repo.create(kind="plan_week", request=payload)
+    # 任务行必须**先落库**再交给执行器：执行器在另一条线程 + 另一个事件循环里，
+    # 未提交的写它看不见 —— 会把这个任务当成"不存在"丢掉，于是它**永远停在 queued**
+    # （界面一直显示"排队中"，用户以为在等）。docs/11 §4.1 P0-3 的同一条根因，
+    # 这一处是**唯一**该在中途提交的地方：提交发生在把活儿交出去之前。
+    await data.commit()
     get_runner().submit(job["id"])
 
     queue_position = before + 1

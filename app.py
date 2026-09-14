@@ -36,6 +36,7 @@ from recipe_planner import ui_state as ui
 from recipe_planner.core import (cheapest_swap, fastest_day, refresh_result,
                                  restore_day, swap_dish, where_text)
 from recipe_planner.db import load_db
+from recipe_planner.infra.jsonfile import ArchiveBroken
 from recipe_planner.infra.settings import storage_kind as _storage_kind
 from recipe_planner.infra.settings import use_api as _use_api
 from recipe_planner.models import (
@@ -426,9 +427,23 @@ def _commit_plan() -> None:
         st.session_state["result"] = rec.result
 
 
+def _archive_broken_page(exc: ArchiveBroken) -> None:
+    """存档读不出来时的一页人话（docs/11 §4.1 P0-2）。
+
+    **绝不能**当成"还没有存档"往下跑：那样下面的保存动作会拿空存档覆盖历史。
+    坏文件已经原样留档（`xxx.json.broken-<时间戳>`），这里只要说清楚 + 停下来。
+    """
+    st.error(str(exc))
+    st.caption("我没有覆盖也没有重建它。确认修好之前，先别在这台机器上保存新的方案。")
+    st.stop()
+
+
 # 首次打开：磁盘上有存档就直接呈现「我这一周」，而不是又一张空表单
 if st.session_state["plan_inputs"] is None and st.session_state["result"] is None:
-    _rec = store.latest_record()
+    try:
+        _rec = store.latest_record()
+    except ArchiveBroken as exc:
+        _archive_broken_page(exc)
     if _rec is not None:
         _load_record(_rec)
         st.session_state["revisit"] = _rec.id
@@ -1226,8 +1241,13 @@ def _meal_head(plan_day, db, c) -> None:
 
 
 def _dish_actions(plan_day: int, dish, is_loved: bool, is_hated: bool, locked: bool = False):
-    """每道菜的操作：换一道 / 定住 / 喜欢 / 不喜欢（E-02 定住，去掉 emoji）。"""
-    """每道菜的操作：换一道 / 定住 / 喜欢 / 不喜欢（E-02 定住，去掉 emoji）。"""
+    """每道菜的操作：换一道 / 定住 / 喜欢 / 不喜欢（E-02 定住，去掉 emoji）。
+
+    docs/09 待决策(1) 已裁定（2026-09-14）：**「喜欢」保持"再点一次取消"的开关语义**，
+    但状态必须写在按钮上、并且把"再点一次会取消"说在说明里 ——
+    同一个页面上「打分」是"确保"语义（好吃就是好吃，再点不会变），两种语义并存的
+    风险只能靠"说清楚"来消，不能靠用户猜。
+    """
     picked = None
     rid = dish.recipe_id
     with st.container(key=f"dishacts_{plan_day}_{rid}"):
@@ -1239,15 +1259,20 @@ def _dish_actions(plan_day: int, dish, is_loved: bool, is_hated: bool, locked: b
         with row[1]:
             if st.button("已定住" if locked else "定住", key=f"lock_{plan_day}_{rid}",
                          use_container_width=True,
-                         help="定住这道菜：以后重排也会保留它"):
+                         help="已定住：以后重排也会保留它，再点一次取消定住" if locked
+                              else "定住这道菜：以后重排也会保留它"):
                 picked = ("unlock" if locked else "lock", plan_day, rid)
         with row[2]:
             if st.button("已喜欢" if is_loved else "喜欢", key=f"like_{plan_day}_{rid}",
-                         use_container_width=True, help="合口味：以后多安排这道菜"):
+                         use_container_width=True,
+                         help="已经喜欢了：以后多安排这道菜。再点一次就是取消喜欢" if is_loved
+                              else "合口味：以后多安排这道菜"):
                 picked = ("like", plan_day, rid)
         with row[3]:
             if st.button("已排除" if is_hated else "不喜欢", key=f"hate_{plan_day}_{rid}",
-                         use_container_width=True, help="不合口味：换掉并记住"):
+                         use_container_width=True,
+                         help="已经排除：以后不再出现。再点一次就恢复成「没表态」" if is_hated
+                              else "不合口味：换掉并记住"):
                 picked = ("dislike", plan_day, rid)
     return picked
 
@@ -1957,11 +1982,15 @@ def render_profile() -> None:
                     "</div></div>", unsafe_allow_html=True)
             with row[1]:
                 if st.button("已喜欢" if is_loved else "喜欢", key=f"pf_like_{r.id}",
-                             use_container_width=True):
+                             use_container_width=True,
+                             help="已经喜欢了。再点一次就是取消喜欢" if is_loved
+                                  else "合口味：以后多安排这道菜"):
                     pf_feedback = (r.name, "like")
             with row[2]:
                 if st.button("已排除" if is_hated else "不喜欢", key=f"pf_hate_{r.id}",
-                             use_container_width=True):
+                             use_container_width=True,
+                             help="已经排除。再点一次就恢复成「没表态」" if is_hated
+                                  else "不合口味：以后不再出现"):
                     pf_feedback = (r.name, "dislike")
 
         if pf_feedback:
@@ -1982,6 +2011,10 @@ _PAGE_RENDERERS = {
 }
 try:
     _PAGE_RENDERERS.get(st.session_state["page"], render_tonight)()
+except ArchiveBroken as exc:
+    # 存档文件读不出来（docs/11 §4.1 P0-2）：**绝不能**当成"还没有存档"继续跑 ——
+    # 那样下一次保存就拿空基覆盖历史。这里把情况原样说清楚，并告诉用户原文件在哪。
+    _archive_broken_page(exc)
 except api.ClientError as exc:
     # 服务端中途出问题（进程被杀、重启、超时）：给一页人话 + 可以点的下一步，
     # 而不是把英文堆栈直接摔在客户脸上（05 §5.1）。开头的连接守卫只管"一开始就连不上"，

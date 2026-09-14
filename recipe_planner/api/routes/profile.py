@@ -182,10 +182,8 @@ async def clear_profile(confirm: bool = Query(False, description="必须显式�
 
 
 async def _commit() -> None:
-    from recipe_planner.storage.engine import session_scope
-
-    async with session_scope() as session:
-        await session.commit()
+    """提交本次请求（与 `plan_mutations._commit` 同一件事，实现在 `async_adapters.commit`）。"""
+    await data.commit()
 
 
 @router.get("/profile/export", response_model=ProfileOut, tags=["profile"])

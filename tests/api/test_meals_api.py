@@ -242,3 +242,42 @@ async def test_单餐时接口形状与以前一致(api):
     assert [d["meal"] for d in detail["days"]][:1] == ["晚餐"]
     one = (await client.get(f"/api/v1/plans/{record.id}/days/1")).json()
     assert one["meal"] == "晚餐" and one["dishes"], "不给 meal 就是当天那一顿"
+
+
+# ---------------------------------------------------------------- 撤销（docs/11 §4.1 P0-1）
+
+
+@pytest_asyncio.fixture()
+async def three_day_meal_api(api):
+    """(client, plan_id) —— 库里多一份「3 天 × 3 顿」的方案（**9 个槽位**）。
+
+    9 > 7 是关键：旧的撤销快照按 `days[:7]` 截断，第 8 个槽位之后就查不到
+    "改动前是什么"了。2 天 × 3 顿只有 6 个槽位，正好盖不住这个 bug。
+    """
+    client, _app, _record = api
+    await RecipeRepo.upsert_many(EXTRA)
+    record = await PlanRepo.save_plan(three_meal_result(days=3), START, "三餐版 3 天")
+    return client, record.id
+
+
+@pytest.mark.asyncio
+async def test_撤销要把那一顿原样还回来(three_day_meal_api):
+    """点「撤销」不能变成"删掉这一顿" —— 9 个槽位逐一来一遍。
+
+    先「不做饭」，再拿回执里的 `undo_hint` **原样**发回去；整份菜单必须逐槽回到改动前。
+    """
+    client, plan_id = three_day_meal_api
+    before = _slots(await _detail(client, plan_id))
+    assert len(before) == 9, "3 天 × 3 顿"
+
+    for (day, meal), ids in before.items():
+        r = await client.patch(f"/api/v1/plans/{plan_id}/days/{day}",
+                               json={"op": "skip", "meal": meal})
+        assert r.status_code == 200, r.text
+        hint = r.json()["undo_hint"]
+        assert hint["body"]["recipe_ids"] == ids, (
+            f"第 {day} 天{meal}的撤销里没有原来的菜 —— 原样发出去就变成了「删掉这一顿」")
+        r2 = await client.request(hint["method"], hint["path"], json=hint["body"])
+        assert r2.status_code == 200, r2.text
+
+    assert _slots(await _detail(client, plan_id)) == before, "撤销之后必须逐槽回到改动前"

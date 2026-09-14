@@ -744,7 +744,7 @@ if _fast:
     _mins = [db.by_id(d.recipe_id).time_min for d in _res.days[0].dishes if db.by_id(d.recipe_id)]
     _old_mins = [db.by_id(rid).time_min for rid in _day_before if db.by_id(rid)]
     check("今晚确实换成了更快的组合（或诚实告知已最快）",
-          (max(_mins) <= max(_old_mins)) if _mins else True, f"{_old_mins} -> {_mins}")
+          bool(_mins) and max(_mins) <= max(_old_mins), f"{_old_mins} -> {_mins}")
     check("给出了回执说明其他天没动", "其他六天没动" in page_text(at) or "更快" in page_text(at),
           page_text(at)[:200])
 

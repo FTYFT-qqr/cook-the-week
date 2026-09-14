@@ -17,6 +17,7 @@ from recipe_planner import tonight as tonight_mod
 from recipe_planner.models import PlanRecord, RecipeDB
 from recipe_planner.storage import async_adapters as data
 
+from .. import clock
 from ..deps import get_current_record, get_db, get_records, require_record
 from ..errors import ConfirmRequiredError, InvalidRequestError, NotFoundError, step
 from ..schemas import (ConstraintsOut, DayOut, DishOut, IssueOut, MutationOut, PlanDetailOut,
@@ -26,11 +27,12 @@ router = APIRouter()
 
 
 async def _commit() -> None:
-    """写接口必须在返回前提交（Session 中间件是响应发出**之后**才提交的）。"""
-    from recipe_planner.storage.engine import session_scope
+    """写接口必须在返回前提交（Session 中间件是响应发出**之后**才提交的）。
 
-    async with session_scope() as session:          # 请求级会话，拿到的是同一个
-        await session.commit()
+    三处同名小函数（这里 / `plan_mutations` / `profile`）都只是 `data.commit()` 的转发 ——
+    真正的实现与"为什么只许提交一次、只许提交在最后"写在 `async_adapters.commit()` 的注释里。
+    """
+    await data.commit()
 
 
 def _slot(record: PlanRecord, day: int, meal: Optional[str] = None):
@@ -128,8 +130,12 @@ def _tonight_payload(record: Optional[PlanRecord], db: RecipeDB,
 
     docs/10：多餐时必须点名看哪一顿（不给 = 当天最后一顿）。界面「今天」页一天要问三顿，
     而且拿这一顿的 `meal` 去决定"做完了/来客人了"落在哪 —— 少了它全会落到晚餐上。
+
+    时间从 `clock` 取、**不写 `datetime.now()`**（docs/11 P1-6 的日期炸弹）：
+    状态判定依赖"今天/现在"，而测试的种子周是写死的，测试要能把它钉死。
     """
-    payload = tonight_mod.tonight_view(record, db, day=day, meal=meal).to_dict()
+    payload = tonight_mod.tonight_view(record, db, today=clock.today(), now=clock.now(),
+                                       day=day, meal=meal).to_dict()
     payload["plan_id"] = record.id if record else None
     return TonightOut(**payload)
 

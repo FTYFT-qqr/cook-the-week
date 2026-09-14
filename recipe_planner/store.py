@@ -20,6 +20,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
+from recipe_planner.infra.jsonfile import ArchiveBroken, read_json, write_json
 from recipe_planner.models import PlanRecord as PlanRecordModel
 from recipe_planner.models import PlanResult, UserConstraints, slot_key
 
@@ -41,34 +42,35 @@ def plans_path() -> Path:
 
 
 def load_records() -> list[PlanRecord]:
-    """按「最近生成的在最前」返回全部存档；坏掉的单条会被跳过而不是让整页崩掉。"""
+    """按「最近生成的在最前」返回全部存档。
+
+    docs/11 §4.1 P0-2：**读不出来 ≠ 还没有存档**。以前这里 `except: return []`，
+    于是一个被写坏的文件会和"空存档"变成同一件事，紧接着的保存就拿空基覆盖了历史。
+    现在：文件不在 → 空列表（真的还没有）；文件在但读不出来 → 抛 `ArchiveBroken`。
+    """
     p = plans_path()
-    if not p.exists():
-        return []
-    try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-    except Exception:
+    data = read_json(p)
+    if data is None:
         return []
     raw = data.get("plans", []) if isinstance(data, dict) else data
     if not isinstance(raw, list):
-        return []
+        raise ArchiveBroken(p, f"内容是 {type(raw).__name__}，不是方案列表")
     out: list[PlanRecord] = []
     for item in raw:
         try:
             out.append(PlanRecord.model_validate(item))
-        except Exception:
-            continue
+        except Exception as exc:
+            # 单条读不出来也不能当没有 —— 照旧写回去就等于**删掉那一份方案**
+            raise ArchiveBroken(p, f"有一份方案读不出来（{type(exc).__name__}: {exc}）") from exc
     return out
 
 
 def _write(records: list[PlanRecord]) -> None:
-    p = plans_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "version": 1,
         "plans": [json.loads(r.model_dump_json()) for r in records[:MAX_PLANS]],
     }
-    p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_json(plans_path(), payload)
 
 
 # ---------------------------------------------------------------- 查询

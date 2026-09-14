@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -56,6 +57,26 @@ PROFILE = {
 }
 
 START = "2026-09-14"          # 周一
+
+# 种子周的周一傍晚：**接口层的"现在"在测试里被钉死在这一刻**（docs/11 §3.3 P1-6 日期炸弹）。
+PINNED_NOW = datetime(2026, 9, 14, 18, 0)
+
+
+@pytest.fixture(autouse=True)
+def frozen_clock(monkeypatch):
+    """把接口层的「现在」钉死在种子周里。
+
+    不钉的话，「今晚」的状态判定会拿**真实今天**去比一个写死的种子周：
+    过了 2026-09-21，同一批断言会集体从「计划中」翻成「这周已结束」——
+    测试随日历变红变绿，是最坏的一种"绿"。
+
+    注入点只有一处：`recipe_planner/api/clock.py`（接口层不许直接写 `datetime.now()`）。
+    """
+    from recipe_planner.api import clock
+
+    monkeypatch.setattr(clock, "now", lambda: PINNED_NOW)
+    monkeypatch.setattr(clock, "today", lambda: PINNED_NOW.date())
+    return PINNED_NOW
 
 
 def build_result(days: int = 3, people: int = 2, dishes_per_day: int = 2,

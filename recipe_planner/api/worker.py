@@ -136,10 +136,28 @@ class InProcessRunner:
 
     # ---------------------------------------------------------- 一个任务的完整生命周期
 
+    def _load_job(self, job_id: str, tries: int = 5, delay: float = 0.1) -> Optional[dict]:
+        """取任务行；刚提交的行可能**晚一点**才看得见，所以重试几次再放弃。
+
+        docs/11 §4.1 P0-3：任务是在另一条线程 + 另一个事件循环里跑的，
+        "还没提交"和"没有这一行"在第一次查询时长得一模一样。路由已经改成
+        "先提交再交给执行器"，这里再兜一层 —— 顺序万一被改回去，
+        表现要是一条 ERROR 日志，而不是一个永远转圈的任务。
+        """
+        for i in range(max(1, tries)):
+            job = sync_bridge.run(data.job_repo().get(job_id))
+            if job is not None:
+                return job
+            if i + 1 < tries:
+                time.sleep(delay)
+        return None
+
     def _run_one(self, job_id: str) -> None:
-        job = sync_bridge.run(data.job_repo().get(job_id))
+        job = self._load_job(job_id)
         if job is None:
-            log_event(logger, logging.WARNING, "任务不存在，跳过", job_id=job_id)
+            # 走到这里说明任务行**一直**读不到。绝不能静默丢掉：丢掉之后这个任务
+            # 永远停在 queued，界面上一直转圈（docs/11 §4.1 P0-3 那一类事故的表现）。
+            log_event(logger, logging.ERROR, "任务一直读不到，放弃执行", job_id=job_id)
             return
         if job["status"] == "cancelled" or self._cancelled(job_id):
             self._finish(job_id, "cancelled", stage="cancelled", progress=0.0)

@@ -7,10 +7,11 @@
 """
 from __future__ import annotations
 
-import json
 import os
 from datetime import date
 from pathlib import Path
+
+from recipe_planner.infra.jsonfile import ArchiveBroken, read_json, write_json
 
 DEFAULT_PROFILE_FILE = Path(__file__).resolve().parent.parent / "data" / "customer_profile.json"
 
@@ -20,21 +21,22 @@ def profile_path() -> Path:
 
 
 def load_profile() -> dict:
-    p = profile_path()
-    if p.exists():
-        try:
-            data = json.loads(p.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                return data
-        except Exception:
-            return {}
-    return {}
+    """读口味档案。
+
+    docs/11 §4.1 P0-2：以前读失败 `return {}` —— "读不出来"和"还没有档案"变成同一件事，
+    紧接着的一次保存就把整份档案（喜欢/不喜欢/评分/历史）覆盖成空。现在读不出来就报错，
+    坏文件原样留档。
+    """
+    data = read_json(profile_path())
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise ArchiveBroken(profile_path(), f"内容是 {type(data).__name__}，不是一份档案")
+    return data
 
 
 def save_profile(profile: dict) -> None:
-    p = profile_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(profile, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_json(profile_path(), profile)
 
 
 def _clean(names: list[str], known: set[str]) -> list[str]:

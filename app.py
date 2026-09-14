@@ -29,6 +29,7 @@ import time
 import streamlit as st
 
 from recipe_planner import client as api
+from recipe_planner import preference
 from recipe_planner import profile as prof
 from recipe_planner import reporting as rep
 from recipe_planner import store
@@ -363,6 +364,13 @@ def _form_meals() -> list[str]:
 def build_constraints(inp: dict) -> UserConstraints:
     liked = prof.liked_names(KNOWN_NAMES)
     disliked = prof.disliked_names(KNOWN_NAMES)
+    profile_now = prof.load_profile()
+    # 逐菜权重（docs/12 阶段二）：事件算"会衰减的记忆"，老档案里没有事件的部分补位。
+    # 没有信号时是**空字典** → `recipe_score` 回退到老的"喜欢就 +8"。
+    try:
+        weights = preference.dish_weights(profile=profile_now, by_name=NAME2ID)
+    except Exception:                      # 权重算不出来时**绝不能挡住排菜**
+        weights = {}
     return UserConstraints(
         people=inp["people"], days=inp["days"], dishes_per_day=int(inp["dishes_per_day"]),
         allergens=inp.get("allergens", []), spice_level=inp.get("spice", "不辣"),
@@ -375,6 +383,7 @@ def build_constraints(inp: dict) -> UserConstraints:
         must_include_recipes=list(inp.get("must_include") or []),  # 「定住 / 加一道」的菜
         liked_dishes=[NAME2ID[n] for n in liked if n in NAME2ID],
         disliked_dishes=[NAME2ID[n] for n in disliked if n in NAME2ID],
+        dish_weights=weights,
         meals=_picked_meals(inp),                      # docs/10：吃哪几顿
         dishes_per_meal=_dishes_per_meal(inp),         # 每餐几道菜
         breakfast_max_time_min=int(inp.get("breakfast_max_time", BREAKFAST_MAX_TIME_DEFAULT)),

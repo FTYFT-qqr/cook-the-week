@@ -5,6 +5,7 @@
 - `SMOKE_STORAGE=db`：自动换成一份全新的临时 SQLite 库并导入菜谱，验证数据库后端下行为一致。
 """
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -365,7 +366,7 @@ print("[7] 信任修复：换一道 / 喜欢不改菜单 / 撤销")
 
 
 def menu_day_map(at) -> dict:
-    """day -> {菜名}，用于验证"只改了这一天"。"""
+    """**当前渲染出来的**那一天 -> {菜名}（从页面上的按钮反查）。"""
     out = {}
     for b in at.button:
         k = b.key or ""
@@ -380,8 +381,61 @@ def menu_day_map(at) -> dict:
     return out
 
 
+def week_day_map(at) -> dict:
+    """**整周** day -> {菜名}，直接读会话里那份权威结果。
+
+    「本周计划」一次只渲染一天（选天胶囊）之后，不能再用页面上的按钮当整周快照：
+    那样"只有一天变了"会退化成恒真（永远只看得到一天）。要验整周就用这一份。
+    """
+    res = at.session_state["result"] if "result" in at.session_state else None
+    out: dict = {}
+    for p in (res.days if res is not None else []):
+        for d in p.dishes:
+            r = db.by_id(d.recipe_id)
+            if r:
+                out.setdefault(p.day, set()).add(r.name)
+    return out
+
+
+def pick_control(at):
+    """选天胶囊（AppTest 里它是 ButtonGroup；取不到就返回 None，不让断言假失败）。"""
+    try:
+        items = list(at.segmented_control)
+    except Exception:
+        return None
+    return items[0] if items else None
+
+
+def rendered_days(at) -> list:
+    """页面上真正渲染出来的那一天（**只从段头 HTML 里取**）。
+
+    别用全文正则数「第 N 天」：统计行（"最费时的第 2 天"）和整周一览里也有这个词，
+    数出来会是一串 [2, 1, 1, 2, 3, …]，看着像"渲染了八天"。
+    """
+    out: list = []
+    for line in page_text(at).split("\n"):
+        if "class='day-head" in line:
+            m = re.search(r"第 (\d+) 天", line)
+            if m:
+                out.append(int(m.group(1)))
+    return out
+
+
+def expected_default_day(at, days_span: int) -> int:
+    """默认该停在第几天：今天在这一周里就是今天，否则第 1 天（与 app.py 同一条规则）。
+
+    注意 `at.session_state` **没有 `.get()`**（docs/07 坑 #3），只能用 `in` + `[]`。
+    """
+    start = at.session_state["plan_start"] if "plan_start" in at.session_state else None
+    if not start and "start_date" in at.session_state:
+        start = at.session_state["start_date"]
+    idx = store.today_index(start, days_span) if start else None
+    return (idx + 1) if idx is not None else 1
+
+
 if nav_to(at, "plan"):
-    snap = menu_day_map(at)
+    # 整周快照读会话里那份权威结果（页面上只渲染一天，用按钮反查会退化成恒真）
+    snap = week_day_map(at)
     prof_before = prof.load_profile()
 
     # ① 「换一道」：只改这一天，不动口味档案
@@ -396,7 +450,7 @@ if nav_to(at, "plan"):
             break
     at.run()
     check("换一道后无异常", not at.exception, str([str(e.value) for e in at.exception]))
-    after = menu_day_map(at)
+    after = week_day_map(at)
     check("换一道后菜单仍在", has_menu(at))
     changed_days = [d for d in after if after.get(d) != snap.get(d)]
     check("只有一天发生变化", len(changed_days) == 1, f"changed={changed_days} snap={snap} after={after}")
@@ -407,7 +461,7 @@ if nav_to(at, "plan"):
     print(f"    第 {target_day} 天: {snap.get(target_day)} → {after.get(target_day)}")
 
     # ② 「喜欢」：记住偏好但不改本次菜单
-    snap2 = menu_day_map(at)
+    snap2 = week_day_map(at)
     like_btns = dish_btns(at, "like")
     loved = None
     if like_btns:
@@ -416,7 +470,7 @@ if nav_to(at, "plan"):
         like_btns[0].click()
         at.run()
         check("喜欢后无异常", not at.exception, str([str(e.value) for e in at.exception]))
-        check("喜欢不改动本次菜单", menu_day_map(at) == snap2,
+        check("喜欢不改动本次菜单", week_day_map(at) == snap2,
               f"before={snap2} after={menu_day_map(at)}")
         check("喜欢已写入档案", loved in prof.load_profile().get("liked_dishes", []))
         check("出现操作确认提示", "已记住你喜欢" in page_text(at), page_text(at)[:200])
@@ -435,7 +489,7 @@ if nav_to(at, "plan"):
         print(f"    已撤销对「{loved}」的喜欢")
 
     # ④ 「不喜欢」：记住 + 只换这一天
-    snap3 = menu_day_map(at)
+    snap3 = week_day_map(at)
     hate_btns = dish_btns(at, "hate")
     if hate_btns:
         rid = (hate_btns[0].key or "").split("_", 2)[2]
@@ -443,27 +497,53 @@ if nav_to(at, "plan"):
         day2 = int((hate_btns[0].key or "").split("_")[1])
         hate_btns[0].click()
         at.run()
-        after3 = menu_day_map(at)
+        after3 = week_day_map(at)
         check("不喜欢已写入档案", hated2 in prof.load_profile().get("disliked_dishes", []))
-        check("不喜欢的菜从菜单消失",
+        check("不喜欢的菜从整周菜单消失（不只当前这一天）",
               all(hated2 not in names for names in after3.values()), f"after={after3}")
+        check("被换掉的那道不再出现在菜卡里",
+              all(hated2 not in line for line in page_text(at).split("\n")
+                  if "dish-card" in line), hated2)
         changed3 = [d for d in after3 if after3.get(d) != snap3.get(d)]
         check("不喜欢只改动这一天", changed3 == [day2], f"target={day2} changed={changed3}")
         print(f"    不喜欢: {hated2}（第 {day2} 天换掉，其余天不变）")
 
-print("[8] 本周计划：一天一段 + 一天里的早/午/晚各一张卡（docs/10 第⑦步）")
+print("[8] 本周计划：选天看（一次一天）+ 一天里的早/午/晚各一张卡")
 nav_to(at, "plan")
-check("不再是「一天一个标签页」（改成竖着一路看下来）", "day_tabs" not in at.session_state,
+check("不再是「一天一个标签页」（改成选天胶囊）", "day_tabs" not in at.session_state,
       "会话状态里还有 day_tabs")
 _txt_plan = page_text(at)
 _res_now = at.session_state["result"] if "result" in at.session_state else None
 _days_span = max((p.day for p in _res_now.days), default=0) if _res_now else 0
-check("每天一个段头（第 N 天，段头带当天合计）",
-      _txt_plan.count("class='day-head") >= 1 and "合计约" in _txt_plan,
-      _txt_plan.count("class='day-head"))
-check("段头数量 = 天数（不是顿数）",
-      _txt_plan.count("class='day-head") == _days_span,
-      f"段头 {_txt_plan.count(chr(39) + 'day-head')} / 天数 {_days_span}")
+_pick = pick_control(at)
+check("有「看哪一天」的选天控件", _pick is not None)
+check("选天控件项数 = 天数（不是顿数）",
+      _pick is not None and len(_pick.options) == _days_span,
+      f"选项 {getattr(_pick, 'options', None)} / 天数 {_days_span}")
+check("默认停在今天；今天不在这周里就停在第 1 天",
+      _pick is not None and _pick.value == expected_default_day(at, _days_span),
+      f"选中 {getattr(_pick, 'value', None)}")
+check("一次只渲染选中的那一天（不再一路铺下来）",
+      len(rendered_days(at)) == 1 and _txt_plan.count("class='day-head") == 1,
+      f"段头 {_txt_plan.count(chr(39) + 'day-head')} / 出现过的天 {rendered_days(at)}")
+
+# 切到另一天：页面必须真的换成那一天（这里验"选得动"，不只是"选得中"）
+if _pick is not None and _days_span > 1:
+    _other = 2 if _pick.value != 2 else 1
+    _pick.set_value(_other)
+    at.run()
+    check("切天后无异常", not at.exception, str([str(e.value) for e in at.exception]))
+    _days_after = rendered_days(at)
+    check("切到第 2 天之后只渲染第 2 天",
+          _days_after == [_other], f"渲染出 {_days_after}")
+    _want = {db.by_id(d.recipe_id).name
+             for p in _res_now.days if p.day == _other for d in p.dishes}
+    _page = page_text(at)
+    check("切天之后页面上是那一天的菜（一道不差）",
+          bool(_want) and all(n in _page for n in _want), f"想要 {_want}")
+    _pick2 = pick_control(at)
+    _pick2.set_value(expected_default_day(at, _days_span))
+    at.run()
 
 nav_to(at, "plan")
 inp = at.session_state["plan_inputs"]
@@ -477,6 +557,10 @@ if inp:
     check("只剩一天时只有一个段头（不会留下第 2 天）",
           page_text(at).count("class='day-head") == 1 and "第 2 天" not in page_text(at),
           page_text(at).count("class='day-head"))
+    _pick1 = pick_control(at)
+    check("天数变少后选天控件跟着缩到 1 项、旧选择被纠正",
+          _pick1 is not None and len(_pick1.options) == 1 and _pick1.value == 1,
+          f"选项 {getattr(_pick1, 'options', None)} / 选中 {getattr(_pick1, 'value', None)}")
     check("天数变少后标签类的界面状态不再存在（那套坑一起消失）",
           "day_tabs" not in at.session_state)
 
@@ -587,8 +671,8 @@ check("前排显示「本周花费」", "本周花费" in txt)
 check("前排显示「最费时」", "最费时" in txt)
 check("前排显示忌口结果", "忌口 / 过敏冲突" in txt)
 check("整周一览还在（等宽天行，收进折叠里了）", "day-wrap" in txt and "分钟 · ¥" in txt)
-check("本周计划主体是卡片：3 天各一个段头 + 各一张餐卡",
-      txt.count("class='day-head") == 3 and txt.count("class='meal-head'") == 3,
+check("本周计划主体是卡片：只渲染选中的那一天 + 当天各一张餐卡",
+      txt.count("class='day-head") == 1 and txt.count("class='meal-head'") == 1,
       f"段头 {txt.count('day-head')} / 餐卡 {txt.count('meal-head')}")
 metric_labels = [m.label for m in at.metric]
 check("开发者视角已从常规界面撤出（05 §1.4）", "候选菜谱" not in metric_labels,
@@ -878,9 +962,11 @@ def section_multi_meal() -> None:
     txt3 = page_text(at)
     check("整周一览按餐分段（早/午/晚都出现）",
           all(m in txt3 for m in ("早餐", "午餐", "晚餐")), txt3[:160])
-    check("本周计划：2 天各一个段头 + 一天三张餐卡（6 张）",
-          txt3.count("class='day-head") == 2 and txt3.count("class='meal-head'") == 6,
-          f"段头 {txt3.count('day-head')} / 餐卡 {txt3.count('meal-head')}")
+    check("本周计划：选天控件 2 项 + 只渲染选中那天的一天三张餐卡（3 张）",
+          txt3.count("class='day-head") == 1 and txt3.count("class='meal-head'") == 3
+          and len((pick_control(at).options if pick_control(at) else [])) == 2,
+          f"段头 {txt3.count('day-head')} / 餐卡 {txt3.count('meal-head')} / "
+          f"选项 {getattr(pick_control(at), 'options', None)}")
     check("每周段头说清是几顿、钱合计（不把三顿的分钟数加成一个「合计 89 分钟」）",
           "3 顿 · 合计 ¥" in txt3 and "这天合计" not in txt3,
           [l for l in txt3.split("\n") if "day-head" in l][:1])

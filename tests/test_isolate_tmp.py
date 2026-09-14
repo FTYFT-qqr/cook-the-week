@@ -21,17 +21,19 @@ import isolate_tmp  # noqa: E402
 @pytest.fixture()
 def clean_env(monkeypatch):
     """把一个干净的环境给用例用（跑测试时环境里可能已经带着上一轮的值）。"""
-    for key in ("STORAGE", "DATABASE_URL", "RECIPE_PLAN_FILE", "RECIPE_PROFILE_FILE"):
+    for key in ("STORAGE", "DATABASE_URL", "RECIPE_PLAN_FILE", "RECIPE_PROFILE_FILE",
+                "RECIPE_EVENTS_FILE"):
         monkeypatch.delenv(key, raising=False)
     return monkeypatch
 
 
 def test_没隔离时会被拦下来(clean_env):
-    """三个落点一个都没设 → 全部报出来（这正是第⑦步那次事故的样子）。"""
+    """四个落点一个都没设 → 全部报出来（这正是第⑦步那次事故的样子）。"""
     bad = isolate_tmp.unsafe()
     assert any("DATABASE_URL" in b for b in bad), bad
     assert any("RECIPE_PLAN_FILE" in b for b in bad), bad
     assert any("RECIPE_PROFILE_FILE" in b for b in bad), bad
+    assert any("RECIPE_EVENTS_FILE" in b for b in bad), bad
 
 
 def test_只设了_storage_仍然会被拦下来(clean_env):
@@ -45,16 +47,18 @@ def test_指向真实目录会被拦下来(clean_env):
     clean_env.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{(ROOT / 'data' / 'app.db').as_posix()}")
     clean_env.setenv("RECIPE_PLAN_FILE", str(ROOT / "data" / "saved_plans.json"))
     clean_env.setenv("RECIPE_PROFILE_FILE", str(ROOT / "data" / "customer_profile.json"))
+    clean_env.setenv("RECIPE_EVENTS_FILE", str(ROOT / "data" / "dish_events.json"))
     bad = isolate_tmp.unsafe()
-    assert len(bad) == 3, bad
+    assert len(bad) == 4, bad
     with pytest.raises(RuntimeError):
         isolate_tmp.assert_safe()
 
 
-def test_isolate_之后三个落点都在_tmp(clean_env):
+def test_isolate_之后四个落点都在_tmp(clean_env):
     env = isolate_tmp.isolate(tag="unittest")
     assert isolate_tmp.unsafe() == [], isolate_tmp.unsafe()
-    for key in ("DATABASE_URL", "RECIPE_PLAN_FILE", "RECIPE_PROFILE_FILE"):
+    for key in ("DATABASE_URL", "RECIPE_PLAN_FILE", "RECIPE_PROFILE_FILE",
+                "RECIPE_EVENTS_FILE"):
         # 用 posix 形式比：helper 返回的是本机原生的 Windows 路径（app 要的就是原生路径）
         assert "/.tmp/" in Path(env[key].replace("\\", "/")).as_posix(), (key, env[key])
     assert env["STORAGE"] in ("json", "db")

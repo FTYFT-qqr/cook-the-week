@@ -70,7 +70,12 @@ def recipe_conflicts(r: Recipe, c: UserConstraints, meal: Optional[str] = None) 
 
 
 def recipe_score(r: Recipe, c: UserConstraints) -> float:
-    """软偏好评分：喜欢的菜、目标标签、口味标签、辣度接近度。"""
+    """软偏好评分：目标标签、口味标签、**逐菜权重**。
+
+    docs/12 阶段二：`c.dish_weights` 有值时用它（一串带时间戳的事件算出来的
+    "会衰减的记忆"，见 `preference.py`）；**空字典时保持老行为**（喜欢就 +8）——
+    所以这条改动对老数据与既有测试是零影响，有偏好信号时才换挡。
+    """
     score = 0.0
     if c.goal != "随便" and c.goal in r.goal_tags:
         score += 5.0
@@ -78,8 +83,11 @@ def recipe_score(r: Recipe, c: UserConstraints) -> float:
         score += 2.0
     overlap = set(c.taste_tags) & set(r.taste_tags)
     score += 1.5 * len(overlap)
-    if r.id in set(c.liked_dishes):
-        score += 8.0  # 客户喜欢的菜强烈优先
+    weights = getattr(c, "dish_weights", None) or {}
+    if weights:
+        score += float(weights.get(r.id, 0.0))
+    elif r.id in set(c.liked_dishes):
+        score += 8.0  # 老行为：客户喜欢的菜强烈优先（没有事件时不知道"多久没吃了"）
     return score
 
 

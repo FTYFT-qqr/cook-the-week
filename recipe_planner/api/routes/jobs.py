@@ -69,6 +69,14 @@ async def _with_profile(payload: dict) -> dict:
     for key in ("liked_dishes", "disliked_dishes"):
         names = profile.get(key) or []
         payload[key] = [name2id[n] for n in names if n in name2id]
+
+    # 逐菜权重（docs/12 阶段二）：由事件算"会衰减的记忆"，老档案里没有事件的部分补位。
+    # 没有信号时是**空字典** → `recipe_score` 回退到老的"喜欢就 +8"，行为零变化。
+    from recipe_planner import preference
+
+    events = await data.recent_events()
+    payload["dish_weights"] = preference.dish_weights(
+        events=events, profile=profile, by_name=name2id)
     return payload
 
 

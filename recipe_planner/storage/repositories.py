@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import uuid4
@@ -31,6 +32,7 @@ from recipe_planner.models import (
     ValidationIssue,
 )
 from recipe_planner.storage import orm
+from recipe_planner.storage import db_events as data_events
 from recipe_planner.storage.engine import session_scope
 
 DEFAULT_HOUSEHOLD = "household_default"
@@ -300,8 +302,14 @@ class PlanRepo:
     @staticmethod
     async def update_result(plan_id: Optional[str], result: PlanResult,
                             change_note: str = "") -> Optional[PlanRecord]:
+        """就地更新某一版的菜单 —— **菜单类偏好事件的唯一入口**（docs/12 阶段二）。
+
+        改动前后的菜单一比，就知道哪道菜被换掉、哪道菜新进来；
+        JSON 后端在 `store.update_result` 里做同一件事（两个前端、两种存储都覆盖）。
+        """
         if not plan_id:
             return None
+        before = await PlanRepo.get_record(plan_id)
         async with session_scope() as s:
             plan = await _load_plan(s, plan_id)
             if plan is None:
@@ -344,7 +352,20 @@ class PlanRepo:
                                        amount_text=it.amount, needed=it.needed,
                                        used_for=list(it.for_recipes)))
             await s.flush()
-            return await _record(s, plan)
+            row = await _record(s, plan)
+        if before is not None:
+            try:
+                from recipe_planner import events as events_mod   # 延迟导入，避免循环
+
+                # **await 异步实现，不能调 data_events.record()**：那是个同步门面
+                # （内部 sync_bridge.run），而这里已经跑在数据库线程里了 ——
+                # 从数据库线程再往桥里塞协程会被重入保护拦下（docs/07 踩坑 #9）。
+                await data_events._record(
+                    events_mod.menu_events(before.result, result, source="接口"),
+                    plan_id=plan_id)
+            except Exception:              # 记事件失败绝不能弄坏"改菜单"这件事本身
+                logging.getLogger("recipe_planner.events").exception("写偏好事件失败（已忽略）")
+        return row
 
     @staticmethod
     async def delete_record(plan_id: str) -> None:
@@ -474,7 +495,13 @@ class ProfileRepo:
 
     @staticmethod
     async def save_profile(profile: dict) -> None:
-        """把完整档案字典写回库（与 JSON 版同义：整体覆盖）。"""
+        """把完整档案字典写回库（与 JSON 版同义：整体覆盖）。
+
+        **偏好事件的唯一入口**（docs/12 阶段二）：档案的每一次改动都过这里
+        （界面点喜欢 / PUT /profile / 撤销恢复 / 清空 / 批量），所以只在这一处
+        按前后差异记一次事件就全覆盖了。JSON 后端在 `profile.save_profile` 里做同一件事。
+        """
+        before = await ProfileRepo.load_profile()
         async with session_scope() as s:
             by_id, name2id = await ProfileRepo._names(s)
             hid = await ensure_household(s)
@@ -495,6 +522,14 @@ class ProfileRepo:
                     s.add(orm.Rating(household_id=hid, recipe_id=rid,
                                      score=int(info.get("score", 1))))
             await s.flush()
+        try:
+            from recipe_planner import events as events_mod   # 延迟导入，避免循环
+
+            # 同 update_result：这里已在数据库线程里，只能 await 异步实现，不能调同步门面
+            await data_events._record(
+                events_mod.profile_events(before, profile, by_name=name2id, source="接口"))
+        except Exception:                  # 记事件失败绝不能弄坏"改档案"这件事本身
+            logging.getLogger("recipe_planner.events").exception("写偏好事件失败（已忽略）")
 
     @staticmethod
     async def clear_all() -> None:

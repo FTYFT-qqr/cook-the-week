@@ -7,10 +7,12 @@
 """
 from __future__ import annotations
 
+import logging
 import os
 from datetime import date
 from pathlib import Path
 
+from recipe_planner import events
 from recipe_planner.infra.jsonfile import ArchiveBroken, read_json, write_json
 
 DEFAULT_PROFILE_FILE = Path(__file__).resolve().parent.parent / "data" / "customer_profile.json"
@@ -36,7 +38,21 @@ def load_profile() -> dict:
 
 
 def save_profile(profile: dict) -> None:
+    """写档案 —— **偏好事件的唯一入口**（docs/12 阶段二）。
+
+    档案的每一次改动都从这里过（界面点喜欢 / 撤销恢复 / 清空 / 批量），
+    所以"哪道菜被标了喜欢、什么时候标的"只需在这一处按前后差异记一次，
+    不必在七八个按钮里各写一遍（写必漏）。数据库后端在 `ProfileRepo.save_profile` 里做同一件事。
+    """
+    try:
+        before = load_profile()
+    except ArchiveBroken:
+        before = {}                       # 坏档案已经在读的那一步报过错，这里不重复拦
     write_json(profile_path(), profile)
+    try:
+        events.record_profile_diff(before, profile, source="本机")
+    except Exception:                     # 记事件失败绝不能弄坏"改档案"这件事本身
+        logging.getLogger("recipe_planner.events").exception("写偏好事件失败（已忽略）")
 
 
 def _clean(names: list[str], known: set[str]) -> list[str]:

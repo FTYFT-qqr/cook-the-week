@@ -106,6 +106,10 @@ class UserConstraints(BaseModel):
     pantry_items: list[str] = []  # 家里已有食材（名称关键词）
     liked_dishes: list[str] = []  # 客户喜欢的菜品 id（软性，尽量安排）
     disliked_dishes: list[str] = []  # 客户不喜欢的菜品 id（硬性，绝不安排）
+    # 逐菜权重（docs/12 阶段二）：`{菜谱 id: 加分}`，由 `preference.dish_weights()` 算出来。
+    # **空字典 = 还没有偏好信号** → `recipe_score` 回退到老行为（"喜欢就 +8"），所以
+    # 老数据/老测试一行都不用改；有信号时才换成"会随时间衰减"的权重。
+    dish_weights: dict[str, float] = {}
     customer_name: str = ""  # 客户标识（预留多客户画像）
     must_include_recipes: list[str] = []  # 调试/演示用：必须包含的菜（id）
 

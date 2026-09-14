@@ -1,4 +1,4 @@
-"""临时脚本的"隔离环境"：把**三种**存储都指到 `.tmp/`，绝不碰 `data/` 里的真实数据。
+"""临时脚本的"隔离环境"：把**四种**存储都指到 `.tmp/`，绝不碰 `data/` 里的真实数据。
 
 ## 为什么有这个文件（两次事故换来的）
 
@@ -11,9 +11,9 @@
    于是把迁移基线里最老的一版方案挤掉了，`verify_migration.py` 立刻变红
    （"JSON 里每一份方案都还在库里"失败）。从 `data/backup/20260913-204312/` 按字节还原。
 
-教训：**"真实数据"不是一个文件，是三个** ——
-SQLite（`DATABASE_URL`）、JSON 存档（`RECIPE_PLAN_FILE`）、口味档案（`RECIPE_PROFILE_FILE`）。
-任何跑 `app.py` / 领域代码的临时脚本，开头先 `isolate()` 一句，三样一起隔离。
+教训：**"真实数据"不是一个文件** —— 一开始是三个，`docs/12` 阶段二加了第四个
+（偏好事件 `data/dish_events.json`，由 `RECIPE_EVENTS_FILE` 指定）。
+**每加一种"进程外的用户数据"，这里就要跟着加一条**，否则迟早会有人踩到同一个坑。
 
 用法：
 
@@ -31,12 +31,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TMP = ROOT / ".tmp"
 
-# 真实数据的三个落点（前缀匹配；只要有一个落到这里就是没隔离干净）
+# 真实数据的落点（前缀匹配；只要有一个落到这里就是没隔离干净）
 REAL_PREFIXES = (str(ROOT / "data") + os.sep, (ROOT / "data").as_posix() + "/")
 
 
 def isolate(tag: str = "diag", storage: str = "json") -> dict[str, str]:
-    """把三种存储全指到 `.tmp/`，返回设好的环境变量（方便脚本打印出来自证）。
+    """把四种存储全指到 `.tmp/`，返回设好的环境变量（方便脚本打印出来自证）。
 
     `tag` 用来给临时文件起名（例如 `diag` → `.tmp/diag_plans.json`），
     这样并行跑几个脚本也不会互相踩。
@@ -47,6 +47,7 @@ def isolate(tag: str = "diag", storage: str = "json") -> dict[str, str]:
         "DATABASE_URL": f"sqlite+aiosqlite:///{(TMP / f'{tag}.db').as_posix()}",
         "RECIPE_PLAN_FILE": str(TMP / f"{tag}_plans.json"),
         "RECIPE_PROFILE_FILE": str(TMP / f"{tag}_profile.json"),
+        "RECIPE_EVENTS_FILE": str(TMP / f"{tag}_events.json"),
         # 排菜走确定性路径：不联网、不用等模型，也不产生费用
         "DEEPSEEK_API_KEY": "",
         "RATE_LIMIT": "off",
@@ -60,9 +61,10 @@ def isolate(tag: str = "diag", storage: str = "json") -> dict[str, str]:
 def unsafe() -> list[str]:
     """现在还有哪些地方会落到真实 `data/`（空列表 = 隔离干净）。
 
-    **"没设"同样危险**：`RECIPE_PLAN_FILE` / `RECIPE_PROFILE_FILE` 不设，
-    `store` / `profile` 就用 `data/` 下的默认文件；`STORAGE=db` 而 `DATABASE_URL` 不设，
-    就用 `data/app.db`。所以这里把"没设"也报出来 —— 第⑦步那次事故正是"设了 STORAGE、没设另外两个"。
+    **"没设"同样危险**：`RECIPE_PLAN_FILE` / `RECIPE_PROFILE_FILE` / `RECIPE_EVENTS_FILE`
+    不设，`store` / `profile` / `events` 就用 `data/` 下的默认文件；`STORAGE=db` 而
+    `DATABASE_URL` 不设，就用 `data/app.db`。所以这里把"没设"也报出来 ——
+    第⑦步那次事故正是"设了 STORAGE、没设另外两个"。
     """
     bad: list[str] = []
     storage = (os.environ.get("STORAGE") or "db").lower()
@@ -75,7 +77,8 @@ def unsafe() -> list[str]:
         bad.append("DATABASE_URL 没设（STORAGE=db 时会写到 data/app.db）")
 
     for key, default in (("RECIPE_PLAN_FILE", "data/saved_plans.json"),
-                         ("RECIPE_PROFILE_FILE", "data/customer_profile.json")):
+                         ("RECIPE_PROFILE_FILE", "data/customer_profile.json"),
+                         ("RECIPE_EVENTS_FILE", "data/dish_events.json")):
         value = os.environ.get(key) or ""
         if not value:
             bad.append(f"{key} 没设（默认会写到 {default}）")

@@ -20,9 +20,14 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
+from recipe_planner import events
 from recipe_planner.infra.jsonfile import ArchiveBroken, read_json, write_json
 from recipe_planner.models import PlanRecord as PlanRecordModel
 from recipe_planner.models import PlanResult, UserConstraints, slot_key
+
+import logging
+
+logger = logging.getLogger("recipe_planner.events")
 
 DEFAULT_PLANS_FILE = Path(__file__).resolve().parent.parent / "data" / "saved_plans.json"
 MAX_PLANS = 3  # 只留最近几份；方案历史与对比属于正式版后续能力
@@ -116,16 +121,27 @@ def save_plan(result: PlanResult, start_date: Any = None,
 
 def update_result(record_id: Optional[str], result: PlanResult,
                   change_note: str = "") -> Optional[PlanRecord]:
-    """就地更新某一版的菜单（换一道 / 撤销之后调用），刷新页面不丢。"""
+    """就地更新某一版的菜单（换一道 / 撤销之后调用），刷新页面不丢。
+
+    docs/12 阶段二：**这里是菜单类偏好事件的唯一入口** ——
+    改动前后的菜单一比，就知道"哪道菜被换掉了""哪道菜新进来了"，
+    不必在八九个按钮里各写一遍（写必漏）。数据库后端在 `PlanRepo.update_result` 里做同一件事。
+    """
     if not record_id:
         return None
     recs = load_records()
     for i, r in enumerate(recs):
         if r.id == record_id:
+            before = r.result
             recs[i] = r.model_copy(
                 update={"result": result, "change_note": change_note or r.change_note}
             )
             _write(recs)
+            try:
+                events.record(events.menu_events(before, result, source="本机"),
+                              plan_id=record_id)
+            except Exception:                     # 记事件失败绝不能弄坏"改菜单"这件事本身
+                logger.exception("写偏好事件失败（已忽略）")
             return recs[i]
     return None
 

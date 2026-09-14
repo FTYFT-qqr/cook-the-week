@@ -319,6 +319,49 @@ class ActionLog(Base):
     plan: Mapped["Plan"] = relationship(back_populates="logs")
 
 
+class DishEvent(Base):
+    """**一道菜上发生的一次偏好事件**（docs/12 §4 阶段二 2.1）。
+
+    ## 为什么不给 `action_log` 加列，而是新开一张表
+
+    `action_log` 是"**一次动作一行**"（回执文案 + 撤销快照），而**一次动作可以涉及多道菜**：
+    整周重排 = 21 顿、做完打分 = 一顿的 3 道、换一道 = 1 道。
+    逐菜的时间衰减需要的是"**每道菜一行**"，塞进 `action_log` 就得在一条 JSON 里放数组，
+    查询与统计反而更麻烦。所以：`action_log` 继续管"这次动作说了什么"，本表管"哪道菜上发生了什么"。
+
+    ## 为什么存 `recipe_id` 而不是菜名
+
+    档案（`preference` / `profile.py`）按**菜名**存，是因为它面向用户展示；
+    而排序比的是 `r.id`。事件是给排序与统计用的，所以存 id —— 菜名改了不会让历史断掉。
+
+    ## 与方案的关系
+
+    `plan_id` 可空（有的反馈不带方案，例如在档案页直接标"喜欢"）；
+    非空时 `ON DELETE CASCADE`（方案删了，它的事件也没意义了）。
+    """
+    __tablename__ = "dish_event"
+
+    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"),
+                                    primary_key=True, autoincrement=True)
+    plan_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("plan.id", ondelete="CASCADE"))
+    household_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    recipe_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    meal: Mapped[str] = mapped_column(String(16), default="", server_default="", nullable=False)
+    day_no: Mapped[int | None] = mapped_column(Integer)
+    source: Mapped[str] = mapped_column(String(24), default="", server_default="", nullable=False)
+    created_at: Mapped[datetime] = _created()
+
+    __table_args__ = (
+        Index("dish_event_recipe_idx", "recipe_id", "created_at"),
+        Index("dish_event_plan_idx", "plan_id", "created_at"),
+        # 动作词表：**故意不做 CheckConstraint**（不像 preference.kind）——
+        # 事件是新东西，以后加一种动作（例如"收藏视频"）不该需要一次迁移。
+        # 合法性由 `recipe_planner/events.py` 的 ACTIONS 常量与测试守。
+    )
+
+
 class IdempotencyKey(Base):
     __tablename__ = "idempotency_key"
 

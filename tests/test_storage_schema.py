@@ -1,4 +1,4 @@
-"""P0-2 验收：16 张表建表、字段齐全、约束与级联真的生效。
+"""P0-2 验收：17 张表建表、字段齐全、约束与级联真的生效。
 
 运行：& 'D:\\conda\\cook\\recipe-planner\\python.exe' -m pytest tests -q
 （pytest.ini 里 asyncio_mode=auto，所以 async 测试不用加 marker）
@@ -23,6 +23,7 @@ from recipe_planner.storage.orm import (
     AppSetting,
     AppUser,
     Base,
+    DishEvent,
     Household,
     IdempotencyKey,
     Ingredient,
@@ -42,6 +43,7 @@ EXPECTED_TABLES = {
     "recipe", "ingredient", "household", "app_user", "preference", "rating",
     "plan", "plan_day", "plan_dish", "shopping_item", "shopping_check",
     "job", "action_log", "idempotency_key", "llm_call_log", "app_setting",
+    "dish_event",
 }
 
 # 注意：不用 pytest 的 tmp_path（它落在系统 TEMP 上，本项目环境对该目录无写权限）
@@ -80,9 +82,28 @@ async def _tables(engine) -> set[str]:
     return set(names)
 
 
-async def test_16_tables_created(db):
+async def test_17_tables_created(db):
     engine = db.kw["bind"]
     assert await _tables(engine) == EXPECTED_TABLES
+
+
+async def test_dish_event_columns(db):
+    """偏好事件表（docs/12 阶段二）：逐菜一行，存**菜谱 id** 而不是菜名。
+
+    故意**不建** CheckConstraint（以后加一种动作不该需要迁移），所以这里只验列与索引。
+    """
+    engine = db.kw["bind"]
+
+    def _cols(sc):
+        return ({c["name"] for c in inspect(sc).get_columns("dish_event")},
+                {i["name"] for i in inspect(sc).get_indexes("dish_event")})
+
+    async with engine.connect() as conn:
+        cols, idx = await conn.run_sync(_cols)
+    assert {"plan_id", "household_id", "recipe_id", "action", "meal", "day_no",
+            "source", "created_at"} <= cols, cols
+    assert {"dish_event_recipe_idx", "dish_event_plan_idx"} <= idx, idx
+    assert DishEvent.__tablename__ == "dish_event"
 
 
 async def test_recipe_columns_and_json_roundtrip(db):

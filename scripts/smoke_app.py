@@ -46,6 +46,7 @@ _patch_tempfile_permissions()
 SMOKE_DB = os.environ.get("SMOKE_STORAGE", "json").lower() == "db"
 PROFILE_TMP = os.path.join(ROOT, ".tmp", "test_profile.json")
 PLANS_TMP = os.path.join(ROOT, ".tmp", "test_plans.json")
+EVENTS_TMP = os.path.join(ROOT, ".tmp", "test_events.json")
 if SMOKE_DB:
     os.environ["STORAGE"] = "db"
     DB_TMP = os.path.join(ROOT, ".tmp", "smoke_app.db")
@@ -55,11 +56,14 @@ if SMOKE_DB:
     os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///" + DB_TMP.replace(os.sep, "/")
 else:
     os.environ["STORAGE"] = "json"
-    for _f in (PROFILE_TMP, PLANS_TMP):
+    for _f in (PROFILE_TMP, PLANS_TMP, EVENTS_TMP):
         if os.path.exists(_f):
             os.remove(_f)
     os.environ["RECIPE_PROFILE_FILE"] = PROFILE_TMP
     os.environ["RECIPE_PLAN_FILE"] = PLANS_TMP
+    # 偏好事件是第 4 个存储（docs/12 阶段二）：不指到 .tmp，`save_profile` 就会写进
+    # 真实的 data/dish_events.json —— 与前面两次"以为隔离干净了"是同一个坑。
+    os.environ["RECIPE_EVENTS_FILE"] = EVENTS_TMP
 
 if SMOKE_DB:                                  # 建表 + 导入菜谱（DB 模式需要一个干净的库）
     from recipe_planner.db import _load_json_db

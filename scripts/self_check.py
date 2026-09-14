@@ -12,9 +12,15 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+_root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# **偏好事件（第 4 个存储）在这里设一次、全程不撤**（docs/12 阶段二）。
+# 教训：只在"档案那一段"设是不够的 —— 后面还有改方案的段落，它们也会写事件
+# （`store.update_result` 的 source 是"本机"），于是落到真实的 data/dish_events.json。
+# 实测确实发生过一次（写进了一条 swap_out），所以改成开头一次性设好。
+os.environ["RECIPE_EVENTS_FILE"] = os.path.join(_root_dir, ".tmp", "self_check_events.json")
+
 # DB 模式（STORAGE=db）下用一份临时库跑，避免把测试数据写进真实 data/app.db
 if os.environ.get("STORAGE", "db").lower() == "db":
-    _root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     _tmp_db = os.path.join(_root_dir, ".tmp", "self_check.db")
     os.makedirs(os.path.dirname(_tmp_db), exist_ok=True)
     for _suffix in ("", "-wal", "-shm"):
@@ -167,6 +173,9 @@ def main() -> int:
     if tmp_profile.exists():
         tmp_profile.unlink()
     os.environ["RECIPE_PROFILE_FILE"] = str(tmp_profile)
+    # 偏好事件是第 4 个存储（docs/12 阶段二）：下面这些 set_feedback 会写事件，
+    # 不指到 .tmp 就会落到真实的 data/dish_events.json
+    os.environ["RECIPE_EVENTS_FILE"] = str(tmp_dir / "events.json")
     from recipe_planner import profile as prof
     known = {r.name for r in db.recipes}
     check("初始档案为空", prof.liked_names(known) == [] and prof.disliked_names(known) == [])
@@ -202,6 +211,8 @@ def main() -> int:
     prof.clear_all()
     check("清空档案生效", prof.liked_names(known) == [] and prof.disliked_names(known) == [])
     os.environ.pop("RECIPE_PROFILE_FILE", None)
+    # 注意：**不要**在这里 pop `RECIPE_EVENTS_FILE` —— 它是开头一次性设好的（全程有效）。
+    # 撤掉它之后，后面改方案的段落会写事件到真实的 data/dish_events.json（实测发生过）。
 
     print("[8] 买菜清单随人数折算（修复：1人/4人买到同样的量）")
     from recipe_planner.core import refresh_result as _refresh  # noqa: E402
@@ -590,6 +601,7 @@ def main() -> int:
     if _prof_file.exists():
         _prof_file.unlink()
     _os.environ["RECIPE_PROFILE_FILE"] = str(_prof_file)
+    _os.environ["RECIPE_EVENTS_FILE"] = str(_prof_dir / "events.json")   # 第 4 个存储
     from recipe_planner import profile as prof2  # noqa: E402
     known2 = {r.name for r in db.recipes}
     first_name = db.by_id(res_f.days[0].dishes[0].recipe_id).name
@@ -599,7 +611,15 @@ def main() -> int:
     prof2.rate(first_name, 0, known2)
     check("E-07 打「下次不做」会移进不喜欢",
           first_name in prof2.disliked_names(known2) and first_name not in prof2.liked_names(known2))
+    # 顺手验一下"打分真的落成了事件"（docs/12 阶段二）——这是权重的时间维度来源
+    from recipe_planner import events as _ev  # noqa: E402
+    _rows = _ev.load_events()
+    check("打分与偏好都落成了偏好事件",
+          any(e["action"] == _ev.RATE_GOOD for e in _rows)
+          and any(e["action"] == _ev.LIKE for e in _rows),
+          [e["action"] for e in _rows])
     _os.environ.pop("RECIPE_PROFILE_FILE", None)
+    # 同上一处：`RECIPE_EVENTS_FILE` 全程有效，谁都不许 pop（见文件开头那段注释）
 
     print(f"\n结果: {PASS} 通过, {len(FAIL)} 失败")
     if FAIL:

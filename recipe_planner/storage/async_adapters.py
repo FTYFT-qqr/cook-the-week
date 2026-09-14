@@ -243,6 +243,21 @@ def job_repo():
     return MemoryJobRepo
 
 
+async def recent_events(days: int = 180) -> list[dict]:
+    """最近 N 天的偏好事件（docs/12 阶段二）。
+
+    **路由要算权重就得走这里**：`events.recent()` 是同步门面（内部 `sync_bridge.run`），
+    在事件循环里直接调会阻塞循环 —— 与"路由不要调 store/profile 这些同步门面"是同一条纪律。
+    """
+    if _is_db():
+        from recipe_planner.storage import db_events
+
+        return await db_events._recent(days, None)
+    from recipe_planner import events as events_mod
+
+    return events_mod.recent(days)
+
+
 async def commit() -> None:
     """把**本次请求**的会话立刻提交（`session_scope()` 拿到的就是请求级那一个）。
 

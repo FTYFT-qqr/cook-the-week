@@ -136,27 +136,34 @@ def delete_record(record_id: str) -> None:
 
 def set_done(record_id: Optional[str], day: int, done: bool = True,
              meal: Optional[str] = None) -> Optional[PlanRecord]:
-    """标记/取消「做过了」（M1 状态③）。
+    """标记/取消「做完了」（M1 状态③）。
 
-    docs/10：给了 `meal` 就记**这一顿**（`done_slots`）；不给就沿用老行为 ——
-    记"这一天"（`done_days`），只做晚餐时两者等价。
+    **一律按顿记**（docs/11 §4.1 P0-5）：`meal=None` 表示"当天最后一顿"
+    （与 `PlanResult.slot(day, None)` 同一条规则），**不再写"这一整天"** ——
+    那样会让"今晚做完了"把早/午/晚三顿全标成做过。
+    老字段 `done_days` 仍然**读**（老存档），并且在写到"当天最后一顿"时**镜像**它，
+    否则只看 `done_days` 的老客户端会与只看 `done_slots` 的新界面给出两个相反的答案。
     """
     if not record_id:
         return None
     recs = load_records()
     for i, r in enumerate(recs):
-        if r.id == record_id:
-            if meal is None:
-                days = set(r.done_days)
-                days.add(day) if done else days.discard(day)
-                recs[i] = r.model_copy(update={"done_days": sorted(days)})
-            else:
-                slots = set(r.done_slots or [])
-                key = slot_key(day, meal)
-                slots.add(key) if done else slots.discard(key)
-                recs[i] = r.model_copy(update={"done_slots": sorted(slots)})
-            _write(recs)
-            return recs[i]
+        if r.id != record_id:
+            continue
+        slot = r.result.slot(day, meal)          # meal=None = 当天最后一顿
+        if slot is None:
+            return None
+        slots = set(r.done_slots or [])
+        key = slot_key(day, slot.meal)
+        slots.add(key) if done else slots.discard(key)
+        update: dict = {"done_slots": sorted(slots)}
+        if slot.meal == r.last_meal_of(day):     # 老字段镜像（它说的就是"当天最后一顿"）
+            days = set(r.done_days or [])
+            days.add(day) if done else days.discard(day)
+            update["done_days"] = sorted(days)
+        recs[i] = r.model_copy(update=update)
+        _write(recs)
+        return recs[i]
     return None
 
 

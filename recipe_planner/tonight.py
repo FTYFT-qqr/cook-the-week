@@ -141,7 +141,9 @@ def tonight_view(record: Optional[PlanRecord], db: RecipeDB, today: Optional[dat
     day_plan = wanted[0] if wanted else slots[-1]
     row = next((r for r in summary.rows if r.day == day_plan.day and r.meal == day_plan.meal),
                summary.rows[0])
-    done_days = set(record.done_days or [])
+    # 「这一顿做过没」只问 `record.is_done(day, meal)`（它同时认老字段 done_days）。
+    # 这里原来还留着一个 `done_days = set(...)` 却没人用 —— 留着只会让人以为
+    # "整天的状态"在这条路径上有意义（docs/11 §4.1 P0-5 的同一处混淆）。
 
     base = TonightView(state="planned", day=row.day, meal=day_plan.meal, weekday=row.weekday,
                        date_label=row.date_label, week_label=label, hint=hint,

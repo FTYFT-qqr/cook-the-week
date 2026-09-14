@@ -140,6 +140,17 @@ def _day_people(slots: list[DayPlan]) -> Optional[int]:
     return max(values) if values else None
 
 
+def _slots_of_day(days: list[orm.PlanDay], day_no: int) -> list[str]:
+    """这一天的餐次（按 MEALS 顺序）。与 `_plan_to_record` 用同一套口径。"""
+    for d in days:
+        if d.day_no != day_no:
+            continue
+        meals = set(_csv_meals(d.done_meals)) | set(_csv_meals(d.skipped_meals))
+        meals |= {(x.meal or MEAL) for x in d.dishes}
+        return [m for m in MEALS if m in meals] or [MEAL]
+    return []
+
+
 def _plan_to_record(plan: orm.Plan, days: list[orm.PlanDay], checks: list[str],
                     shop_rows: list[orm.ShoppingItem]) -> PlanRecord:
     day_models: list[DayPlan] = []
@@ -153,9 +164,14 @@ def _plan_to_record(plan: orm.Plan, days: list[orm.PlanDay], checks: list[str],
                 ChosenDish(recipe_id=x.recipe_id, reason=x.reason))
         skipped_meals = set(_csv_meals(d.skipped_meals))
         done_meals = set(_csv_meals(d.done_meals))
-        if d.done_at is not None and not done_meals:
-            legacy_done.append(d.day_no)          # 老数据：这一天（当时只有晚餐）做过了
-        for meal in [m for m in MEALS if m in (set(per_meal) | skipped_meals | done_meals)] or [MEAL]:
+        meals_here = [m for m in MEALS if m in (set(per_meal) | skipped_meals | done_meals)] or [MEAL]
+        last_meal = meals_here[-1]
+        # 老字段 `done_at` 的含义是"**当天最后一顿**做过了"（一天一顿时代＝晚餐）。
+        # 两种情况都要认，否则同一个"做完了"会有两种读法：
+        # ① 老数据只有 done_at；② 新写法写了 done_meals，而 done_at 被镜像同步过。
+        if d.done_at is not None or last_meal in done_meals:
+            legacy_done.append(d.day_no)
+        for meal in meals_here:
             day_models.append(DayPlan(
                 day=d.day_no, meal=meal, dishes=per_meal.get(meal, []),
                 skipped=meal in skipped_meals or (not skipped_meals and d.skipped),
@@ -366,22 +382,31 @@ class PlanRepo:
                        meal: Optional[str] = None) -> Optional[PlanRecord]:
         """标记"做过了"。
 
-        docs/10：给了 `meal` 就只记**这一顿**（写在 `done_meals` 里）；
-        不给就沿用老行为 —— 记"这一天"（`done_at`），只做晚餐时两者等价。
+        **一律按顿记**（docs/11 §4.1 P0-5）：`meal=None` = **当天最后一顿**，
+        与 JSON 后端（`store.set_done`）同一条规则。原来这里"不给 meal"会写 `done_at`
+        并**顺手清空** `done_meals` —— 两个后端语义不同，切一次 `STORAGE` 状态就变。
+
+        `done_at` 是"一天一顿"时代的老字段，含义是"当天最后一顿做过了"；
+        所以只在写**最后一顿**时镜像它，两边就永远一致（老客户端只看 `done_at` 也读得对）。
         """
         if not plan_id:
             return None
         async with session_scope() as s:
+            rows = await _days_of(s, plan_id)
+            slots = _slots_of_day(rows, day)
+            if not slots:
+                return None
+            target = slots[-1] if meal is None else meal
+            if target not in slots:
+                return None                    # 叫不准是哪一顿就不动 —— 绝不错标到别的顿上
             row = await s.get(orm.PlanDay, (plan_id, day))
             if row is None:
                 return None
-            if meal is None:
+            meals = set(_csv_meals(row.done_meals))
+            meals.add(target) if done else meals.discard(target)
+            row.done_meals = _meals_csv(sorted(meals))
+            if target == slots[-1]:            # 老字段镜像
                 row.done_at = datetime.now(timezone.utc) if done else None
-                row.done_meals = ""
-            else:
-                meals = set(_csv_meals(row.done_meals))
-                meals.add(meal) if done else meals.discard(meal)
-                row.done_meals = _meals_csv(sorted(meals))
             await s.flush()
             plan = await _load_plan(s, plan_id)
             return await _record(s, plan)

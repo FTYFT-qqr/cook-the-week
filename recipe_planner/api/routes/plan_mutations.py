@@ -87,7 +87,11 @@ async def patch_day(body: DayPatchIn, day: int, record: PlanRecord = Depends(req
         outcome = actions.replace_day(record, db, day, list(body.recipe_ids or []), meal)
     elif op == "done":
         outcome = actions.mark_done(record, day, body.done, meal)
-        await data.set_done(record.id, day, body.done, body.meal)
+        # 把**解析好的那一顿**传给存储（docs/11 §4.1 P0-5）：`body.meal=None` = 当天最后一顿，
+        # 由 `record.result.slot(day, None)` 定，而不是让两个后端各自猜 ——
+        # 猜错的后果是"今晚做完了"把早/午/晚全标成做过。
+        _slot = record.result.slot(day, meal)
+        await data.set_done(record.id, day, body.done, _slot.meal if _slot else None)
         log_id = await data.add_log(record.id, outcome.kind, outcome.message, outcome.extra)
         out = _envelope(outcome, log_id, {"day": day, "done": body.done, "meal": body.meal})
         await _commit()

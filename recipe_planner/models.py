@@ -256,23 +256,38 @@ class PlanRecord(BaseModel):
     start_date: str = ""      # ISO 日期，这一周的第一天（周一）
     label: str = ""           # "8/12–8/18"
     change_note: str = ""     # 最近一次改动的说明
-    done_days: list[int] = []        # **老字段**：一天的饭全做完了（docs/10 之前只有晚餐）
-    done_slots: list[str] = []       # "3|晚餐" 形式的"这一顿做过了"（docs/10 起写这里）
+    done_days: list[int] = []        # **老字段**：当天**最后一顿**做完了（一天一顿时代＝晚餐）
+    done_slots: list[str] = []       # "3|晚餐" 形式的"这一顿做过了"（docs/10 起只写这里）
     checked_items: list[str] = []    # 买菜清单的勾选（M4：关掉浏览器再打开还在）
     result: PlanResult
 
     def constraints(self) -> UserConstraints:
         return self.result.constraints
 
+    def last_meal_of(self, day: int) -> str:
+        """这一天的**最后一顿**（`done_days` 这个老字段说的就是它）。
+
+        全项目"不给 meal"都表示当天最后一顿（`PlanResult.slot(day, None)`、`core.slot_of(day, None)`
+        同一条规则），这里必须一致 —— 否则同一份老数据在"做完了/撤销"两处会落到不同的顿上。
+        """
+        slots = self.result.slots_for(int(day)) if self.result is not None else []
+        return slots[-1].meal if slots else MEAL
+
     def is_done(self, day: int, meal: str) -> bool:
         """这一顿做过了没。
 
-        同时认老字段：老存档里 `done_days=[3]` 表示"第 3 天（当时只有晚餐）做过了"，
-        直接当成"那天的晚餐做过了"，**不写数据迁移**。
+        **一律按顿判**（`done_slots`）。老字段 `done_days=[3]` 是"一天一顿"时代的写法，
+        含义是**第 3 天的那一顿**（当时只有晚餐）—— 多餐之后按"当天最后一顿"解释。
+
+        docs/11 §4.1 P0-5：原来这里写成"`day in done_days` 就直接 True"，
+        于是"我勾了今晚做完了"会让**早/午/晚三顿全变已做过** ——
+        用户看到的状态是假的，一旦发现就不会再认真用这个 App。
         """
         if slot_key(day, meal) in set(self.done_slots or []):
             return True
-        return int(day) in set(self.done_days or [])
+        if int(day) not in set(self.done_days or []):
+            return False
+        return meal == self.last_meal_of(day)
 
     def done_meals_of(self, day: int, meals: Optional[list[str]] = None) -> set[str]:
         """这一天哪些餐做过了（界面标"已做过"用）。"""

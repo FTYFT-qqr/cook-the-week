@@ -7,6 +7,8 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from recipe_planner.allergens import hidden_allergens
+
 # ---------- 常量 ----------
 
 DISPLAY_CATEGORIES = ["蔬菜", "肉蛋", "水产", "豆制品", "菌菇", "主食", "调料", "干货"]
@@ -59,13 +61,22 @@ class Recipe(BaseModel):
         return v or []
 
     def all_allergen_names(self) -> set[str]:
-        """过敏原 + 食材名兜底（含关键词匹配）。"""
+        """这道菜**实际**含哪些过敏原：显式标注 ∪ 食材名兜底 ∪ 隐性来源映射。
+
+        docs/12 §3.5（阶段零）：原来只有前两项，而实测「海鲜/坚果/大豆/麸质/芝麻」
+        这 5 个标签在 171 个食材名里出现 **0 次**（食材写的是"蚝油""生抽"，不会出现"海鲜"），
+        于是它们完全依赖 `allergens` 字段被人工填对，而 19/38 道菜该字段为空 ——
+        实测「蚝油生菜」对海鲜过敏用户不会被排除。第三项就是补这个洞（`allergens.py`）。
+
+        全项目只有两个调用点：`core.recipe_conflicts`（检索过滤）与 `core.validate_plan`
+        （硬校验），所以这一处修好，检索与校验两条路径同时生效。
+        """
         s = set(self.allergens)
         for ing in self.ingredients:
             for al in ALLERGENS:
                 if al in ing.name:
                     s.add(al)
-        return s
+        return s | hidden_allergens(self.name, [i.name for i in self.ingredients])
 
 
 class RecipeDB(BaseModel):

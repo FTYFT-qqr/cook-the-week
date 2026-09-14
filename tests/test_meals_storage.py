@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import importlib.util
 import os
 from pathlib import Path
 from uuid import uuid4
@@ -145,3 +146,135 @@ def test_老数据没有meal列时仍然是晚餐():
     finally:
         engine.reset_engine()
         os.environ.pop("DATABASE_URL", None)
+
+
+# ---------------------------------------------------------------- 「做完了」按顿（docs/11 §4.1 P0-5）
+
+MEALS3 = ["早餐", "午餐", "晚餐"]
+
+
+def _with_db(fn):
+    """跑一段需要临时库的断言（三处口径相同，抽出来避免各写一遍）。"""
+    url = _fresh_url()
+    migrate.ensure_schema(url)
+    os.environ["DATABASE_URL"] = url
+    engine.reset_engine()
+    try:
+        _seed_recipes()
+        fn()
+    finally:
+        engine.reset_engine()
+        os.environ.pop("DATABASE_URL", None)
+
+
+def test_不给meal时只标当天最后一顿而不是三顿():
+    """**这就是 docs/11 §4.1 P0-5 的核心断言。**
+
+    以前"不给 meal"= 记"这一整天"（`done_at`），而 `is_done` 对任意餐次都返回 True ——
+    用户勾一次"今晚做完了"，界面上早/午/晚三顿全变已做过。
+    现在两边都是"当天最后一顿"。
+    """
+    def body():
+        rec = db_store.save_plan(_result(1), start_date="2026-09-14")
+        db_store.set_done(rec.id, 1, True)                 # 不给 meal
+        back = db_store.get_record(rec.id)
+        assert back.is_done(1, "晚餐") is True
+        assert back.is_done(1, "早餐") is False, "「今晚做完了」不该把早餐也标成做过"
+        assert back.is_done(1, "午餐") is False, "「今晚做完了」不该把午餐也标成做过"
+        assert back.done_meals_of(1, MEALS3) == {"晚餐"}
+        assert back.done_slots == [slot_key(1, "晚餐")], back.done_slots
+
+    _with_db(body)
+
+
+def test_取消做完了也只取消那一顿():
+    def body():
+        rec = db_store.save_plan(_result(1), start_date="2026-09-14")
+        db_store.set_done(rec.id, 1, True)                  # 晚餐
+        db_store.set_done(rec.id, 1, True, meal="早餐")
+        db_store.set_done(rec.id, 1, False)                 # 取消"当天最后一顿"
+        back = db_store.get_record(rec.id)
+        assert back.is_done(1, "晚餐") is False
+        assert back.is_done(1, "早餐") is True, "取消晚餐不该把早餐一起取消"
+        assert back.done_days == [], "最后一顿取消了，老字段也要跟着清掉"
+
+    _with_db(body)
+
+
+def test_老字段done_at与新的按顿标记不再互相掩盖():
+    """老数据的 `done_at`（＝当天最后一顿做过）和 `done_meals` 并存时两边都要读得到。
+
+    以前 `_plan_to_record` 的条件是"done_at 非空**且** done_meals 为空"才算老字段 ——
+    于是"老标记 + 新标记"同时存在时，老标记**被静默吞掉**。
+    """
+    def body():
+        from datetime import datetime, timezone
+
+        from recipe_planner.storage import orm
+        from recipe_planner.storage.engine import session_scope
+
+        rec = db_store.save_plan(_result(1), start_date="2026-09-14")
+        db_store.set_done(rec.id, 1, True, meal="午餐")       # 先按顿标
+
+        async def _legacy_mark():                             # 再补一个"老式"整天标记
+            async with session_scope() as s:
+                row = await s.get(orm.PlanDay, (rec.id, 1))
+                row.done_at = datetime.now(timezone.utc)
+
+        sync_bridge.run(_legacy_mark())
+        back = db_store.get_record(rec.id)
+        assert back.is_done(1, "午餐") is True
+        assert back.done_days == [1], "老字段不能被 done_meals 吞掉"
+        assert back.is_done(1, "晚餐") is True, "老字段说的是当天最后一顿"
+        assert back.is_done(1, "早餐") is False
+
+    _with_db(body)
+
+
+def test_两个后端的做完了语义一致():
+    """JSON 与 DB 对同一串操作必须给出同一个答案（docs/11 的 R5/P1：多后端分叉）。
+
+    以前：JSON 把 `meal=None` 记成"一整天"、DB 记成"当天"并顺手清空 `done_meals` ——
+    切一次 `STORAGE`，同一份"我这一周"就换了一副样子。
+    """
+    def snapshot(rec) -> set:
+        return {(p.day, p.meal) for p in rec.result.days if rec.is_done(p.day, p.meal)}
+
+    def body():
+        # DB 侧
+        db_rec = db_store.save_plan(_result(1), start_date="2026-09-14")
+        db_store.set_done(db_rec.id, 1, True)                  # 不给 meal
+        db_store.set_done(db_rec.id, 1, True, meal="早餐")
+        db_done = snapshot(db_store.get_record(db_rec.id))
+
+        # JSON 侧：同一串操作、同一份方案。用**按 STORAGE=json 重新加载的那个模块**
+        # （顶层 `store` 在 db 模式下已被 db_store 覆盖，直接调它测的是 DB）
+        plan_file = TMP_ROOT / f"p05_{uuid4().hex[:8]}.json"
+        old_file = os.environ.get("RECIPE_PLAN_FILE")
+        old_storage = os.environ.get("STORAGE")
+        os.environ["RECIPE_PLAN_FILE"] = str(plan_file)
+        os.environ["STORAGE"] = "json"
+        try:
+            spec = importlib.util.spec_from_file_location(
+                f"json_store_p05_{uuid4().hex[:6]}",
+                Path(__file__).resolve().parent.parent / "recipe_planner" / "store.py")
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            json_rec = mod.save_plan(_result(1), start_date="2026-09-14")
+            mod.set_done(json_rec.id, 1, True)
+            mod.set_done(json_rec.id, 1, True, meal="早餐")
+            json_done = snapshot(mod.get_record(json_rec.id))
+        finally:
+            if old_file is None:
+                os.environ.pop("RECIPE_PLAN_FILE", None)
+            else:
+                os.environ["RECIPE_PLAN_FILE"] = old_file
+            if old_storage is None:
+                os.environ.pop("STORAGE", None)
+            else:
+                os.environ["STORAGE"] = old_storage
+            plan_file.unlink(missing_ok=True)
+
+        assert json_done == db_done == {(1, "晚餐"), (1, "早餐")}, (json_done, db_done)
+
+    _with_db(body)

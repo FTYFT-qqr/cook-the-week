@@ -235,6 +235,29 @@ async def test_今天页认得出做完了的是哪一顿(meal_api):
 
 
 @pytest.mark.asyncio
+async def test_不给meal时只标当天最后一顿(meal_api):
+    """docs/11 §4.1 P0-5：`{"op": "done"}` 不带 meal，**绝不能**把三顿全标成做过。
+
+    这是用户报过的原话那类问题（"我勾了今晚做完了，结果早中晚全变已做过"）——
+    接口层最容易漏的就是这一条：不给 meal 时"哪一顿"由服务端定，而服务端必须定成
+    "当天最后一顿"，不是"这一整天"。
+    """
+    client, plan_id = meal_api
+    r = await client.patch(f"/api/v1/plans/{plan_id}/days/1", json={"op": "done", "done": True})
+    assert r.status_code == 200, r.text
+
+    detail = await _detail(client, plan_id)
+    done = {(d["day"], d["meal"]) for d in detail["days"] if d["done"]}
+    assert done == {(1, "晚餐")}, f"不带 meal 只该标当天最后一顿，实际：{done}"
+    assert detail["done_slots"] == ["1|晚餐"], detail["done_slots"]
+
+    # 取消也一样只取消那一顿
+    await client.patch(f"/api/v1/plans/{plan_id}/days/1", json={"op": "done", "done": False})
+    detail2 = await _detail(client, plan_id)
+    assert not any(d["done"] for d in detail2["days"]), "取消之后不该还有「做完了」"
+
+
+@pytest.mark.asyncio
 async def test_单餐时接口形状与以前一致(api):
     """只做晚餐的老方案：不带 meal 也能正常读（老客户端不用改）。"""
     client, _app, record = api

@@ -221,7 +221,10 @@ def _fresh_env(monkeypatch, tmp: Path):
 def test_json后端的事件读写(monkeypatch, tmp_path=None):
     tmp = Path(__file__).resolve().parent.parent / ".tmp" / f"ev_{uuid4().hex[:8]}"
     tmp.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setenv("RECIPE_EVENTS_FILE", str(tmp / "events.json"))
+    # **`STORAGE=json` 必须设**（`_fresh_env`）：只设事件文件路径的话，
+    # fresh-load 出来的 `events.py` 末尾那段"数据库后端覆盖 JSON 实现"照样生效 ——
+    # 这个测试就变成在读**真库**（以前它能过，只是因为真库里恰好一行事件都没有）。
+    _fresh_env(monkeypatch, tmp)
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(

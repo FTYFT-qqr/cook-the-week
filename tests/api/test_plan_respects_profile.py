@@ -64,3 +64,51 @@ async def test_任务里带着服务端档案翻出来的偏好(api, client):
     assert req["disliked_dishes"] == ["r3"], req      # 红烧排骨
     assert "r1" in req["liked_dishes"], req           # 番茄炒蛋
     await wait_job(client, job_id, timeout=60)
+
+
+@pytest.mark.asyncio
+async def test_任务里带着两个偏好信号(api, client):
+    """服务化模式下，"会衰减的权重"与"上次吃是多少天前"也必须是**服务端**算出来的。
+
+    这两个信号在直连模式下由 `app.build_constraints` 算（界面进程读同一份事件），
+    服务化模式下客户端**什么都没传**（`client.create_plan` 只提交需求表单）——
+    所以服务端不注入的话，`USE_API=1` 的部署里菜单上永远不会出现"好久没吃这道了"，
+    这正是上一次"服务模式排菜不读档案"的同一类洞（当时也是行为测试才逼出来的）。
+
+    为了让断言不可能空过，先往库里塞两条真事件：`done`（40 天前）+ `like`（3 天前）。
+    用一道**档案里没提过**的菜，这样权重里只有这两条事件在起作用（数值是精确的）。
+    """
+    import json
+    import os
+    import sqlite3
+    from datetime import datetime, timedelta
+
+    path = os.environ["DATABASE_URL"].split("///", 1)[-1]
+    con = sqlite3.connect(path)
+    try:
+        hid = con.execute("SELECT id FROM household LIMIT 1").fetchone()[0]
+        rid = con.execute("SELECT id FROM recipe WHERE name NOT IN"
+                          " ('番茄炒蛋', '红烧排骨', '清炒时蔬') LIMIT 1").fetchone()[0]
+        now = datetime.now()
+        for action, days, meal in (("done", 40, "晚餐"), ("like", 3, "")):
+            con.execute(
+                "INSERT INTO dish_event (household_id, recipe_id, action, meal, day_no, source,"
+                " created_at) VALUES (?,?,?,?,?,?,?)",
+                (hid, rid, action, meal, 1 if meal else None, "做完了", now - timedelta(days=days)))
+        con.commit()
+    finally:
+        con.close()
+
+    r = await client.post("/api/v1/plans", json={"days": 3})
+    assert r.status_code == 202, r.text
+    job_id = r.json()["job_id"]
+    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        req = json.loads(con.execute(
+            "SELECT request FROM job WHERE id = ?", (job_id,)).fetchone()[0])
+    finally:
+        con.close()
+
+    assert req["dish_last_seen"].get(rid) in (40, 41), req["dish_last_seen"]
+    assert req["dish_weights"].get(rid) == 8.0, req["dish_weights"]
+    await wait_job(client, job_id, timeout=60)

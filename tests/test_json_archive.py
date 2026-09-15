@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from jsonmod import bind_json_events
 from recipe_planner.infra import jsonfile
 from recipe_planner.models import (ChosenDish, DayPlan, PlanResult, ShoppingItem,
                                    UserConstraints)
@@ -38,11 +39,17 @@ def _p(name: str) -> Path:
 
 
 def _fresh(module_file: str, monkeypatch, **env):
-    """按**当前**环境重新加载一份模块（这样 STORAGE=json 的分支才生效）。"""
+    """按**当前**环境重新加载一份模块（这样 STORAGE=json 的分支才生效）。
+
+    **必须连 `recipe_planner.events` 一起换成 JSON 版**（docs/07 踩坑 #44）：
+    `store.py` / `profile.py` 里的 `events` 否则还是数据库版，
+    记事件会写到真库上（`tests/jsonmod.py` 讲清了为什么）。
+    """
     monkeypatch.setenv("STORAGE", "json")
     monkeypatch.setenv("USE_API", "0")
     for k, v in env.items():
         monkeypatch.setenv(k, str(v))
+    bind_json_events(monkeypatch)
     spec = importlib.util.spec_from_file_location(
         f"_jsonmod_{module_file.replace('.', '_')}_{uuid.uuid4().hex[:6]}",
         ROOT / "recipe_planner" / module_file)

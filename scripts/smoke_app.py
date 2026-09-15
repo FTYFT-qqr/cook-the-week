@@ -1012,6 +1012,75 @@ if nav_to(at, "create"):
     check("只做晚餐时页名还是「今晚」", "今晚" in page_text(at), page_text(at)[:120])
 
 
+def seed_done(recipe_id: str, days_ago: int) -> None:
+    """塞一条"这道菜 N 天前做过"的记录（docs/12 2.6 的"好久没吃"要 30 天以上才说）。
+
+    两种后端都要能塞：JSON 后端的 `record(now=...)` 能指定时间，
+    数据库后端的 `created_at` 是库自己给的 server_default —— 只能直接写行。
+    """
+    from datetime import datetime, timedelta
+
+    when = datetime.now() - timedelta(days=days_ago)
+    if SMOKE_DB:
+        from recipe_planner.storage import orm
+        from recipe_planner.storage.engine import session_scope
+        from recipe_planner.storage.repositories import ensure_household
+        from recipe_planner.storage import sync_bridge
+
+        async def _insert():
+            async with session_scope() as s:
+                hid = await ensure_household(s)
+                s.add(orm.DishEvent(household_id=hid, recipe_id=recipe_id, action="done",
+                                    meal="晚餐", day_no=1, source="做完了", created_at=when))
+                await s.flush()
+
+        sync_bridge.run(_insert())
+    else:
+        from recipe_planner import events as ev
+
+        ev.record([{"recipe_id": recipe_id, "action": ev.DONE, "meal": "晚餐", "day_no": 1,
+                    "source": "做完了"}], now=when)
+
+
+def section_eating_history() -> None:
+    """[23] 「最近的吃法」：菜单上那句"好久没吃" + 档案页三堆（docs/12 阶段二 2.6）。"""
+    print("[23] 最近的吃法：吃过才算 · 菜单上「好久没吃」 · 档案页三堆")
+    if not nav_to(at, "create") or not find_buttons(at, "生成菜单"):
+        check("能回到表单重排（为 2.6 造一份新菜单）", False)
+        return
+    find_buttons(at, "生成菜单")[0].click()
+    at.run()
+    result = at.session_state["result"]
+    target = result.days[0].dishes[0].recipe_id
+    dish_name = db.by_id(target).name
+
+    # ① 没记录时：三堆都是空的、也不该有"好久没吃"的注脚
+    nav_to(at, "plan")
+    at.run()
+    check("没有任何吃过记录时，菜单上没有「好久没吃」的注脚",
+          "好久没吃这道了" not in page_text(at), page_text(at)[:160])
+
+    # ② 塞一条 40 天前的"做完了" → 菜单上这一道就该说话
+    seed_done(target, 40)
+    nav_to(at, "plan")
+    at.run()
+    text = page_text(at)
+    check("40 天没吃的菜在菜单上被标出来", "好久没吃这道了" in text,
+          f"dish={dish_name} 页面开头：{text[:200]}")
+    check("那句话带上了「上次多少天前」", "上次" in text and "天前" in text, text[:200])
+
+    # ③ 档案页：三堆里能看到它
+    if nav_to(at, "profile"):
+        ptext = page_text(at)
+        check("档案页有「最近的吃法」这一栏", "最近的吃法" in ptext, ptext[:200])
+        check("三堆的标题都在（最近常吃 / 好久没吃 / 刚开始爱吃）",
+              all(t in ptext for t in ("最近常吃", "好久没吃", "刚开始爱吃")), ptext[:300])
+        check("刚塞的那道出现在「好久没吃」里", dish_name in ptext, f"{dish_name} / {ptext[:200]}")
+
+
+section_eating_history()
+
+
 def _tempfile_noise_guard() -> None:
     """兜底：把没删掉的临时目录再清一遍（正常情况下 `_patch_tempfile_permissions()` 已经解决了）。"""
     import glob

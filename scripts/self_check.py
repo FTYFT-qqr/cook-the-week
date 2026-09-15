@@ -598,10 +598,14 @@ def main() -> int:
     _prof_dir = _root / ".tmp" / "self_check_final"
     _prof_dir.mkdir(parents=True, exist_ok=True)
     _prof_file = _prof_dir / "profile.json"
-    if _prof_file.exists():
-        _prof_file.unlink()
+    _events_file = _prof_dir / "events.json"
+    # **事件文件也要删**：它以前不删，于是 JSON 模式连跑两次时点数是**累加**的 ——
+    # "这道菜吃过几次"（2.6 的 n）会变成 4、6…，而老断言只问"有没有"，看不出来。
+    for _f in (_prof_file, _events_file):
+        if _f.exists():
+            _f.unlink()
     _os.environ["RECIPE_PROFILE_FILE"] = str(_prof_file)
-    _os.environ["RECIPE_EVENTS_FILE"] = str(_prof_dir / "events.json")   # 第 4 个存储
+    _os.environ["RECIPE_EVENTS_FILE"] = str(_events_file)                # 第 4 个存储
     from recipe_planner import profile as prof2  # noqa: E402
     known2 = {r.name for r in db.recipes}
     first_name = db.by_id(res_f.days[0].dishes[0].recipe_id).name
@@ -618,6 +622,23 @@ def main() -> int:
           any(e["action"] == _ev.RATE_GOOD for e in _rows)
           and any(e["action"] == _ev.LIKE for e in _rows),
           [e["action"] for e in _rows])
+
+    # 「吃过」与三堆归类（docs/12 阶段二 2.6）：刚打的两次分（好吃 + 下次不做）
+    # **都算吃过**（打分发生在做完之后），所以这道菜是"吃过 2 次、上次是今天"。
+    from recipe_planner import preference as _pref  # noqa: E402
+    _rid = next(r.id for r in db.recipes if r.name == first_name)
+    _sig = _pref.planning_signals(by_name={first_name: _rid})
+    check("2.6 打过分的菜算「吃过」，上次吃就是今天",
+          _sig["dish_last_seen"].get(_rid) == 0, _sig["dish_last_seen"])
+    _hist = _pref.eating_history()
+    check("2.6 两次打分都记成吃过（n=2）",
+          _hist.get(_rid, {}).get("n") == 2 and _hist.get(_rid, {}).get("last_days") == 0,
+          _hist.get(_rid))
+    check("2.6 归类把它放进「最近常吃」", _rid in _pref.buckets(_hist)["recent"],
+          _pref.buckets(_hist))
+    check("2.6 只是被排进菜单 ≠ 吃过",
+          _pref.last_eaten([{"recipe_id": "r01", "action": _ev.SELECT,
+                             "created_at": "2026-09-14T10:00:00"}]) == {})
     _os.environ.pop("RECIPE_PROFILE_FILE", None)
     # 同上一处：`RECIPE_EVENTS_FILE` 全程有效，谁都不许 pop（见文件开头那段注释）
 

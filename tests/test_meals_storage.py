@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 from uuid import uuid4
 
+from jsonmod import json_events_bound
 from recipe_planner.models import (ChosenDish, DayPlan, PlanResult, UserConstraints,
                                    slot_key)
 from recipe_planner.storage import db_store, engine, migrate, sync_bridge
@@ -248,32 +249,45 @@ def test_两个后端的做完了语义一致():
         db_done = snapshot(db_store.get_record(db_rec.id))
 
         # JSON 侧：同一串操作、同一份方案。用**按 STORAGE=json 重新加载的那个模块**
-        # （顶层 `store` 在 db 模式下已被 db_store 覆盖，直接调它测的是 DB）
+        # （顶层 `store` 在 db 模式下已被 db_store 覆盖，直接调它测的是 DB）。
+        # `json_events_bound`：`store.py` 里的 `events` 否则还是**数据库版**，
+        # "标记做完"会 attempt 往真库写事件（docs/07 踩坑 #44）。
         plan_file = TMP_ROOT / f"p05_{uuid4().hex[:8]}.json"
+        events_file = TMP_ROOT / f"p05_{uuid4().hex[:8]}_events.json"
         old_file = os.environ.get("RECIPE_PLAN_FILE")
+        old_events = os.environ.get("RECIPE_EVENTS_FILE")
         old_storage = os.environ.get("STORAGE")
         os.environ["RECIPE_PLAN_FILE"] = str(plan_file)
+        os.environ["RECIPE_EVENTS_FILE"] = str(events_file)
         os.environ["STORAGE"] = "json"
         try:
-            spec = importlib.util.spec_from_file_location(
-                f"json_store_p05_{uuid4().hex[:6]}",
-                Path(__file__).resolve().parent.parent / "recipe_planner" / "store.py")
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
-            json_rec = mod.save_plan(_result(1), start_date="2026-09-14")
-            mod.set_done(json_rec.id, 1, True)
-            mod.set_done(json_rec.id, 1, True, meal="早餐")
-            json_done = snapshot(mod.get_record(json_rec.id))
+            with json_events_bound():
+                spec = importlib.util.spec_from_file_location(
+                    f"json_store_p05_{uuid4().hex[:6]}",
+                    Path(__file__).resolve().parent.parent / "recipe_planner" / "store.py")
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                json_rec = mod.save_plan(_result(1), start_date="2026-09-14")
+                mod.set_done(json_rec.id, 1, True)
+                mod.set_done(json_rec.id, 1, True, meal="早餐")
+                json_done = snapshot(mod.get_record(json_rec.id))
+                # 标记做完也要落成"吃过"事件（docs/12 2.6），JSON 后端走的是临时文件
+                assert [e["action"] for e in mod.events.load_events()][:1] == ["done"]
         finally:
             if old_file is None:
                 os.environ.pop("RECIPE_PLAN_FILE", None)
             else:
                 os.environ["RECIPE_PLAN_FILE"] = old_file
+            if old_events is None:
+                os.environ.pop("RECIPE_EVENTS_FILE", None)
+            else:
+                os.environ["RECIPE_EVENTS_FILE"] = old_events
             if old_storage is None:
                 os.environ.pop("STORAGE", None)
             else:
                 os.environ["STORAGE"] = old_storage
             plan_file.unlink(missing_ok=True)
+            events_file.unlink(missing_ok=True)
 
         assert json_done == db_done == {(1, "晚餐"), (1, "早餐")}, (json_done, db_done)
 

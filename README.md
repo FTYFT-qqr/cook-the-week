@@ -1,4 +1,4 @@
-# 一周晚餐规划 Agent（recipe-planner）
+# cook-the-week · 一周晚餐规划 Agent
 
 填一次需求 → 排出一周菜单与买菜清单 → 天天能用、越用越懂你。
 
@@ -53,7 +53,8 @@
 ## 快速开始
 
 ```bash
-git clone <this-repo> && cd recipe-planner
+git clone https://github.com/FTYFT-qqr/cook-the-week.git
+cd cook-the-week
 python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 

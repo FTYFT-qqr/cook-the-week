@@ -23,6 +23,27 @@ from recipe_planner.storage.repositories import PlanRepo, ProfileRepo, RecipeRep
 DATA = settings.DATA_DIR
 
 
+def _sources() -> dict[str, Path]:
+    """要被导入的三个源文件 —— **按当前环境解析，不写死 `data/`**。
+
+    这是 2026-09-15 验证"刚 clone 下来能不能跑"时撞出来的：这里以前直接写
+    `DATA / "saved_plans.json"`，于是**忽略** `RECIPE_PLAN_FILE` / `RECIPE_PROFILE_FILE`。
+    后果不是"导入错文件"这么轻：`scripts/isolate_tmp.py` 靠这两个环境变量把临时脚本
+    与真实数据隔开，而这个脚本照样会读真实的方案与档案（再写进当时的库）——
+    隔离在最该生效的迁移路径上失效。`store` / `profile` 早就有各自的路径解析，
+    这里改用它们，两边就永远一致。
+    """
+    from recipe_planner import profile as profile_mod
+    from recipe_planner import store as store_mod
+    from recipe_planner.db import DATA_FILE
+
+    return {
+        "recipes.json": DATA_FILE,
+        "saved_plans.json": store_mod.plans_path(),
+        "customer_profile.json": profile_mod.profile_path(),
+    }
+
+
 def ensure_schema() -> None:
     """本地首次初始化：走 Alembic（`create_all` 只留给测试，见 docs/09 P0-3）。"""
     DATA.mkdir(parents=True, exist_ok=True)
@@ -34,8 +55,7 @@ def _backup() -> Path:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     dest = DATA / "backup" / stamp
     dest.mkdir(parents=True, exist_ok=True)
-    for name in ("recipes.json", "saved_plans.json", "customer_profile.json"):
-        src = DATA / name
+    for name, src in _sources().items():
         if src.exists():
             shutil.copy2(src, dest / name)
     return dest
@@ -67,7 +87,7 @@ def import_all() -> dict:
     n_recipes = sync_bridge.run(RecipeRepo.upsert_many(db.recipes))
     print(f"菜谱 {n_recipes} 道入库")
 
-    plans_raw = _read_json(DATA / "saved_plans.json")
+    plans_raw = _read_json(_sources()["saved_plans.json"])
     items = plans_raw.get("plans", []) if isinstance(plans_raw, dict) else plans_raw
     n_plans = 0
     broken: list[str] = []
@@ -107,7 +127,7 @@ def import_all() -> dict:
         for line in broken:
             print(f"    - {line}")
 
-    prof = _read_json(DATA / "customer_profile.json")
+    prof = _read_json(_sources()["customer_profile.json"])
     if prof:
         sync_bridge.run(ProfileRepo.save_profile(prof))
         print(f"档案入库：喜欢 {len(prof.get('liked_dishes', []))} 道 / "

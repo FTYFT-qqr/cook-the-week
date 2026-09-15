@@ -74,3 +74,21 @@ def test_真实数据文件没被测试碰过():
     plans = raw.get("plans", []) if isinstance(raw, dict) else raw
     assert len(plans) <= 3, "JSON 存档最多 3 份（store.MAX_PLANS）"
     assert all(p.get("id") and p.get("result") for p in plans), "存档里的方案不能被截断"
+
+
+def test_迁移脚本的源文件也听环境变量(clean_env):
+    """`import_json` 读哪三个文件，必须跟着 `RECIPE_PLAN_FILE` / `RECIPE_PROFILE_FILE` 走。
+
+    2026-09-15 验证"刚 clone 下来能不能跑"时撞出来的：它以前直接拼 `data/saved_plans.json`，
+    于是**隔离在迁移这条路径上失效** —— 临时脚本明明把两个路径指到了 `.tmp`，
+    迁移照样去读**真实的**方案与档案（再把它们写进当时的库）。这类"以为隔离了"最难发现。
+    """
+    from recipe_planner.storage import import_json
+
+    iso = isolate_tmp.isolate(tag="import_json")
+    sources = {k: Path(v).as_posix() for k, v in import_json._sources().items()}
+    assert "/.tmp/" in sources["saved_plans.json"], sources
+    assert "/.tmp/" in sources["customer_profile.json"], sources
+    assert sources["saved_plans.json"] == Path(iso["RECIPE_PLAN_FILE"]).as_posix(), sources
+    # 菜谱库是只读输入，没跟着隔离走也没关系，但必须是"存在的那个文件"
+    assert Path(sources["recipes.json"]).name == "recipes.json"

@@ -8,7 +8,7 @@
 注意：这些测试必须是**同步**函数——`migrate.ensure_schema()` 内部会 `asyncio.run()`，
 在 pytest-asyncio（asyncio_mode=auto）包装出来的事件循环里是跑不了的。
 
-运行：& 'D:\\conda\\cook\\recipe-planner\\python.exe' -m pytest tests -q
+运行：python -m pytest tests -q
 """
 from __future__ import annotations
 

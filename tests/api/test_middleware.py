@@ -1,6 +1,6 @@
 """P1-1 验收：中间件 1（请求 ID）、2（访问日志）、6（请求级事务）、7（统一错误）。
 
-运行：& 'D:\\conda\\cook\\recipe-planner\\python.exe' -m pytest tests -q
+运行：python -m pytest tests -q
 """
 from __future__ import annotations
 

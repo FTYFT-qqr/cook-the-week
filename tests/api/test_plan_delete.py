@@ -6,7 +6,7 @@
    SQLite 的外键约束不一定开着，靠数据库级联会留下孤儿行；
 3. 删除后**没有撤销**（`undo_hint=None`）：删掉的数据找不回来，给个假的"可以撤销"是骗人。
 
-运行：& 'D:\\conda\\cook\\recipe-planner\\python.exe' -m pytest tests -q
+运行：python -m pytest tests -q
 """
 from __future__ import annotations
 

@@ -1,5 +1,5 @@
 # 版本固定（2026-09-11 实测可用的组合；升级前先跑一遍全套回归，见 docs/07 §5）
-# 环境：conda D:\conda\cook\recipe-planner（Python 3.13）
+# 环境：Python 3.13（用 conda / venv 都行）
 
 # 核心：编排与领域模型
 langgraph==1.2.11

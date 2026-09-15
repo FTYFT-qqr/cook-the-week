@@ -8,7 +8,7 @@
 2. **整份恢复**（`PUT /profile/restore`）：撤销上一步改动时把快照原样写回去。
    快照里有**评分**，而 `PUT /profile` 碰不到评分 —— 少了这个口子，"撤销打分"就是假的撤销。
 
-运行：& 'D:\\conda\\cook\\recipe-planner\\python.exe' -m pytest tests -q
+运行：python -m pytest tests -q
 """
 from __future__ import annotations
 

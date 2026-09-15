@@ -1,6 +1,6 @@
 """P0-2 验收：17 张表建表、字段齐全、约束与级联真的生效。
 
-运行：& 'D:\\conda\\cook\\recipe-planner\\python.exe' -m pytest tests -q
+运行：python -m pytest tests -q
 （pytest.ini 里 asyncio_mode=auto，所以 async 测试不用加 marker）
 """
 from __future__ import annotations

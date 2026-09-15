@@ -1,11 +1,15 @@
 # secrets
 .env
+.env.local
 
 # 客户个人档案（含喜好，不入库）
 data/customer_profile.json
 
 # 客户方案存档（这一周的菜单，不入库）
 data/saved_plans.json
+
+# 偏好事件（第 4 个存储，JSON 后端用）
+data/dish_events.json
 
 # 数据库文件（本机 SQLite；P2 的 Postgres 数据在容器卷里）
 data/app.db
@@ -18,8 +22,19 @@ data/backup/
 # python
 __pycache__/
 *.pyc
+*.pyo
 
-# IDE
+# 虚拟环境 / 打包产物
+.venv/
+venv/
+env/
+build/
+dist/
+*.egg-info/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
 .idea/
 .vscode/
 

@@ -5,7 +5,7 @@
 2. **回执是人话**（05 §5.3）：句式「已<做了什么>，<哪里没动>」；
 3. **撤销是精确逆操作**：拿 `undo_hint` 原样再发一次，必须回到改动前的样子。
 
-运行：& 'D:\\conda\\cook\\recipe-planner\\python.exe' -m pytest tests -q
+运行：python -m pytest tests -q
 """
 from __future__ import annotations
 

@@ -61,7 +61,8 @@ def main() -> int:
             mismatched.append(f"缺少 {r.id}")
             continue
         for field in ("name", "category", "difficulty", "time_min", "spice_level",
-                      "cost_yuan", "calories", "protein_g", "taste_tags", "goal_tags", "allergens"):
+                      "cost_yuan", "calories", "protein_g", "taste_tags", "goal_tags", "allergens",
+                      "steps", "video_url"):
             if getattr(r, field) != getattr(d, field):
                 mismatched.append(f"{r.id}.{field}: {getattr(r, field)} != {getattr(d, field)}")
         if len(r.ingredients) != len(d.ingredients):

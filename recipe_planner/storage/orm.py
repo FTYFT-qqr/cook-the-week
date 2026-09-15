@@ -62,6 +62,16 @@ class Recipe(Base):
     taste_tags: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     goal_tags: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     allergens: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    # 家常做法 + 参考视频链接（docs/12 阶段三，迁移 0004）：与 taste_tags 同样是 JSON 列，
+    # 所以"数组字段统一用 JSON"这条约定不用破。
+    # **必须带 `server_default`**（不只是 Python 侧的 `default`）：迁移是给**已有 100 行**的
+    # 表加两列 NOT NULL，没有库级默认值 SQLite 直接拒绝（"Cannot add a NOT NULL column with
+    # default value NULL"），而且 `tests/test_migrations.py` 会逐列比对"迁移建的库"与
+    # `create_all` 建的库 —— 两边写一样才是真的等价（踩坑 #46）。
+    steps: Mapped[list] = mapped_column(JSON, default=list, server_default=text("'[]'"),
+                                        nullable=False)
+    video_url: Mapped[str] = mapped_column(String(300), default="", server_default="",
+                                           nullable=False)
     updated_at: Mapped[datetime] = _created()
 
     __table_args__ = (

@@ -893,20 +893,17 @@ def _tonight_slot(view, result, c, db, multi: bool = False) -> bool:
                          help="标记这一顿做完了，明天打开还记着"):
                 _mark_done(view.day, True, view.meal)
 
-    # 开始做饭 → 展开下锅顺序（05 M1-5）
+    # 开始做饭 → 展开「怎么做」（05 M1-5 / docs/12 阶段三 3.4）
     order, has_slow = rep.cook_order(day_plan, db)
     if order:
         if st.session_state.get("show_order_for") == tag:
             st.markdown("<p class='line'>照这个顺序来：</p>", unsafe_allow_html=True)
-            for line in order:
-                st.markdown(f"- {line}")
-            if has_slow:
-                st.markdown("<p class='line'>有汤/炖菜可以先上火，边炖边做别的。</p>",
-                            unsafe_allow_html=True)
+            _how_to_block(day_plan, db)          # 先做什么 → 每道菜怎么做 → 参考视频
             if st.button("收起", key=f"order_hide{k}", use_container_width=True):
                 st.session_state["show_order_for"] = None
                 st.rerun()
-        elif st.button("开始做饭", key=f"order_show{k}", type="primary"):
+        elif st.button("开始做饭", key=f"order_show{k}", type="primary",
+                       help="展开这一顿的做法：先做什么、每道菜几步、参考视频"):
             st.session_state["show_order_for"] = tag
             st.rerun()
 
@@ -1221,6 +1218,58 @@ def _row_of(rows, day: int, meal: str):
     return next((r for r in rows if r.day == day and r.meal == meal), None)
 
 
+def _video_link(r) -> tuple[str, str]:
+    """参考视频入口 → `(地址, 文案)`（docs/12 阶段三 3.1/3.2）。
+
+    **库里存的是"链接"，不是"内容"**：不抓取、不转存、不做代理。
+    而没有策展链接时，给的是**搜索入口**而不是编一个地址 ——
+    网上搜来的具体片子会下架、会换地址，而**菜名永远不会失效**，所以这条入口永远点得开。
+    """
+    if r.video_url:
+        return r.video_url, "看参考视频"
+    from urllib.parse import quote
+
+    return ("https://search.bilibili.com/all?keyword=" + quote(f"{r.name} 做法"),
+            "搜做法视频（B 站）")
+
+
+def _how_to_block(plan_day, db) -> None:
+    """一顿的「怎么做」：**先做什么 → 每道菜怎么做 → 参考视频**（docs/12 阶段三 3.4）。
+
+    与原来的「下锅顺序」合成一块：站在灶前的人要的就是这两样（先动哪个锅、每道菜几步），
+    分成两个入口只会让人多点一次。顺序那几句仍然来自 `rep.cook_order`（没动它的逻辑）。
+    """
+    order, has_slow = rep.cook_order(plan_day, db)
+    if order:
+        st.markdown("**先做什么**")
+        for line in order:
+            st.markdown(f"- {line}")
+        if has_slow:
+            st.markdown("<p class='line'>有汤/炖菜可以先上火，边炖边做别的。</p>",
+                        unsafe_allow_html=True)
+    written = 0
+    for dish in plan_day.dishes:
+        r = db.by_id(dish.recipe_id)
+        if r is None or not r.steps:
+            continue
+        written += 1
+        st.markdown(f"**{r.name}**")
+        st.markdown("\n".join(f"{i}. {s}" for i, s in enumerate(r.steps, start=1)))
+        url, label = _video_link(r)
+        st.markdown(f"<p class='line'>参考：<a href='{url}' target='_blank' "
+                    f"rel='noreferrer noopener'>{label}</a></p>", unsafe_allow_html=True)
+    if written == 0:
+        st.markdown("<p class='line'>这一顿的菜还没有做法（菜谱库里没写）。</p>",
+                    unsafe_allow_html=True)
+
+
+def _how_to_caption(plan_day, db) -> str:
+    """「怎么做」这一条自己的小标题：几道菜有做法 / 共几步。"""
+    total = sum(len(db.by_id(d.recipe_id).steps) for d in plan_day.dishes
+                if db.by_id(d.recipe_id) is not None)
+    return f"怎么做（{total} 步 · 含参考视频）" if total else "怎么做"
+
+
 def _dish_card(r, dish, is_loved: bool, is_hated: bool, note: str = "") -> str:
     """菜品卡：等高四段，芯片固定 3 个中性灰，状态用文字 + 底色（4.5 / V-06 / V-07）。
 
@@ -1409,10 +1458,10 @@ def _plan_day_section(day_no: int, *, result, c, db, summary, start_date, today_
             if has_slow:
                 st.markdown("<p class='line'>有汤/炖菜可以先上火，实际用时更短。</p>",
                             unsafe_allow_html=True)
-            if order:
-                with st.expander("下锅顺序"):
-                    for line in order:
-                        st.markdown(f"- {line}")
+            if order or any(db.by_id(d.recipe_id) is not None and db.by_id(d.recipe_id).steps
+                            for d in plan_day.dishes):
+                with st.expander(_how_to_caption(plan_day, db)):
+                    _how_to_block(plan_day, db)
     return picked
 
 
@@ -1506,8 +1555,14 @@ def render_plan() -> None:
     with q3:
         st.toggle("分享视图", key="share_view", help="给家人看的干净版：只有日期、菜名、金额")
     if st.session_state.get("share_view"):
-        st.code(rep.share_text(result, db, start_date), language=None)
-        st.caption("这一屏可以直接截图发给家人；没有按钮、没有技术字样。")
+        st.toggle("带上做法（发给做饭的人，照着做）", key="share_steps",
+                  help="不勾选就是干净版：只有日期、菜名、金额")
+        st.code(rep.share_text(result, db, start_date,
+                               with_steps=bool(st.session_state.get("share_steps"))),
+                language=None)
+        st.caption("这一屏可以直接截图发给家人；没有按钮、没有技术字样。"
+                   + ("　勾了「带上做法」，每道菜的步骤都在。" if st.session_state.get("share_steps")
+                      else "　要连做法一起发，勾上面那个开关。"))
     stat = [
         (f"¥{summary.total_cost:.0f}",
          f"本周花费（预算 ¥{summary.budget_total:.0f}）" if summary.budget_total

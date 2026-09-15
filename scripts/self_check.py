@@ -639,6 +639,22 @@ def main() -> int:
     check("2.6 只是被排进菜单 ≠ 吃过",
           _pref.last_eaten([{"recipe_id": "r01", "action": _ev.SELECT,
                              "created_at": "2026-09-14T10:00:00"}]) == {})
+
+    # 做法与参考视频（docs/12 阶段三）：菜单上任意一道菜都能点到做法，
+    # 而"分享给家人"的那份文本可以按需带上步骤。
+    from recipe_planner import reporting as _rep  # noqa: E402
+    check("3.x 每道菜都有 3–5 步做法",
+          all(3 <= len(r.steps) <= 5 for r in db.recipes),
+          [r.name for r in db.recipes if not 3 <= len(r.steps) <= 5][:3])
+    check("3.x 没有做法时也不会崩（分享文本照常出）",
+          isinstance(_rep.share_text(res_f, db), str))
+    _with = _rep.share_text(res_f, db, with_steps=True)
+    _first_r = db.by_id(res_f.days[0].dishes[0].recipe_id)
+    check("3.x 分享文本勾了「带上做法」就有步骤",
+          _first_r is not None and _first_r.steps and _first_r.steps[0] in _with,
+          _with[:120])
+    check("3.x 不勾时不带步骤（干净版还给家人看）",
+          _first_r is not None and _first_r.steps[0] not in _rep.share_text(res_f, db))
     _os.environ.pop("RECIPE_PROFILE_FILE", None)
     # 同上一处：`RECIPE_EVENTS_FILE` 全程有效，谁都不许 pop（见文件开头那段注释）
 

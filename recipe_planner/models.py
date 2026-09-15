@@ -53,6 +53,13 @@ class Recipe(BaseModel):
     spice_level: str = "不辣"  # SPICE_LEVELS
     goal_tags: list[str] = []  # 减脂/控糖/清淡/高蛋白/省钱 子集
     allergens: list[str] = []  # ALLERGENS 子集
+    # 家常做法（docs/12 阶段三）：3–5 步，每步一句动作。**不是算法生成的**，
+    # 是随菜谱一起维护的内容（与 `ingredients` 同级）；空列表 = 还没写，界面就不给入口。
+    steps: list[str] = []
+    # 参考视频链接：**只存链接、不抓取内容**（阶段三 3.1）。
+    # 空字符串 = 还没有策展链接 → 界面给一个"去搜做法视频"的搜索入口，
+    # 而不是编一个可能 404 的地址（详见 docs/12 v7）。
+    video_url: str = ""
     ingredients: list[Ingredient] = []
 
     @field_validator("ingredients")

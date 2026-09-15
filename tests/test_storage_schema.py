@@ -112,10 +112,14 @@ async def test_recipe_columns_and_json_roundtrip(db):
         cols = await conn.run_sync(lambda sc: {c["name"] for c in inspect(sc).get_columns("recipe")})
     assert {"id", "name", "category", "difficulty", "time_min", "cost_yuan",
             "taste_tags", "goal_tags", "allergens"} <= cols
+    # 做法与视频链接（docs/12 阶段三，迁移 0004）：两列都是"有默认值"的，老库升级上来不会 NULL
+    assert {"steps", "video_url"} <= cols, cols
 
     async with db() as s:
         s.add(Recipe(id="r01", name="西红柿炒鸡蛋", time_min=15, cost_yuan=8.5,
-                     taste_tags=["清淡", "下饭"], goal_tags=["减脂"], allergens=["蛋"]))
+                     taste_tags=["清淡", "下饭"], goal_tags=["减脂"], allergens=["蛋"],
+                     steps=["西红柿切块，鸡蛋打散", "热锅炒蛋盛出", "炒西红柿后合炒调味"],
+                     video_url="https://example.com/v"))
         s.add(Ingredient(recipe_id="r01", seq=1, name="西红柿", amount="2 个",
                          category="蔬菜", grams=300))
         await s.commit()
@@ -123,6 +127,8 @@ async def test_recipe_columns_and_json_roundtrip(db):
     async with db() as s:
         r = await s.get(Recipe, "r01")
         assert r.taste_tags == ["清淡", "下饭"]        # JSON 列往返正常
+        assert r.steps == ["西红柿切块，鸡蛋打散", "热锅炒蛋盛出", "炒西红柿后合炒调味"]
+        assert r.video_url == "https://example.com/v"
         assert float(r.cost_yuan) == 8.5
         ing = (await s.execute(select(Ingredient).where(Ingredient.recipe_id == "r01"))).scalar_one()
         assert ing.grams == 300

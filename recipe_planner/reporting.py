@@ -108,6 +108,9 @@ class DayRow:
     minutes: int
     cost: float
     meal: str = MEAL          # docs/10：一行 = 一天里的一顿（只做晚餐时就是那一天）
+    # 这一顿的菜谱 id（docs/12 阶段三）：分享文本要"带上做法"就得按 id 取 steps ——
+    # `dishes` 是**菜名**，只够显示，不够回查。
+    recipe_ids: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -146,6 +149,7 @@ def plan_summary(result: PlanResult, db: RecipeDB, start_date=None) -> PlanSumma
             minutes=day_minutes(p, db),
             cost=day_cost(p, db, c.people),
             meal=p.meal,
+            recipe_ids=[d.recipe_id for d in p.dishes if not p.skipped],
         ))
         for d in p.dishes:
             if d.recipe_id in liked_ids:
@@ -265,8 +269,14 @@ def optional_hint(row: dict) -> str:
     return "可选" if len(uses) == 1 else ""
 
 
-def share_text(result: PlanResult, db: RecipeDB, start_date=None) -> str:
-    """E-08：分享给家人的干净视图 —— 只有日期、菜名、时间、金额，没有按钮、没有技术字样。"""
+def share_text(result: PlanResult, db: RecipeDB, start_date=None,
+               with_steps: bool = False) -> str:
+    """E-08：分享给家人的干净视图 —— 只有日期、菜名、时间、金额，没有按钮、没有技术字样。
+
+    `with_steps=True`（docs/12 阶段三 3.3）：在每道菜后面补上做法步骤 ——
+    这份文本本来就是"发给做饭的人"的，对方照着做时缺的恰好是步骤。
+    默认关：不勾选时仍然是**干净版**（截图发微信不该被一屏步骤淹没）。
+    """
     summary = plan_summary(result, db, start_date)
     c = result.constraints
     lines = [f"这一周的{'晚饭' if not c.is_multi_meal() else '饭'}"
@@ -278,6 +288,13 @@ def share_text(result: PlanResult, db: RecipeDB, start_date=None) -> str:
             continue
         lines.append(f"{when}　{'、'.join(row.dishes)}"
                      f"　（约 {row.minutes} 分钟 · ¥{row.cost:.0f}）")
+        if with_steps:
+            for rid in row.recipe_ids:
+                r = db.by_id(rid)
+                if r is None or not r.steps:
+                    continue
+                lines.append(f"　　【{r.name}】")
+                lines += [f"　　{i}. {s}" for i, s in enumerate(r.steps, start=1)]
     lines += ["", "本周预计 ¥%.0f" % summary.total_cost
               + (" / 预算 ¥%.0f" % summary.budget_total if summary.budget_total else "")]
     return "\n".join(lines)

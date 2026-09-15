@@ -550,6 +550,16 @@ if _pick is not None and _days_span > 1:
     at.run()
 
 nav_to(at, "plan")
+_plan_txt = page_text(at)
+# 「怎么做」（docs/12 阶段三 3.4）：原来是「下锅顺序」一个折叠块，现在合成一块，
+# 顺序 + 每道菜的步骤 + 参考视频都在里面。**折叠块的标题不在 markdown 里**，
+# 所以要连 expander 的 label 一起看（AppTest 的元素类型随版本变，取不到就退回文本判断）。
+try:
+    _exp_labels = "\n".join(str(getattr(e, "label", "")) for e in at.get("expander"))
+except Exception:
+    _exp_labels = ""
+check("本周计划每张餐卡都有「怎么做」入口",
+      "怎么做" in _exp_labels or "怎么做" in _plan_txt, (_exp_labels or _plan_txt)[:200])
 inp = at.session_state["plan_inputs"]
 if inp:
     inp["days"] = 1                     # 天数从 3 变 1
@@ -866,13 +876,24 @@ if _done:
         at.run()
         check("可以改回未做", "已经做过了" not in page_text(at), page_text(at)[:160])
 
-# ④ 开始做饭 → 展开下锅顺序
+# ④ 开始做饭 → 展开「怎么做」（先做什么 → 每道菜几步 → 参考视频，docs/12 阶段三 3.4）
 _order = [b for b in at.button if (b.key or "") == "order_show"]
 if _order:
     _order[0].click()
     at.run()
-    check("「开始做饭」展开下锅顺序", "先上火" in page_text(at) or "接着做" in page_text(at)
+    check("「开始做饭」展开先做什么", "先上火" in page_text(at) or "接着做" in page_text(at)
           or "最后" in page_text(at), page_text(at)[:200])
+    # 这一顿的每道菜都要有步骤，并且给出参考视频入口（库里没写做法时这两条都会红）
+    _tag = at.session_state["show_order_for"] if "show_order_for" in at.session_state else None
+    _slots = [p for p in at.session_state["result"].days
+              if _tag and (p.day, p.meal) == tuple(_tag)]
+    _want_steps = [r for r in (db.by_id(d.recipe_id) for p in _slots for d in p.dishes)
+                   if r is not None and r.steps]
+    _txt = page_text(at)
+    check("「开始做饭」里这一顿每道菜的做法都列了出来（含第一步）",
+          bool(_want_steps) and all(r.steps[0] in _txt for r in _want_steps),
+          f"缺：{[r.name for r in _want_steps if r.steps[0] not in _txt][:3]}")
+    check("做法下面给了参考视频入口", "搜做法视频" in _txt or "看参考视频" in _txt, _txt[-200:])
 
 print("[19] 说人话的改需求引擎（05 §1.4：界面不开放自由对话，引擎保留并被测试覆盖）")
 from recipe_planner import assistant  # noqa: E402

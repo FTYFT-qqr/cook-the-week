@@ -102,3 +102,50 @@ def test_菜谱id与名称都不重复():
     assert len(names) == len(set(names)), "菜名重复"
     counter = Counter(r.category for r in DB.recipes)
     assert counter["早餐"] >= 10 and counter["热菜"] >= 30, counter
+
+
+# ---------------------------------------------------------------- 做法（docs/12 阶段三）
+#
+# 验收是"菜单上**任意**一道菜都能点到做法"，所以这组护栏按"每道菜"检查，不按总数：
+# 少写一道菜的做法，界面上那一道就没有入口（而它恰好可能就是明天被排上的那道）。
+
+def test_每道菜都有三到五步做法():
+    missing = [r.name for r in DB.recipes if not 3 <= len(r.steps) <= 5]
+    assert not missing, f"这些菜的做法不是 3–5 步（共 {len(missing)} 道）：{missing[:8]}"
+    counter = Counter(len(r.steps) for r in DB.recipes)
+    assert sum(counter.values()) == len(DB.recipes), counter
+
+
+def test_每一步都写成了能照着做的一句话():
+    """太短（"下锅"）等于没写；太长说明把好几步挤在一起；出现英文/编号说明是机器味。"""
+    bad = []
+    for r in DB.recipes:
+        for s in r.steps:
+            if not 6 <= len(s) <= 40:
+                bad.append(f"{r.name}: 长度 {len(s)}「{s}」")
+            elif any("a" <= ch.lower() <= "z" for ch in s):
+                bad.append(f"{r.name}: 含英文「{s}」")
+    assert not bad, bad[:8]
+
+
+def test_做法里提到了主料并且有火候或时长():
+    """内容对得上（不是复制来的通用话）且可执行（有时间/火力，不是"适当翻炒"）。"""
+    heat = ("分钟", "小时", "秒", "钟", "大火", "中火", "小火", "高火", "低火", "微波",
+            "加热", "水开", "沸", "焖", "静置", "煮", "蒸", "炒", "炖", "焯", "腌", "醒", "泡")
+    bad = []
+    for r in DB.recipes:
+        joined = "".join(r.steps)
+        main = str(r.ingredients[0].name).split("（")[0].strip() if r.ingredients else ""
+        if main and main not in joined:
+            bad.append(f"{r.name}: 没提到主料「{main}」")
+        if not any(w in joined for w in heat):
+            bad.append(f"{r.name}: 没有任何火候/时长")
+    assert not bad, bad[:8]
+
+
+def test_做法不是成段抄来的():
+    """同一条步骤在多道菜里重复出现 = 批量填空。整库不许有第二条相同文本。"""
+    counter = Counter(s for r in DB.recipes for s in r.steps)
+    dupes = [s for s, n in counter.items() if n > 1]
+    assert not dupes, f"这些步骤在多道菜里重复：{dupes[:3]}"
+    assert len(counter) >= 350, f"整库只有 {len(counter)} 条不同的步骤"

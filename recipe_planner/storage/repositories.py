@@ -73,6 +73,7 @@ def _recipe_to_domain(row: orm.Recipe) -> Recipe:
         calories=row.calories, protein_g=float(row.protein_g) if row.protein_g is not None else None,
         spice_level=row.spice_level, taste_tags=list(row.taste_tags or []),
         goal_tags=list(row.goal_tags or []), allergens=list(row.allergens or []),
+        steps=[str(x) for x in (row.steps or [])], video_url=row.video_url or "",
         ingredients=[IngredientModel(name=i.name, amount=i.amount, category=i.category,
                                      grams=float(i.grams) if i.grams is not None else None)
                      for i in sorted(row.ingredients, key=lambda x: x.seq)],
@@ -102,6 +103,8 @@ class RecipeRepo:
                 row.taste_tags = list(r.taste_tags)
                 row.goal_tags = list(r.goal_tags)
                 row.allergens = list(r.allergens)
+                row.steps = list(r.steps)
+                row.video_url = r.video_url
                 await s.flush()
                 await s.execute(delete(orm.Ingredient).where(orm.Ingredient.recipe_id == r.id))
                 await s.flush()

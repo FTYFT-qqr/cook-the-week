@@ -1,104 +1,5407 @@
 {
   "recipes": [
-    {"id": "r01", "name": "西红柿炒鸡蛋", "category": "热菜", "difficulty": "简单", "time_min": 15, "cost_yuan": 8, "calories": 420, "protein_g": 24, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["蛋"], "ingredients": [{"name": "西红柿", "amount": "2个", "category": "蔬菜", "grams": 400}, {"name": "鸡蛋", "amount": "3个", "category": "肉蛋", "grams": 150}, {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}, {"name": "食用油", "amount": "2勺", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r02", "name": "清蒸鲈鱼", "category": "热菜", "difficulty": "中等", "time_min": 25, "cost_yuan": 28, "calories": 380, "protein_g": 40, "taste_tags": ["清淡", "咸鲜"], "spice_level": "不辣", "goal_tags": ["高蛋白", "减脂"], "allergens": ["海鲜"], "ingredients": [{"name": "鲈鱼", "amount": "1条", "category": "水产", "grams": 500}, {"name": "姜", "amount": "5片", "category": "调料", "grams": 10}, {"name": "小葱", "amount": "2根", "category": "蔬菜", "grams": 20}, {"name": "蒸鱼豉油", "amount": "2勺", "category": "调料"}, {"name": "食用油", "amount": "1勺", "category": "调料"}]},
-    {"id": "r03", "name": "宫保鸡丁", "category": "热菜", "difficulty": "中等", "time_min": 30, "cost_yuan": 15, "calories": 520, "protein_g": 32, "taste_tags": ["香辣", "下饭", "咸鲜"], "spice_level": "微辣", "goal_tags": ["高蛋白"], "allergens": ["花生"], "ingredients": [{"name": "鸡胸肉", "amount": "250克", "category": "肉蛋", "grams": 250}, {"name": "花生米", "amount": "50克", "category": "干货", "grams": 50}, {"name": "干辣椒", "amount": "6个", "category": "调料", "grams": 5}, {"name": "黄瓜", "amount": "1根", "category": "蔬菜", "grams": 150}, {"name": "大葱", "amount": "1段", "category": "蔬菜", "grams": 30}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r04", "name": "蒜蓉西兰花", "category": "热菜", "difficulty": "简单", "time_min": 15, "cost_yuan": 8, "calories": 180, "protein_g": 8, "taste_tags": ["清淡"], "spice_level": "不辣", "goal_tags": ["减脂", "控糖", "清淡"], "allergens": [], "ingredients": [{"name": "西兰花", "amount": "1颗", "category": "蔬菜", "grams": 400}, {"name": "大蒜", "amount": "5瓣", "category": "调料", "grams": 15}, {"name": "食用油", "amount": "1勺", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r05", "name": "麻婆豆腐", "category": "热菜", "difficulty": "简单", "time_min": 20, "cost_yuan": 9, "calories": 300, "protein_g": 16, "taste_tags": ["香辣", "下饭"], "spice_level": "辣", "goal_tags": ["省钱"], "allergens": ["大豆"], "ingredients": [{"name": "嫩豆腐", "amount": "1盒", "category": "豆制品", "grams": 400}, {"name": "猪肉末", "amount": "80克", "category": "肉蛋", "grams": 80}, {"name": "郫县豆瓣酱", "amount": "1勺", "category": "调料"}, {"name": "花椒粉", "amount": "1小勺", "category": "调料"}, {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}]},
-    {"id": "r06", "name": "拍黄瓜", "category": "凉菜", "difficulty": "简单", "time_min": 10, "cost_yuan": 4, "calories": 90, "taste_tags": ["清爽"], "spice_level": "不辣", "goal_tags": ["减脂", "控糖", "省钱", "清淡"], "allergens": ["芝麻"], "ingredients": [{"name": "黄瓜", "amount": "2根", "category": "蔬菜", "grams": 400}, {"name": "大蒜", "amount": "4瓣", "category": "调料", "grams": 12}, {"name": "香醋", "amount": "1勺", "category": "调料"}, {"name": "香油", "amount": "少许", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r07", "name": "土豆炖牛肉", "category": "热菜", "difficulty": "中等", "time_min": 90, "cost_yuan": 40, "calories": 720, "protein_g": 45, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "牛腩", "amount": "500克", "category": "肉蛋", "grams": 500}, {"name": "土豆", "amount": "2个", "category": "蔬菜", "grams": 400}, {"name": "胡萝卜", "amount": "1根", "category": "蔬菜", "grams": 150}, {"name": "姜", "amount": "4片", "category": "调料", "grams": 8}, {"name": "八角", "amount": "2个", "category": "调料"}, {"name": "生抽", "amount": "2勺", "category": "调料"}]},
-    {"id": "r08", "name": "白灼虾", "category": "热菜", "difficulty": "简单", "time_min": 15, "cost_yuan": 35, "calories": 250, "protein_g": 40, "taste_tags": ["清淡", "咸鲜"], "spice_level": "不辣", "goal_tags": ["高蛋白", "减脂"], "allergens": ["海鲜"], "ingredients": [{"name": "基围虾", "amount": "400克", "category": "水产", "grams": 400}, {"name": "姜", "amount": "3片", "category": "调料", "grams": 6}, {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}, {"name": "生抽", "amount": "2勺", "category": "调料"}]},
-    {"id": "r09", "name": "糖醋里脊", "category": "热菜", "difficulty": "中等", "time_min": 35, "cost_yuan": 22, "calories": 680, "protein_g": 35, "taste_tags": ["酸甜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["麸质"], "ingredients": [{"name": "猪里脊", "amount": "300克", "category": "肉蛋", "grams": 300}, {"name": "番茄酱", "amount": "2勺", "category": "调料"}, {"name": "白醋", "amount": "1勺", "category": "调料"}, {"name": "白糖", "amount": "1勺", "category": "调料", "grams": 15}, {"name": "玉米淀粉", "amount": "2勺", "category": "调料"}, {"name": "食用油", "amount": "3勺", "category": "调料"}]},
-    {"id": "r10", "name": "香菇青菜", "category": "热菜", "difficulty": "简单", "time_min": 12, "cost_yuan": 6, "calories": 150, "taste_tags": ["清淡"], "spice_level": "不辣", "goal_tags": ["减脂", "控糖", "清淡", "省钱"], "allergens": [], "ingredients": [{"name": "上海青", "amount": "300克", "category": "蔬菜", "grams": 300}, {"name": "鲜香菇", "amount": "6朵", "category": "菌菇", "grams": 150}, {"name": "大蒜", "amount": "3瓣", "category": "调料", "grams": 10}, {"name": "食用油", "amount": "1勺", "category": "调料"}]},
-    {"id": "r11", "name": "酸辣土豆丝", "category": "热菜", "difficulty": "简单", "time_min": 15, "cost_yuan": 5, "calories": 260, "taste_tags": ["酸辣", "下饭"], "spice_level": "微辣", "goal_tags": ["省钱"], "allergens": [], "ingredients": [{"name": "土豆", "amount": "2个", "category": "蔬菜", "grams": 400}, {"name": "干辣椒", "amount": "3个", "category": "调料", "grams": 3}, {"name": "青椒", "amount": "1个", "category": "蔬菜", "grams": 60}, {"name": "白醋", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r12", "name": "可乐鸡翅", "category": "热菜", "difficulty": "简单", "time_min": 35, "cost_yuan": 20, "calories": 560, "protein_g": 30, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "鸡翅中", "amount": "8个", "category": "肉蛋", "grams": 400}, {"name": "可乐", "amount": "1罐", "category": "调料", "grams": 330}, {"name": "姜", "amount": "3片", "category": "调料", "grams": 6}, {"name": "生抽", "amount": "1勺", "category": "调料"}]},
-    {"id": "r13", "name": "虾仁滑蛋", "category": "热菜", "difficulty": "简单", "time_min": 15, "cost_yuan": 25, "calories": 300, "protein_g": 32, "taste_tags": ["清淡", "咸鲜"], "spice_level": "不辣", "goal_tags": ["高蛋白", "减脂"], "allergens": ["海鲜", "蛋"], "ingredients": [{"name": "虾仁", "amount": "200克", "category": "水产", "grams": 200}, {"name": "鸡蛋", "amount": "3个", "category": "肉蛋", "grams": 150}, {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r14", "name": "清炒油麦菜", "category": "热菜", "difficulty": "简单", "time_min": 10, "cost_yuan": 5, "calories": 120, "taste_tags": ["清淡"], "spice_level": "不辣", "goal_tags": ["减脂", "控糖", "清淡", "省钱"], "allergens": [], "ingredients": [{"name": "油麦菜", "amount": "300克", "category": "蔬菜", "grams": 300}, {"name": "大蒜", "amount": "3瓣", "category": "调料", "grams": 10}, {"name": "食用油", "amount": "1勺", "category": "调料"}]},
-    {"id": "r15", "name": "冬瓜排骨汤", "category": "汤", "difficulty": "简单", "time_min": 60, "cost_yuan": 22, "calories": 350, "protein_g": 25, "taste_tags": ["清淡"], "spice_level": "不辣", "goal_tags": ["清淡"], "allergens": [], "ingredients": [{"name": "猪小排", "amount": "400克", "category": "肉蛋", "grams": 400}, {"name": "冬瓜", "amount": "400克", "category": "蔬菜", "grams": 400}, {"name": "姜", "amount": "4片", "category": "调料", "grams": 8}, {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r16", "name": "紫菜蛋花汤", "category": "汤", "difficulty": "简单", "time_min": 10, "cost_yuan": 5, "calories": 150, "protein_g": 12, "taste_tags": ["清淡"], "spice_level": "不辣", "goal_tags": ["省钱", "清淡"], "allergens": ["海鲜", "蛋"], "ingredients": [{"name": "紫菜", "amount": "1小把", "category": "干货", "grams": 5}, {"name": "鸡蛋", "amount": "2个", "category": "肉蛋", "grams": 100}, {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}, {"name": "香油", "amount": "几滴", "category": "调料"}]},
-    {"id": "r17", "name": "白灼菜心", "category": "热菜", "difficulty": "简单", "time_min": 10, "cost_yuan": 6, "calories": 110, "taste_tags": ["清淡"], "spice_level": "不辣", "goal_tags": ["减脂", "控糖", "清淡"], "allergens": ["海鲜", "麸质"], "ingredients": [{"name": "菜心", "amount": "300克", "category": "蔬菜", "grams": 300}, {"name": "姜", "amount": "2片", "category": "调料", "grams": 4}, {"name": "蒸鱼豉油", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "1勺", "category": "调料"}]},
-    {"id": "r18", "name": "山药炒木耳", "category": "热菜", "difficulty": "简单", "time_min": 15, "cost_yuan": 9, "calories": 180, "taste_tags": ["清淡", "咸鲜"], "spice_level": "不辣", "goal_tags": ["减脂", "控糖", "清淡"], "allergens": [], "ingredients": [{"name": "山药", "amount": "300克", "category": "蔬菜", "grams": 300}, {"name": "干木耳", "amount": "10克", "category": "干货", "grams": 10}, {"name": "青椒", "amount": "半个", "category": "蔬菜", "grams": 40}, {"name": "食用油", "amount": "1勺", "category": "调料"}]},
-    {"id": "r19", "name": "小葱拌豆腐", "category": "凉菜", "difficulty": "简单", "time_min": 8, "cost_yuan": 5, "calories": 160, "protein_g": 14, "taste_tags": ["清淡", "清爽"], "spice_level": "不辣", "goal_tags": ["减脂", "省钱", "清淡", "高蛋白"], "allergens": ["大豆"], "ingredients": [{"name": "嫩豆腐", "amount": "1盒", "category": "豆制品", "grams": 400}, {"name": "小葱", "amount": "2根", "category": "蔬菜", "grams": 20}, {"name": "香油", "amount": "少许", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r20", "name": "蚝油生菜", "category": "热菜", "difficulty": "简单", "time_min": 8, "cost_yuan": 5, "calories": 100, "taste_tags": ["清淡", "咸鲜"], "spice_level": "不辣", "goal_tags": ["减脂", "控糖", "清淡", "省钱"], "allergens": ["海鲜"], "ingredients": [{"name": "生菜", "amount": "300克", "category": "蔬菜", "grams": 300}, {"name": "蚝油", "amount": "1勺", "category": "调料"}, {"name": "大蒜", "amount": "3瓣", "category": "调料", "grams": 10}, {"name": "食用油", "amount": "1勺", "category": "调料"}]},
-    {"id": "r21", "name": "农家小炒肉", "category": "热菜", "difficulty": "中等", "time_min": 25, "cost_yuan": 16, "calories": 620, "protein_g": 30, "taste_tags": ["香辣", "下饭"], "spice_level": "辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "五花肉", "amount": "250克", "category": "肉蛋", "grams": 250}, {"name": "青尖椒", "amount": "4个", "category": "蔬菜", "grams": 150}, {"name": "大蒜", "amount": "4瓣", "category": "调料", "grams": 12}, {"name": "豆瓣酱", "amount": "1勺", "category": "调料"}, {"name": "生抽", "amount": "1勺", "category": "调料"}]},
-    {"id": "r22", "name": "酸菜鱼", "category": "热菜", "difficulty": "较难", "time_min": 45, "cost_yuan": 30, "calories": 450, "protein_g": 38, "taste_tags": ["酸辣", "下饭"], "spice_level": "微辣", "goal_tags": ["高蛋白"], "allergens": ["海鲜"], "ingredients": [{"name": "草鱼", "amount": "1条", "category": "水产", "grams": 800}, {"name": "酸菜", "amount": "200克", "category": "蔬菜", "grams": 200}, {"name": "干辣椒", "amount": "5个", "category": "调料", "grams": 4}, {"name": "花椒", "amount": "1小把", "category": "调料", "grams": 3}, {"name": "姜", "amount": "4片", "category": "调料", "grams": 8}]},
-    {"id": "r23", "name": "韭菜炒鸡蛋", "category": "热菜", "difficulty": "简单", "time_min": 12, "cost_yuan": 8, "calories": 320, "protein_g": 20, "taste_tags": ["咸鲜"], "spice_level": "不辣", "goal_tags": ["高蛋白", "省钱"], "allergens": ["蛋"], "ingredients": [{"name": "韭菜", "amount": "200克", "category": "蔬菜", "grams": 200}, {"name": "鸡蛋", "amount": "3个", "category": "肉蛋", "grams": 150}, {"name": "食用油", "amount": "2勺", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r24", "name": "红烧肉", "category": "热菜", "difficulty": "中等", "time_min": 90, "cost_yuan": 28, "calories": 780, "protein_g": 28, "taste_tags": ["咸鲜", "下饭", "浓郁"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "五花肉", "amount": "500克", "category": "肉蛋", "grams": 500}, {"name": "冰糖", "amount": "20克", "category": "调料", "grams": 20}, {"name": "姜", "amount": "4片", "category": "调料", "grams": 8}, {"name": "生抽", "amount": "2勺", "category": "调料"}, {"name": "老抽", "amount": "1勺", "category": "调料"}]},
-    {"id": "r25", "name": "蒸蛋羹", "category": "热菜", "difficulty": "简单", "time_min": 20, "cost_yuan": 6, "calories": 180, "protein_g": 15, "taste_tags": ["清淡"], "spice_level": "不辣", "goal_tags": ["高蛋白", "减脂", "清淡"], "allergens": ["蛋"], "ingredients": [{"name": "鸡蛋", "amount": "3个", "category": "肉蛋", "grams": 150}, {"name": "温水", "amount": "200毫升", "category": "其他", "grams": 200}, {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}, {"name": "生抽", "amount": "少许", "category": "调料"}]},
-    {"id": "r26", "name": "手撕包菜", "category": "热菜", "difficulty": "简单", "time_min": 12, "cost_yuan": 5, "calories": 170, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["省钱", "控糖"], "allergens": [], "ingredients": [{"name": "包菜", "amount": "半个", "category": "蔬菜", "grams": 400}, {"name": "干辣椒", "amount": "2个", "category": "调料", "grams": 2}, {"name": "大蒜", "amount": "3瓣", "category": "调料", "grams": 10}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r27", "name": "莲藕排骨汤", "category": "汤", "difficulty": "中等", "time_min": 80, "cost_yuan": 25, "calories": 380, "protein_g": 26, "taste_tags": ["清淡"], "spice_level": "不辣", "goal_tags": ["清淡"], "allergens": [], "ingredients": [{"name": "猪小排", "amount": "400克", "category": "肉蛋", "grams": 400}, {"name": "莲藕", "amount": "300克", "category": "蔬菜", "grams": 300}, {"name": "姜", "amount": "4片", "category": "调料", "grams": 8}, {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}]},
-    {"id": "r28", "name": "番茄牛腩", "category": "热菜", "difficulty": "中等", "time_min": 80, "cost_yuan": 38, "calories": 580, "protein_g": 40, "taste_tags": ["酸甜", "咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["麸质"], "ingredients": [{"name": "牛腩", "amount": "500克", "category": "肉蛋", "grams": 500}, {"name": "西红柿", "amount": "3个", "category": "蔬菜", "grams": 600}, {"name": "洋葱", "amount": "半个", "category": "蔬菜", "grams": 100}, {"name": "姜", "amount": "3片", "category": "调料", "grams": 6}, {"name": "番茄酱", "amount": "1勺", "category": "调料"}]},
-    {"id": "r29", "name": "扬州炒饭", "category": "主食", "difficulty": "简单", "time_min": 15, "cost_yuan": 10, "calories": 620, "protein_g": 22, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["省钱"], "allergens": ["蛋"], "ingredients": [{"name": "米饭", "amount": "3碗", "category": "主食", "grams": 450}, {"name": "鸡蛋", "amount": "2个", "category": "肉蛋", "grams": 100}, {"name": "火腿", "amount": "50克", "category": "肉蛋", "grams": 50}, {"name": "豌豆", "amount": "30克", "category": "蔬菜", "grams": 30}, {"name": "玉米粒", "amount": "30克", "category": "蔬菜", "grams": 30}, {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}]},
-    {"id": "r30", "name": "葱油拌面", "category": "主食", "difficulty": "简单", "time_min": 15, "cost_yuan": 6, "calories": 450, "taste_tags": ["咸鲜", "清淡"], "spice_level": "不辣", "goal_tags": ["省钱"], "allergens": ["麸质"], "ingredients": [{"name": "面条", "amount": "300克", "category": "主食", "grams": 300}, {"name": "小葱", "amount": "4根", "category": "蔬菜", "grams": 40}, {"name": "食用油", "amount": "3勺", "category": "调料"}, {"name": "生抽", "amount": "2勺", "category": "调料"}, {"name": "白糖", "amount": "半勺", "category": "调料", "grams": 5}]},
-    {"id": "r31", "name": "皮蛋瘦肉粥", "category": "早餐", "difficulty": "简单", "time_min": 15, "cost_yuan": 7, "calories": 260, "protein_g": 14, "taste_tags": ["清淡", "咸鲜"], "spice_level": "不辣", "goal_tags": ["清淡", "省钱"], "allergens": ["蛋"], "ingredients": [{"name": "大米", "amount": "1杯", "category": "主食", "grams": 150}, {"name": "猪瘦肉", "amount": "100克", "category": "肉蛋", "grams": 100}, {"name": "皮蛋", "amount": "1个", "category": "肉蛋", "grams": 60}, {"name": "姜", "amount": "2片", "category": "调料", "grams": 4}, {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r32", "name": "小米南瓜粥", "category": "早餐", "difficulty": "简单", "time_min": 15, "cost_yuan": 5, "calories": 220, "protein_g": 6, "taste_tags": ["清淡"], "spice_level": "不辣", "goal_tags": ["清淡", "控糖", "省钱"], "allergens": [], "ingredients": [{"name": "小米", "amount": "半杯", "category": "主食", "grams": 80}, {"name": "南瓜", "amount": "200克", "category": "蔬菜", "grams": 200}, {"name": "枸杞", "amount": "少许", "category": "干货", "grams": 5}]},
-    {"id": "r33", "name": "番茄鸡蛋面", "category": "早餐", "difficulty": "简单", "time_min": 15, "cost_yuan": 7, "calories": 480, "protein_g": 20, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["省钱", "高蛋白"], "allergens": ["蛋", "麸质"], "ingredients": [{"name": "挂面", "amount": "200克", "category": "主食", "grams": 200}, {"name": "西红柿", "amount": "1个", "category": "蔬菜", "grams": 200}, {"name": "鸡蛋", "amount": "2个", "category": "肉蛋", "grams": 100}, {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}, {"name": "食用油", "amount": "1勺", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r34", "name": "葱花鸡蛋饼", "category": "早餐", "difficulty": "简单", "time_min": 12, "cost_yuan": 5, "calories": 380, "protein_g": 16, "taste_tags": ["咸鲜"], "spice_level": "不辣", "goal_tags": ["省钱", "高蛋白"], "allergens": ["蛋", "麸质"], "ingredients": [{"name": "面粉", "amount": "1杯", "category": "主食", "grams": 120}, {"name": "鸡蛋", "amount": "2个", "category": "肉蛋", "grams": 100}, {"name": "小葱", "amount": "2根", "category": "蔬菜", "grams": 20}, {"name": "食用油", "amount": "1勺", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r35", "name": "白煮蛋配黄瓜", "category": "早餐", "difficulty": "简单", "time_min": 10, "cost_yuan": 4, "calories": 170, "protein_g": 13, "taste_tags": ["清淡", "清爽"], "spice_level": "不辣", "goal_tags": ["高蛋白", "减脂", "控糖"], "allergens": ["蛋"], "ingredients": [{"name": "鸡蛋", "amount": "2个", "category": "肉蛋", "grams": 100}, {"name": "黄瓜", "amount": "1根", "category": "蔬菜", "grams": 200}, {"name": "生抽", "amount": "1勺", "category": "调料"}]},
-    {"id": "r36", "name": "燕麦牛奶", "category": "早餐", "difficulty": "简单", "time_min": 8, "cost_yuan": 6, "calories": 320, "protein_g": 14, "taste_tags": ["清淡"], "spice_level": "不辣", "goal_tags": ["高蛋白", "控糖", "清淡"], "allergens": ["奶", "麸质"], "ingredients": [{"name": "即食燕麦", "amount": "半杯", "category": "主食", "grams": 60}, {"name": "牛奶", "amount": "1盒", "category": "肉蛋", "grams": 250}, {"name": "香蕉", "amount": "1根", "category": "蔬菜", "grams": 120}]},
-    {"id": "r37", "name": "吐司煎蛋", "category": "早餐", "difficulty": "简单", "time_min": 10, "cost_yuan": 7, "calories": 420, "protein_g": 18, "taste_tags": ["咸鲜"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["蛋", "麸质", "奶"], "ingredients": [{"name": "吐司", "amount": "2片", "category": "主食", "grams": 80}, {"name": "鸡蛋", "amount": "2个", "category": "肉蛋", "grams": 100}, {"name": "黄油", "amount": "1小块", "category": "调料", "grams": 10}, {"name": "盐", "amount": "少许", "category": "调料"}]},
-    {"id": "r38", "name": "香煎速冻饺子", "category": "早餐", "difficulty": "简单", "time_min": 12, "cost_yuan": 9, "calories": 450, "protein_g": 18, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["省钱"], "allergens": ["麸质"], "ingredients": [{"name": "速冻饺子", "amount": "12个", "category": "主食", "grams": 300}, {"name": "食用油", "amount": "1勺", "category": "调料"}, {"name": "香醋", "amount": "1勺", "category": "调料"}]},
-    {"id": "r39", "name": "西红柿炖豆腐", "category": "热菜", "difficulty": "简单", "time_min": 20, "cost_yuan": 9, "calories": 260, "protein_g": 14, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白", "省钱"], "allergens": ["大豆"], "ingredients": [{"name": "西红柿", "amount": "2个", "category": "蔬菜", "grams": 300}, {"name": "北豆腐", "amount": "1块", "category": "豆制品", "grams": 400}, {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}, {"name": "食用油", "amount": "2勺", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r40", "name": "家常豆腐", "category": "热菜", "difficulty": "中等", "time_min": 25, "cost_yuan": 11, "calories": 380, "protein_g": 18, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "北豆腐", "amount": "1块", "category": "豆制品", "grams": 400}, {"name": "青椒", "amount": "1个", "category": "蔬菜", "grams": 80}, {"name": "胡萝卜", "amount": "半根", "category": "蔬菜", "grams": 60}, {"name": "生抽", "amount": "2勺", "category": "调料"}, {"name": "食用油", "amount": "3勺", "category": "调料"}]},
-    {"id": "r41", "name": "青椒肉丝", "category": "热菜", "difficulty": "简单", "time_min": 15, "cost_yuan": 14, "calories": 420, "protein_g": 26, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "猪里脊", "amount": "250克", "category": "肉蛋", "grams": 250}, {"name": "青椒", "amount": "2个", "category": "蔬菜", "grams": 150}, {"name": "大蒜", "amount": "3瓣", "category": "调料", "grams": 10}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r42", "name": "蒜苔炒肉", "category": "热菜", "difficulty": "简单", "time_min": 20, "cost_yuan": 15, "calories": 460, "protein_g": 22, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["省钱"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "蒜苔", "amount": "300克", "category": "蔬菜", "grams": 300}, {"name": "五花肉", "amount": "150克", "category": "肉蛋", "grams": 150}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "2勺", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r43", "name": "洋葱炒牛肉", "category": "热菜", "difficulty": "简单", "time_min": 18, "cost_yuan": 24, "calories": 400, "protein_g": 30, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "牛肉", "amount": "250克", "category": "肉蛋", "grams": 250}, {"name": "洋葱", "amount": "1个", "category": "蔬菜", "grams": 200}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "玉米淀粉", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r44", "name": "芹菜炒香干", "category": "热菜", "difficulty": "简单", "time_min": 15, "cost_yuan": 10, "calories": 300, "protein_g": 16, "taste_tags": ["清淡", "咸鲜"], "spice_level": "不辣", "goal_tags": ["减脂", "省钱"], "allergens": ["大豆"], "ingredients": [{"name": "芹菜", "amount": "300克", "category": "蔬菜", "grams": 300}, {"name": "香干", "amount": "200克", "category": "豆制品", "grams": 200}, {"name": "大蒜", "amount": "3瓣", "category": "调料", "grams": 10}, {"name": "食用油", "amount": "2勺", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r45", "name": "香菇滑鸡", "category": "热菜", "difficulty": "简单", "time_min": 20, "cost_yuan": 19, "calories": 380, "protein_g": 30, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "鸡腿肉", "amount": "300克", "category": "肉蛋", "grams": 300}, {"name": "鲜香菇", "amount": "6朵", "category": "菌菇", "grams": 150}, {"name": "姜", "amount": "3片", "category": "调料", "grams": 10}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "玉米淀粉", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r46", "name": "酱爆鸡丁", "category": "热菜", "difficulty": "简单", "time_min": 20, "cost_yuan": 16, "calories": 430, "protein_g": 28, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "鸡胸肉", "amount": "250克", "category": "肉蛋", "grams": 250}, {"name": "黄瓜", "amount": "1根", "category": "蔬菜", "grams": 150}, {"name": "甜面酱", "amount": "1勺", "category": "调料"}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r47", "name": "土豆烧鸡块", "category": "热菜", "difficulty": "中等", "time_min": 30, "cost_yuan": 20, "calories": 560, "protein_g": 30, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "鸡腿", "amount": "400克", "category": "肉蛋", "grams": 400}, {"name": "土豆", "amount": "2个", "category": "蔬菜", "grams": 300}, {"name": "姜", "amount": "4片", "category": "调料", "grams": 12}, {"name": "生抽", "amount": "2勺", "category": "调料"}, {"name": "老抽", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r48", "name": "冬瓜烧肉", "category": "热菜", "difficulty": "简单", "time_min": 25, "cost_yuan": 13, "calories": 420, "protein_g": 16, "taste_tags": ["咸鲜", "清淡"], "spice_level": "不辣", "goal_tags": ["省钱"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "五花肉", "amount": "200克", "category": "肉蛋", "grams": 200}, {"name": "冬瓜", "amount": "400克", "category": "蔬菜", "grams": 400}, {"name": "姜", "amount": "3片", "category": "调料", "grams": 8}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "1勺", "category": "调料"}]},
-    {"id": "r49", "name": "干煸杏鲍菇", "category": "热菜", "difficulty": "简单", "time_min": 18, "cost_yuan": 9, "calories": 200, "protein_g": 8, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["减脂", "清淡"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "杏鲍菇", "amount": "3个", "category": "菌菇", "grams": 300}, {"name": "大蒜", "amount": "4瓣", "category": "调料", "grams": 12}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r50", "name": "红烧茄子", "category": "热菜", "difficulty": "中等", "time_min": 25, "cost_yuan": 10, "calories": 320, "protein_g": 6, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["省钱"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "茄子", "amount": "2个", "category": "蔬菜", "grams": 400}, {"name": "大蒜", "amount": "4瓣", "category": "调料", "grams": 12}, {"name": "生抽", "amount": "2勺", "category": "调料"}, {"name": "白糖", "amount": "1勺", "category": "调料", "grams": 10}, {"name": "食用油", "amount": "3勺", "category": "调料"}]},
-    {"id": "r51", "name": "地三鲜", "category": "热菜", "difficulty": "中等", "time_min": 30, "cost_yuan": 12, "calories": 420, "protein_g": 8, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["省钱"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "土豆", "amount": "2个", "category": "蔬菜", "grams": 300}, {"name": "茄子", "amount": "1个", "category": "蔬菜", "grams": 250}, {"name": "青椒", "amount": "1个", "category": "蔬菜", "grams": 100}, {"name": "生抽", "amount": "2勺", "category": "调料"}, {"name": "食用油", "amount": "4勺", "category": "调料"}]},
-    {"id": "r52", "name": "肉末茄子", "category": "热菜", "difficulty": "中等", "time_min": 25, "cost_yuan": 14, "calories": 400, "protein_g": 15, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["省钱"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "茄子", "amount": "2个", "category": "蔬菜", "grams": 400}, {"name": "猪肉末", "amount": "150克", "category": "肉蛋", "grams": 150}, {"name": "大蒜", "amount": "3瓣", "category": "调料", "grams": 10}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "3勺", "category": "调料"}]},
-    {"id": "r53", "name": "咖喱土豆鸡", "category": "热菜", "difficulty": "中等", "time_min": 30, "cost_yuan": 22, "calories": 620, "protein_g": 30, "taste_tags": ["浓郁", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["麸质"], "ingredients": [{"name": "鸡腿肉", "amount": "300克", "category": "肉蛋", "grams": 300}, {"name": "土豆", "amount": "2个", "category": "蔬菜", "grams": 300}, {"name": "胡萝卜", "amount": "1根", "category": "蔬菜", "grams": 100}, {"name": "咖喱块", "amount": "2块", "category": "调料", "grams": 40}, {"name": "食用油", "amount": "1勺", "category": "调料"}]},
-    {"id": "r54", "name": "白菜炖粉条", "category": "热菜", "difficulty": "简单", "time_min": 25, "cost_yuan": 11, "calories": 380, "protein_g": 12, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["省钱"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "白菜", "amount": "400克", "category": "蔬菜", "grams": 400}, {"name": "红薯粉条", "amount": "100克", "category": "主食", "grams": 100}, {"name": "五花肉", "amount": "100克", "category": "肉蛋", "grams": 100}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "1勺", "category": "调料"}]},
-    {"id": "r55", "name": "芹菜炒牛肉", "category": "热菜", "difficulty": "简单", "time_min": 18, "cost_yuan": 24, "calories": 390, "protein_g": 30, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "牛肉", "amount": "250克", "category": "肉蛋", "grams": 250}, {"name": "芹菜", "amount": "300克", "category": "蔬菜", "grams": 300}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "玉米淀粉", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r56", "name": "韭菜炒豆芽", "category": "热菜", "difficulty": "简单", "time_min": 12, "cost_yuan": 6, "calories": 180, "protein_g": 6, "taste_tags": ["清爽", "清淡"], "spice_level": "不辣", "goal_tags": ["减脂", "省钱", "清淡"], "allergens": [], "ingredients": [{"name": "韭菜", "amount": "200克", "category": "蔬菜", "grams": 200}, {"name": "绿豆芽", "amount": "300克", "category": "蔬菜", "grams": 300}, {"name": "食用油", "amount": "2勺", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r57", "name": "蒜蓉菠菜", "category": "热菜", "difficulty": "简单", "time_min": 10, "cost_yuan": 6, "calories": 150, "protein_g": 6, "taste_tags": ["清淡", "清爽"], "spice_level": "不辣", "goal_tags": ["减脂", "控糖", "清淡", "省钱"], "allergens": [], "ingredients": [{"name": "菠菜", "amount": "400克", "category": "蔬菜", "grams": 400}, {"name": "大蒜", "amount": "4瓣", "category": "调料", "grams": 12}, {"name": "食用油", "amount": "1勺", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r58", "name": "清炒莴笋", "category": "热菜", "difficulty": "简单", "time_min": 12, "cost_yuan": 7, "calories": 160, "protein_g": 5, "taste_tags": ["清爽", "清淡"], "spice_level": "不辣", "goal_tags": ["减脂", "清淡"], "allergens": [], "ingredients": [{"name": "莴笋", "amount": "2根", "category": "蔬菜", "grams": 400}, {"name": "大蒜", "amount": "3瓣", "category": "调料", "grams": 10}, {"name": "食用油", "amount": "1勺", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r59", "name": "蒜蓉粉丝蒸娃娃菜", "category": "热菜", "difficulty": "简单", "time_min": 20, "cost_yuan": 10, "calories": 220, "protein_g": 6, "taste_tags": ["清淡", "咸鲜"], "spice_level": "不辣", "goal_tags": ["清淡", "省钱"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "娃娃菜", "amount": "2颗", "category": "蔬菜", "grams": 400}, {"name": "粉丝", "amount": "1把", "category": "主食", "grams": 80}, {"name": "大蒜", "amount": "5瓣", "category": "调料", "grams": 15}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r60", "name": "番茄炒菜花", "category": "热菜", "difficulty": "简单", "time_min": 15, "cost_yuan": 9, "calories": 200, "protein_g": 7, "taste_tags": ["酸甜", "清淡"], "spice_level": "不辣", "goal_tags": ["减脂", "控糖", "清淡"], "allergens": [], "ingredients": [{"name": "菜花", "amount": "1颗", "category": "蔬菜", "grams": 400}, {"name": "西红柿", "amount": "2个", "category": "蔬菜", "grams": 250}, {"name": "大蒜", "amount": "3瓣", "category": "调料", "grams": 10}, {"name": "食用油", "amount": "2勺", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r61", "name": "手撕鸡丝", "category": "凉菜", "difficulty": "简单", "time_min": 20, "cost_yuan": 15, "calories": 320, "protein_g": 30, "taste_tags": ["清爽", "咸鲜"], "spice_level": "不辣", "goal_tags": ["高蛋白", "减脂"], "allergens": ["大豆", "芝麻", "麸质"], "ingredients": [{"name": "鸡胸肉", "amount": "300克", "category": "肉蛋", "grams": 300}, {"name": "黄瓜", "amount": "1根", "category": "蔬菜", "grams": 150}, {"name": "大蒜", "amount": "3瓣", "category": "调料", "grams": 10}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "香油", "amount": "1勺", "category": "调料"}]},
-    {"id": "r62", "name": "凉拌木耳", "category": "凉菜", "difficulty": "简单", "time_min": 10, "cost_yuan": 6, "calories": 120, "protein_g": 4, "taste_tags": ["清爽", "清淡"], "spice_level": "不辣", "goal_tags": ["减脂", "控糖", "清淡"], "allergens": ["芝麻"], "ingredients": [{"name": "干木耳", "amount": "15克", "category": "干货", "grams": 15}, {"name": "青椒", "amount": "1个", "category": "蔬菜", "grams": 80}, {"name": "大蒜", "amount": "3瓣", "category": "调料", "grams": 10}, {"name": "香醋", "amount": "1勺", "category": "调料"}, {"name": "香油", "amount": "1勺", "category": "调料"}]},
-    {"id": "r63", "name": "凉拌土豆丝", "category": "凉菜", "difficulty": "简单", "time_min": 12, "cost_yuan": 5, "calories": 220, "protein_g": 4, "taste_tags": ["清爽", "酸甜"], "spice_level": "不辣", "goal_tags": ["省钱", "清淡"], "allergens": ["芝麻"], "ingredients": [{"name": "土豆", "amount": "2个", "category": "蔬菜", "grams": 300}, {"name": "青椒", "amount": "1个", "category": "蔬菜", "grams": 80}, {"name": "白醋", "amount": "1勺", "category": "调料"}, {"name": "香油", "amount": "1勺", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r64", "name": "番茄豆腐汤", "category": "汤", "difficulty": "简单", "time_min": 15, "cost_yuan": 8, "calories": 180, "protein_g": 12, "taste_tags": ["酸甜", "清淡"], "spice_level": "不辣", "goal_tags": ["清淡", "省钱"], "allergens": ["大豆"], "ingredients": [{"name": "西红柿", "amount": "2个", "category": "蔬菜", "grams": 250}, {"name": "北豆腐", "amount": "1块", "category": "豆制品", "grams": 300}, {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}, {"name": "食用油", "amount": "1勺", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r65", "name": "香菇豆腐汤", "category": "汤", "difficulty": "简单", "time_min": 15, "cost_yuan": 9, "calories": 190, "protein_g": 13, "taste_tags": ["清淡", "咸鲜"], "spice_level": "不辣", "goal_tags": ["清淡", "减脂"], "allergens": ["大豆"], "ingredients": [{"name": "鲜香菇", "amount": "5朵", "category": "菌菇", "grams": 120}, {"name": "北豆腐", "amount": "1块", "category": "豆制品", "grams": 300}, {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r66", "name": "萝卜丝汤", "category": "汤", "difficulty": "简单", "time_min": 15, "cost_yuan": 6, "calories": 120, "protein_g": 3, "taste_tags": ["清淡", "清爽"], "spice_level": "不辣", "goal_tags": ["清淡", "减脂", "省钱"], "allergens": ["芝麻"], "ingredients": [{"name": "白萝卜", "amount": "400克", "category": "蔬菜", "grams": 400}, {"name": "姜", "amount": "3片", "category": "调料", "grams": 8}, {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}, {"name": "香油", "amount": "少许", "category": "调料"}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r67", "name": "青椒土豆丝", "category": "热菜", "difficulty": "简单", "time_min": 15, "cost_yuan": 7, "calories": 240, "protein_g": 5, "taste_tags": ["清爽", "咸鲜"], "spice_level": "不辣", "goal_tags": ["省钱", "清淡"], "allergens": [], "ingredients": [{"name": "土豆", "amount": "2个", "category": "蔬菜", "grams": 300}, {"name": "青椒", "amount": "1个", "category": "蔬菜", "grams": 80}, {"name": "大蒜", "amount": "3瓣", "category": "调料", "grams": 10}, {"name": "白醋", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r68", "name": "蒜香鸡翅", "category": "热菜", "difficulty": "简单", "time_min": 25, "cost_yuan": 20, "calories": 520, "protein_g": 34, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "鸡翅中", "amount": "8个", "category": "肉蛋", "grams": 400}, {"name": "大蒜", "amount": "5瓣", "category": "调料", "grams": 15}, {"name": "生抽", "amount": "2勺", "category": "调料"}, {"name": "蜂蜜", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "1勺", "category": "调料"}]},
-    {"id": "r69", "name": "香菇蒸鸡", "category": "热菜", "difficulty": "简单", "time_min": 25, "cost_yuan": 20, "calories": 400, "protein_g": 32, "taste_tags": ["咸鲜", "清淡"], "spice_level": "不辣", "goal_tags": ["高蛋白", "清淡"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "鸡腿肉", "amount": "300克", "category": "肉蛋", "grams": 300}, {"name": "干香菇", "amount": "6朵", "category": "干货", "grams": 20}, {"name": "姜", "amount": "3片", "category": "调料", "grams": 8}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "玉米淀粉", "amount": "1勺", "category": "调料"}]},
-    {"id": "r70", "name": "南瓜蒸排骨", "category": "热菜", "difficulty": "中等", "time_min": 30, "cost_yuan": 24, "calories": 520, "protein_g": 28, "taste_tags": ["咸鲜", "清淡"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "猪小排", "amount": "400克", "category": "肉蛋", "grams": 400}, {"name": "南瓜", "amount": "300克", "category": "蔬菜", "grams": 300}, {"name": "姜", "amount": "3片", "category": "调料", "grams": 8}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "玉米淀粉", "amount": "1勺", "category": "调料"}]},
-    {"id": "r71", "name": "洋葱土豆片", "category": "热菜", "difficulty": "简单", "time_min": 18, "cost_yuan": 8, "calories": 300, "protein_g": 6, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["省钱"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "土豆", "amount": "2个", "category": "蔬菜", "grams": 300}, {"name": "洋葱", "amount": "1个", "category": "蔬菜", "grams": 200}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r72", "name": "番茄牛肉", "category": "热菜", "difficulty": "中等", "time_min": 30, "cost_yuan": 26, "calories": 430, "protein_g": 32, "taste_tags": ["酸甜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "牛肉", "amount": "300克", "category": "肉蛋", "grams": 300}, {"name": "西红柿", "amount": "3个", "category": "蔬菜", "grams": 400}, {"name": "姜", "amount": "3片", "category": "调料", "grams": 8}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r73", "name": "番茄炖牛腩", "category": "热菜", "difficulty": "中等", "time_min": 40, "cost_yuan": 32, "calories": 560, "protein_g": 34, "taste_tags": ["酸甜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["麸质"], "ingredients": [{"name": "牛腩", "amount": "500克", "category": "肉蛋", "grams": 500}, {"name": "西红柿", "amount": "3个", "category": "蔬菜", "grams": 400}, {"name": "洋葱", "amount": "半个", "category": "蔬菜", "grams": 100}, {"name": "姜", "amount": "3片", "category": "调料", "grams": 8}, {"name": "番茄酱", "amount": "1勺", "category": "调料"}]},
-    {"id": "r74", "name": "萝卜炖牛腩", "category": "热菜", "difficulty": "中等", "time_min": 40, "cost_yuan": 30, "calories": 540, "protein_g": 33, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "牛腩", "amount": "500克", "category": "肉蛋", "grams": 500}, {"name": "白萝卜", "amount": "400克", "category": "蔬菜", "grams": 400}, {"name": "姜", "amount": "4片", "category": "调料", "grams": 12}, {"name": "八角", "amount": "2个", "category": "调料", "grams": 5}, {"name": "生抽", "amount": "2勺", "category": "调料"}]},
-    {"id": "r75", "name": "黄豆焖鸡", "category": "热菜", "difficulty": "中等", "time_min": 40, "cost_yuan": 20, "calories": 600, "protein_g": 38, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "鸡腿", "amount": "400克", "category": "肉蛋", "grams": 400}, {"name": "黄豆", "amount": "100克", "category": "干货", "grams": 100}, {"name": "姜", "amount": "3片", "category": "调料", "grams": 8}, {"name": "生抽", "amount": "2勺", "category": "调料"}]},
-    {"id": "r76", "name": "花菜炒肉", "category": "热菜", "difficulty": "简单", "time_min": 35, "cost_yuan": 14, "calories": 400, "protein_g": 16, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["省钱"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "菜花", "amount": "1颗", "category": "蔬菜", "grams": 400}, {"name": "五花肉", "amount": "150克", "category": "肉蛋", "grams": 150}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r77", "name": "香菇炖豆腐", "category": "热菜", "difficulty": "中等", "time_min": 35, "cost_yuan": 12, "calories": 360, "protein_g": 20, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["高蛋白", "清淡"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "北豆腐", "amount": "1块", "category": "豆制品", "grams": 400}, {"name": "鲜香菇", "amount": "6朵", "category": "菌菇", "grams": 150}, {"name": "生抽", "amount": "2勺", "category": "调料"}, {"name": "食用油", "amount": "2勺", "category": "调料"}]},
-    {"id": "r78", "name": "玉米炖排骨", "category": "汤", "difficulty": "中等", "time_min": 40, "cost_yuan": 22, "calories": 480, "protein_g": 26, "taste_tags": ["清淡", "咸鲜"], "spice_level": "不辣", "goal_tags": ["高蛋白", "清淡"], "allergens": [], "ingredients": [{"name": "猪小排", "amount": "400克", "category": "肉蛋", "grams": 400}, {"name": "玉米", "amount": "2根", "category": "蔬菜", "grams": 400}, {"name": "胡萝卜", "amount": "1根", "category": "蔬菜", "grams": 100}, {"name": "姜", "amount": "3片", "category": "调料", "grams": 8}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r79", "name": "山药炖鸡", "category": "汤", "difficulty": "中等", "time_min": 40, "cost_yuan": 22, "calories": 460, "protein_g": 34, "taste_tags": ["清淡", "咸鲜"], "spice_level": "不辣", "goal_tags": ["高蛋白", "清淡"], "allergens": [], "ingredients": [{"name": "鸡腿", "amount": "400克", "category": "肉蛋", "grams": 400}, {"name": "山药", "amount": "300克", "category": "蔬菜", "grams": 300}, {"name": "姜", "amount": "3片", "category": "调料", "grams": 8}, {"name": "枸杞", "amount": "少许", "category": "干货", "grams": 5}, {"name": "盐", "amount": "适量", "category": "调料"}]},
-    {"id": "r80", "name": "茄子煲", "category": "热菜", "difficulty": "中等", "time_min": 35, "cost_yuan": 13, "calories": 380, "protein_g": 14, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["省钱"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "茄子", "amount": "2个", "category": "蔬菜", "grams": 400}, {"name": "猪肉末", "amount": "150克", "category": "肉蛋", "grams": 150}, {"name": "大蒜", "amount": "4瓣", "category": "调料", "grams": 12}, {"name": "生抽", "amount": "2勺", "category": "调料"}, {"name": "食用油", "amount": "3勺", "category": "调料"}]},
-    {"id": "r81", "name": "芋头蒸排骨", "category": "热菜", "difficulty": "中等", "time_min": 40, "cost_yuan": 23, "calories": 540, "protein_g": 26, "taste_tags": ["咸鲜", "清淡"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "猪小排", "amount": "400克", "category": "肉蛋", "grams": 400}, {"name": "芋头", "amount": "300克", "category": "蔬菜", "grams": 300}, {"name": "姜", "amount": "3片", "category": "调料", "grams": 8}, {"name": "生抽", "amount": "1勺", "category": "调料"}]},
-    {"id": "r82", "name": "干锅土豆片", "category": "热菜", "difficulty": "中等", "time_min": 35, "cost_yuan": 11, "calories": 420, "protein_g": 10, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["省钱"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "土豆", "amount": "3个", "category": "蔬菜", "grams": 450}, {"name": "五花肉", "amount": "100克", "category": "肉蛋", "grams": 100}, {"name": "大蒜", "amount": "4瓣", "category": "调料", "grams": 12}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "食用油", "amount": "3勺", "category": "调料"}]},
-    {"id": "r83", "name": "白粥配榨菜", "category": "早餐", "difficulty": "简单", "time_min": 20, "cost_yuan": 3, "calories": 200, "protein_g": 4, "taste_tags": ["清淡", "清爽"], "spice_level": "不辣", "goal_tags": ["清淡", "省钱"], "allergens": [], "ingredients": [{"name": "大米", "amount": "1杯", "category": "主食", "grams": 150}, {"name": "榨菜", "amount": "1小包", "category": "其他", "grams": 50}]},
-    {"id": "r84", "name": "红薯粥", "category": "早餐", "difficulty": "简单", "time_min": 20, "cost_yuan": 5, "calories": 260, "protein_g": 5, "taste_tags": ["清淡", "酸甜"], "spice_level": "不辣", "goal_tags": ["清淡", "控糖", "省钱"], "allergens": [], "ingredients": [{"name": "红薯", "amount": "300克", "category": "蔬菜", "grams": 300}, {"name": "大米", "amount": "半杯", "category": "主食", "grams": 80}]},
-    {"id": "r85", "name": "山药小米粥", "category": "早餐", "difficulty": "简单", "time_min": 20, "cost_yuan": 6, "calories": 240, "protein_g": 6, "taste_tags": ["清淡", "清爽"], "spice_level": "不辣", "goal_tags": ["清淡", "控糖"], "allergens": [], "ingredients": [{"name": "山药", "amount": "200克", "category": "蔬菜", "grams": 200}, {"name": "小米", "amount": "半杯", "category": "主食", "grams": 80}, {"name": "枸杞", "amount": "少许", "category": "干货", "grams": 5}]},
-    {"id": "r86", "name": "南瓜粥", "category": "早餐", "difficulty": "简单", "time_min": 20, "cost_yuan": 5, "calories": 220, "protein_g": 4, "taste_tags": ["清淡", "酸甜"], "spice_level": "不辣", "goal_tags": ["清淡", "控糖"], "allergens": [], "ingredients": [{"name": "南瓜", "amount": "300克", "category": "蔬菜", "grams": 300}, {"name": "大米", "amount": "半杯", "category": "主食", "grams": 80}]},
-    {"id": "r87", "name": "紫薯粥", "category": "早餐", "difficulty": "简单", "time_min": 20, "cost_yuan": 6, "calories": 250, "protein_g": 5, "taste_tags": ["清淡", "酸甜"], "spice_level": "不辣", "goal_tags": ["清淡", "控糖"], "allergens": [], "ingredients": [{"name": "紫薯", "amount": "300克", "category": "蔬菜", "grams": 300}, {"name": "大米", "amount": "半杯", "category": "主食", "grams": 80}]},
-    {"id": "r88", "name": "蔬菜粥", "category": "早餐", "difficulty": "简单", "time_min": 20, "cost_yuan": 6, "calories": 230, "protein_g": 5, "taste_tags": ["清淡", "咸鲜"], "spice_level": "不辣", "goal_tags": ["清淡", "减脂"], "allergens": [], "ingredients": [{"name": "大米", "amount": "半杯", "category": "主食", "grams": 80}, {"name": "上海青", "amount": "200克", "category": "蔬菜", "grams": 200}, {"name": "胡萝卜", "amount": "半根", "category": "蔬菜", "grams": 60}]},
-    {"id": "r89", "name": "玉米糊", "category": "早餐", "difficulty": "简单", "time_min": 10, "cost_yuan": 3, "calories": 180, "protein_g": 4, "taste_tags": ["清淡"], "spice_level": "不辣", "goal_tags": ["清淡", "省钱"], "allergens": [], "ingredients": [{"name": "玉米面", "amount": "1碗", "category": "主食", "grams": 80}, {"name": "白糖", "amount": "1勺", "category": "调料", "grams": 10}]},
-    {"id": "r90", "name": "玉米面发糕", "category": "早餐", "difficulty": "简单", "time_min": 25, "cost_yuan": 4, "calories": 240, "protein_g": 6, "taste_tags": ["清淡", "酸甜"], "spice_level": "不辣", "goal_tags": ["清淡", "省钱"], "allergens": [], "ingredients": [{"name": "玉米面", "amount": "1碗", "category": "主食", "grams": 100}, {"name": "白糖", "amount": "2勺", "category": "调料", "grams": 20}, {"name": "酵母", "amount": "少许", "category": "调料"}]},
-    {"id": "r91", "name": "糯米鸡", "category": "早餐", "difficulty": "中等", "time_min": 25, "cost_yuan": 10, "calories": 420, "protein_g": 20, "taste_tags": ["咸鲜", "浓郁"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "糯米", "amount": "1杯", "category": "主食", "grams": 150}, {"name": "鸡腿肉", "amount": "150克", "category": "肉蛋", "grams": 150}, {"name": "干香菇", "amount": "4朵", "category": "干货", "grams": 12}, {"name": "生抽", "amount": "1勺", "category": "调料"}]},
-    {"id": "r92", "name": "鲜肉小馄饨", "category": "早餐", "difficulty": "简单", "time_min": 15, "cost_yuan": 10, "calories": 380, "protein_g": 18, "taste_tags": ["咸鲜", "清淡"], "spice_level": "不辣", "goal_tags": ["高蛋白"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "馄饨皮", "amount": "20张", "category": "主食", "grams": 150}, {"name": "猪肉末", "amount": "150克", "category": "肉蛋", "grams": 150}, {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}, {"name": "生抽", "amount": "1勺", "category": "调料"}]},
-    {"id": "r93", "name": "白菜猪肉包", "category": "早餐", "difficulty": "简单", "time_min": 12, "cost_yuan": 7, "calories": 360, "protein_g": 14, "taste_tags": ["咸鲜", "下饭"], "spice_level": "不辣", "goal_tags": ["省钱"], "allergens": ["麸质"], "ingredients": [{"name": "面粉", "amount": "200克", "category": "主食", "grams": 200}, {"name": "白菜", "amount": "200克", "category": "蔬菜", "grams": 200}, {"name": "猪肉末", "amount": "100克", "category": "肉蛋", "grams": 100}, {"name": "姜", "amount": "2片", "category": "调料", "grams": 5}]},
-    {"id": "r94", "name": "豆浆配蒸红薯", "category": "早餐", "difficulty": "简单", "time_min": 20, "cost_yuan": 6, "calories": 300, "protein_g": 12, "taste_tags": ["清淡", "清爽"], "spice_level": "不辣", "goal_tags": ["高蛋白", "清淡", "省钱"], "allergens": ["大豆"], "ingredients": [{"name": "黄豆", "amount": "50克", "category": "干货", "grams": 50}, {"name": "红薯", "amount": "250克", "category": "蔬菜", "grams": 250}]},
-    {"id": "r95", "name": "蒸红薯", "category": "早餐", "difficulty": "简单", "time_min": 10, "cost_yuan": 4, "calories": 180, "protein_g": 3, "taste_tags": ["清淡", "酸甜"], "spice_level": "不辣", "goal_tags": ["清淡", "控糖", "省钱"], "allergens": [], "ingredients": [{"name": "红薯", "amount": "2个", "category": "蔬菜", "grams": 300}]},
-    {"id": "r96", "name": "水煮玉米", "category": "早餐", "difficulty": "简单", "time_min": 12, "cost_yuan": 5, "calories": 200, "protein_g": 5, "taste_tags": ["清淡"], "spice_level": "不辣", "goal_tags": ["清淡", "省钱"], "allergens": [], "ingredients": [{"name": "玉米", "amount": "2根", "category": "蔬菜", "grams": 400}]},
-    {"id": "r97", "name": "豆浆油条", "category": "早餐", "difficulty": "简单", "time_min": 10, "cost_yuan": 6, "calories": 420, "protein_g": 12, "taste_tags": ["咸鲜"], "spice_level": "不辣", "goal_tags": ["省钱"], "allergens": ["大豆", "麸质"], "ingredients": [{"name": "黄豆", "amount": "50克", "category": "干货", "grams": 50}, {"name": "油条", "amount": "2根", "category": "主食", "grams": 150}]},
-    {"id": "r98", "name": "豆腐脑", "category": "早餐", "difficulty": "简单", "time_min": 10, "cost_yuan": 5, "calories": 180, "protein_g": 12, "taste_tags": ["咸鲜", "清淡"], "spice_level": "不辣", "goal_tags": ["高蛋白", "清淡"], "allergens": ["大豆", "芝麻", "麸质"], "ingredients": [{"name": "内酯豆腐", "amount": "1盒", "category": "豆制品", "grams": 300}, {"name": "生抽", "amount": "1勺", "category": "调料"}, {"name": "榨菜", "amount": "少许", "category": "其他", "grams": 20}, {"name": "香油", "amount": "少许", "category": "调料"}]},
-    {"id": "r99", "name": "馒头配咸菜", "category": "早餐", "difficulty": "简单", "time_min": 10, "cost_yuan": 4, "calories": 300, "protein_g": 8, "taste_tags": ["清淡", "咸鲜"], "spice_level": "不辣", "goal_tags": ["省钱", "清淡"], "allergens": ["麸质"], "ingredients": [{"name": "馒头", "amount": "2个", "category": "主食", "grams": 200}, {"name": "咸菜", "amount": "少许", "category": "其他", "grams": 30}]},
-    {"id": "r100", "name": "燕麦香蕉粥", "category": "早餐", "difficulty": "简单", "time_min": 10, "cost_yuan": 5, "calories": 280, "protein_g": 8, "taste_tags": ["清淡", "酸甜"], "spice_level": "不辣", "goal_tags": ["清淡", "高蛋白"], "allergens": ["麸质"], "ingredients": [{"name": "即食燕麦", "amount": "半杯", "category": "主食", "grams": 60}, {"name": "香蕉", "amount": "1根", "category": "蔬菜", "grams": 120}]}
+    {
+      "id": "r01",
+      "name": "西红柿炒鸡蛋",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 8,
+      "calories": 420,
+      "protein_g": 24,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "蛋"
+      ],
+      "ingredients": [
+        {
+          "name": "西红柿",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "鸡蛋",
+          "amount": "3个",
+          "category": "肉蛋",
+          "grams": 150
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "西红柿两个去蒂切滚刀块，鸡蛋三个加少许盐打散",
+        "热锅倒两勺油，倒入蛋液中火炒至凝固盛出",
+        "锅内留底油下西红柿，中火翻炒三分钟出红汁",
+        "倒回鸡蛋，加盐炒匀，撒小葱段翻两下出锅"
+      ]
+    },
+    {
+      "id": "r02",
+      "name": "清蒸鲈鱼",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 25,
+      "cost_yuan": 28,
+      "calories": 380,
+      "protein_g": 40,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "减脂"
+      ],
+      "allergens": [
+        "海鲜"
+      ],
+      "ingredients": [
+        {
+          "name": "鲈鱼",
+          "amount": "1条",
+          "category": "水产",
+          "grams": 500
+        },
+        {
+          "name": "姜",
+          "amount": "5片",
+          "category": "调料",
+          "grams": 10
+        },
+        {
+          "name": "小葱",
+          "amount": "2根",
+          "category": "蔬菜",
+          "grams": 20
+        },
+        {
+          "name": "蒸鱼豉油",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "鲈鱼一条洗净，两面各划两刀，鱼身铺三片姜",
+        "蒸锅水开后放入鲈鱼，大火蒸八分钟关火",
+        "倒掉盘中腥水，拣去姜片，铺上葱丝",
+        "淋两勺蒸鱼豉油，另烧一勺热油浇在葱丝上"
+      ]
+    },
+    {
+      "id": "r03",
+      "name": "宫保鸡丁",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 30,
+      "cost_yuan": 15,
+      "calories": 520,
+      "protein_g": 32,
+      "taste_tags": [
+        "香辣",
+        "下饭",
+        "咸鲜"
+      ],
+      "spice_level": "微辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "花生"
+      ],
+      "ingredients": [
+        {
+          "name": "鸡胸肉",
+          "amount": "250克",
+          "category": "肉蛋",
+          "grams": 250
+        },
+        {
+          "name": "花生米",
+          "amount": "50克",
+          "category": "干货",
+          "grams": 50
+        },
+        {
+          "name": "干辣椒",
+          "amount": "6个",
+          "category": "调料",
+          "grams": 5
+        },
+        {
+          "name": "黄瓜",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 150
+        },
+        {
+          "name": "大葱",
+          "amount": "1段",
+          "category": "蔬菜",
+          "grams": 30
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "鸡胸肉二百五十克切丁，加少许油抓匀待用",
+        "黄瓜一根切丁，大葱切段，干辣椒六个剪段",
+        "中火热油，下干辣椒和葱段爆香三十秒",
+        "下鸡丁大火翻炒三分钟至变白，加黄瓜丁再炒一分钟",
+        "倒入花生米五十克，翻匀后关火装盘"
+      ]
+    },
+    {
+      "id": "r04",
+      "name": "蒜蓉西兰花",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 8,
+      "calories": 180,
+      "protein_g": 8,
+      "taste_tags": [
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "减脂",
+        "控糖",
+        "清淡"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "西兰花",
+          "amount": "1颗",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "大蒜",
+          "amount": "5瓣",
+          "category": "调料",
+          "grams": 15
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "西兰花一颗拆成小朵，淡盐水泡五分钟后冲净",
+        "水开后下西兰花焯一分半，捞出沥干",
+        "大蒜五瓣切末，锅中放一勺油小火煸香蒜末",
+        "倒入西兰花大火翻炒两分钟，加盐炒匀出锅"
+      ]
+    },
+    {
+      "id": "r05",
+      "name": "麻婆豆腐",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 9,
+      "calories": 300,
+      "protein_g": 16,
+      "taste_tags": [
+        "香辣",
+        "下饭"
+      ],
+      "spice_level": "辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "大豆"
+      ],
+      "ingredients": [
+        {
+          "name": "嫩豆腐",
+          "amount": "1盒",
+          "category": "豆制品",
+          "grams": 400
+        },
+        {
+          "name": "猪肉末",
+          "amount": "80克",
+          "category": "肉蛋",
+          "grams": 80
+        },
+        {
+          "name": "郫县豆瓣酱",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "花椒粉",
+          "amount": "1小勺",
+          "category": "调料"
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        }
+      ],
+      "steps": [
+        "嫩豆腐一盒切两厘米方块，放淡盐水中浸三分钟",
+        "锅中放油，下八十克猪肉末中火炒散至微黄",
+        "加一勺郫县豆瓣酱炒出红油，倒入半碗清水烧开",
+        "下豆腐块小火煮四分钟，轻推防碎",
+        "撒一小勺花椒粉和葱花，收汁后盛出"
+      ]
+    },
+    {
+      "id": "r06",
+      "name": "拍黄瓜",
+      "category": "凉菜",
+      "difficulty": "简单",
+      "time_min": 10,
+      "cost_yuan": 4,
+      "calories": 90,
+      "taste_tags": [
+        "清爽"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "减脂",
+        "控糖",
+        "省钱",
+        "清淡"
+      ],
+      "allergens": [
+        "芝麻"
+      ],
+      "ingredients": [
+        {
+          "name": "黄瓜",
+          "amount": "2根",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "大蒜",
+          "amount": "4瓣",
+          "category": "调料",
+          "grams": 12
+        },
+        {
+          "name": "香醋",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "香油",
+          "amount": "少许",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "黄瓜两根拍裂切段，加盐腌三分钟后倒掉水分",
+        "大蒜四瓣剁成蒜末，铺在黄瓜上",
+        "淋一勺香醋和少许香油，拌匀静置两分钟即可"
+      ]
+    },
+    {
+      "id": "r07",
+      "name": "土豆炖牛肉",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 90,
+      "cost_yuan": 40,
+      "calories": 720,
+      "protein_g": 45,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "牛腩",
+          "amount": "500克",
+          "category": "肉蛋",
+          "grams": 500
+        },
+        {
+          "name": "土豆",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 150
+        },
+        {
+          "name": "姜",
+          "amount": "4片",
+          "category": "调料",
+          "grams": 8
+        },
+        {
+          "name": "八角",
+          "amount": "2个",
+          "category": "调料"
+        },
+        {
+          "name": "生抽",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "牛腩五百克切块，冷水下锅焯三分钟捞出冲净",
+        "锅中放油，下姜片四片和八角两个炒香",
+        "倒入牛腩块翻炒两分钟，加两勺生抽炒上色",
+        "加没过食材的热水，小火炖五十分钟",
+        "下土豆块和胡萝卜块，继续炖二十分钟至软烂"
+      ]
+    },
+    {
+      "id": "r08",
+      "name": "白灼虾",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 35,
+      "calories": 250,
+      "protein_g": 40,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "减脂"
+      ],
+      "allergens": [
+        "海鲜"
+      ],
+      "ingredients": [
+        {
+          "name": "基围虾",
+          "amount": "400克",
+          "category": "水产",
+          "grams": 400
+        },
+        {
+          "name": "姜",
+          "amount": "3片",
+          "category": "调料",
+          "grams": 6
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "生抽",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "基围虾四百克剪去虾须，挑净虾线冲洗干净",
+        "锅中加水和三片姜烧开，下虾煮两分钟至变红",
+        "捞出虾沥水装盘，小葱一根切末撒在虾上",
+        "用两勺生抽调成蘸汁，配虾食用"
+      ]
+    },
+    {
+      "id": "r09",
+      "name": "糖醋里脊",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 35,
+      "cost_yuan": 22,
+      "calories": 680,
+      "protein_g": 35,
+      "taste_tags": [
+        "酸甜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "猪里脊",
+          "amount": "300克",
+          "category": "肉蛋",
+          "grams": 300
+        },
+        {
+          "name": "番茄酱",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "白醋",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "白糖",
+          "amount": "1勺",
+          "category": "调料",
+          "grams": 15
+        },
+        {
+          "name": "玉米淀粉",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "3勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "猪里脊三百克切条，加两勺玉米淀粉抓匀",
+        "锅中放三勺油烧至六成热，下肉条中火炸三分钟捞出",
+        "油温升高复炸四十秒至外壳金黄，捞出控油",
+        "另起锅下两勺番茄酱、一勺白醋、一勺白糖和少量水",
+        "小火熬到冒泡变稠，倒入肉条快速翻匀出锅"
+      ]
+    },
+    {
+      "id": "r10",
+      "name": "香菇青菜",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 12,
+      "cost_yuan": 6,
+      "calories": 150,
+      "taste_tags": [
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "减脂",
+        "控糖",
+        "清淡",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "上海青",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "鲜香菇",
+          "amount": "6朵",
+          "category": "菌菇",
+          "grams": 150
+        },
+        {
+          "name": "大蒜",
+          "amount": "3瓣",
+          "category": "调料",
+          "grams": 10
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "上海青三百克掰开洗净，鲜香菇六朵切厚片",
+        "水开后下香菇片焯一分钟，捞出沥干",
+        "锅中放一勺油，下蒜末小火煸香",
+        "先下香菇片中火炒两分钟，再下上海青大火炒一分钟",
+        "加盐炒匀，菜叶变软立刻出锅"
+      ]
+    },
+    {
+      "id": "r11",
+      "name": "酸辣土豆丝",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 5,
+      "calories": 260,
+      "taste_tags": [
+        "酸辣",
+        "下饭"
+      ],
+      "spice_level": "微辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "土豆",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "干辣椒",
+          "amount": "3个",
+          "category": "调料",
+          "grams": 3
+        },
+        {
+          "name": "青椒",
+          "amount": "1个",
+          "category": "蔬菜",
+          "grams": 60
+        },
+        {
+          "name": "白醋",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "两个土豆去皮切细丝，放清水泡五分钟去淀粉",
+        "青椒一个去籽切细丝，干辣椒三个剪成小段备用",
+        "锅烧热放两勺油，下干辣椒段小火炸二十秒出香味",
+        "倒入沥干的土豆丝，大火快速翻炒两分钟",
+        "加青椒丝、一勺白醋和盐，翻炒一分钟断生出锅"
+      ]
+    },
+    {
+      "id": "r12",
+      "name": "可乐鸡翅",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 35,
+      "cost_yuan": 20,
+      "calories": 560,
+      "protein_g": 30,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "鸡翅中",
+          "amount": "8个",
+          "category": "肉蛋",
+          "grams": 400
+        },
+        {
+          "name": "可乐",
+          "amount": "1罐",
+          "category": "调料",
+          "grams": 330
+        },
+        {
+          "name": "姜",
+          "amount": "3片",
+          "category": "调料",
+          "grams": 6
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "鸡翅中八个洗净，两面各划两刀方便入味",
+        "冷水下锅焯两分钟，捞出冲净浮沫沥干",
+        "锅里放少许油，下三片姜和鸡翅中火煎三分钟至微黄",
+        "倒入一罐可乐和一勺生抽，大火烧开",
+        "转小火盖盖焖十五分钟，再大火收汁三分钟"
+      ]
+    },
+    {
+      "id": "r13",
+      "name": "虾仁滑蛋",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 25,
+      "calories": 300,
+      "protein_g": 32,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "减脂"
+      ],
+      "allergens": [
+        "海鲜",
+        "蛋"
+      ],
+      "ingredients": [
+        {
+          "name": "虾仁",
+          "amount": "200克",
+          "category": "水产",
+          "grams": 200
+        },
+        {
+          "name": "鸡蛋",
+          "amount": "3个",
+          "category": "肉蛋",
+          "grams": 150
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "虾仁二百克洗净沥干，用厨房纸吸去表面水分",
+        "三个鸡蛋打散，加少许盐搅匀成蛋液",
+        "锅烧热放两勺油，下虾仁中火炒一分钟至变红盛出",
+        "锅内留油，倒入蛋液小火推炒三十秒",
+        "蛋液半凝固时倒回虾仁，撒小葱段翻匀出锅"
+      ]
+    },
+    {
+      "id": "r14",
+      "name": "清炒油麦菜",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 10,
+      "cost_yuan": 5,
+      "calories": 120,
+      "taste_tags": [
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "减脂",
+        "控糖",
+        "清淡",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "油麦菜",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "大蒜",
+          "amount": "3瓣",
+          "category": "调料",
+          "grams": 10
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "油麦菜三百克洗净，切成六厘米长的段",
+        "大蒜三瓣拍碎切末备用",
+        "锅烧到冒烟放一勺油，下蒜末爆香十秒",
+        "倒入油麦菜，大火快速翻炒一分钟至变软",
+        "加少许盐炒匀，立刻出锅装盘"
+      ]
+    },
+    {
+      "id": "r15",
+      "name": "冬瓜排骨汤",
+      "category": "汤",
+      "difficulty": "简单",
+      "time_min": 60,
+      "cost_yuan": 22,
+      "calories": 350,
+      "protein_g": 25,
+      "taste_tags": [
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "猪小排",
+          "amount": "400克",
+          "category": "肉蛋",
+          "grams": 400
+        },
+        {
+          "name": "冬瓜",
+          "amount": "400克",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "姜",
+          "amount": "4片",
+          "category": "调料",
+          "grams": 8
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "猪小排四百克冷水下锅焯三分钟，捞出洗净血沫",
+        "汤锅加足量清水，放排骨和四片姜大火烧开",
+        "转小火炖三十五分钟，撇净表面浮油",
+        "冬瓜四百克去皮切厚片，下锅再炖十二分钟",
+        "加盐调味，撒小葱段即可关火"
+      ]
+    },
+    {
+      "id": "r16",
+      "name": "紫菜蛋花汤",
+      "category": "汤",
+      "difficulty": "简单",
+      "time_min": 10,
+      "cost_yuan": 5,
+      "calories": 150,
+      "protein_g": 12,
+      "taste_tags": [
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱",
+        "清淡"
+      ],
+      "allergens": [
+        "海鲜",
+        "蛋"
+      ],
+      "ingredients": [
+        {
+          "name": "紫菜",
+          "amount": "1小把",
+          "category": "干货",
+          "grams": 5
+        },
+        {
+          "name": "鸡蛋",
+          "amount": "2个",
+          "category": "肉蛋",
+          "grams": 100
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "香油",
+          "amount": "几滴",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "紫菜一小把用温水泡两分钟，撕散沥干",
+        "两个鸡蛋打散，加少许盐搅匀",
+        "锅中加两碗水烧开，放入紫菜煮一分钟",
+        "转小火淋入蛋液，静置十秒再轻轻推散",
+        "滴几滴香油，撒小葱末即可出锅"
+      ]
+    },
+    {
+      "id": "r17",
+      "name": "白灼菜心",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 10,
+      "cost_yuan": 6,
+      "calories": 110,
+      "taste_tags": [
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "减脂",
+        "控糖",
+        "清淡"
+      ],
+      "allergens": [
+        "海鲜",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "菜心",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "姜",
+          "amount": "2片",
+          "category": "调料",
+          "grams": 4
+        },
+        {
+          "name": "蒸鱼豉油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "菜心三百克洗净，去掉老根留嫩叶",
+        "锅中水烧开，加两片姜和少许油",
+        "放入菜心焯一分钟，捞出沥干摆盘",
+        "一勺蒸鱼豉油淋在菜心上",
+        "一勺油烧至冒烟，趁热浇在菜心上"
+      ]
+    },
+    {
+      "id": "r18",
+      "name": "山药炒木耳",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 9,
+      "calories": 180,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "减脂",
+        "控糖",
+        "清淡"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "山药",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "干木耳",
+          "amount": "10克",
+          "category": "干货",
+          "grams": 10
+        },
+        {
+          "name": "青椒",
+          "amount": "半个",
+          "category": "蔬菜",
+          "grams": 40
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "干木耳十克用温水泡发二十分钟，撕成小朵",
+        "山药三百克去皮切薄片，泡清水防止变黑",
+        "锅烧热放一勺油，下山药片中火翻炒两分钟",
+        "加木耳和青椒片，转大火同炒一分钟",
+        "加盐炒匀，山药微微透明即可出锅"
+      ]
+    },
+    {
+      "id": "r19",
+      "name": "小葱拌豆腐",
+      "category": "凉菜",
+      "difficulty": "简单",
+      "time_min": 8,
+      "cost_yuan": 5,
+      "calories": 160,
+      "protein_g": 14,
+      "taste_tags": [
+        "清淡",
+        "清爽"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "减脂",
+        "省钱",
+        "清淡",
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆"
+      ],
+      "ingredients": [
+        {
+          "name": "嫩豆腐",
+          "amount": "1盒",
+          "category": "豆制品",
+          "grams": 400
+        },
+        {
+          "name": "小葱",
+          "amount": "2根",
+          "category": "蔬菜",
+          "grams": 20
+        },
+        {
+          "name": "香油",
+          "amount": "少许",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "嫩豆腐一盒倒扣取出，切成两厘米见方的块",
+        "锅中水烧开，豆腐块下锅烫一分钟去豆腥",
+        "捞出沥干装盘，撒少许盐",
+        "小葱两根切碎撒在豆腐上",
+        "淋几滴香油，轻轻拌匀即可上桌"
+      ]
+    },
+    {
+      "id": "r20",
+      "name": "蚝油生菜",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 8,
+      "cost_yuan": 5,
+      "calories": 100,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "减脂",
+        "控糖",
+        "清淡",
+        "省钱"
+      ],
+      "allergens": [
+        "海鲜"
+      ],
+      "ingredients": [
+        {
+          "name": "生菜",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "蚝油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "大蒜",
+          "amount": "3瓣",
+          "category": "调料",
+          "grams": 10
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "生菜三百克洗净，用手撕成大片沥干",
+        "大蒜三瓣切末备用",
+        "锅烧热放一勺油，下蒜末小火爆香十秒",
+        "倒入生菜，大火翻炒三十秒至叶片变软",
+        "加一勺蚝油和少许盐，翻匀立刻出锅"
+      ]
+    },
+    {
+      "id": "r21",
+      "name": "农家小炒肉",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 25,
+      "cost_yuan": 16,
+      "calories": 620,
+      "protein_g": 30,
+      "taste_tags": [
+        "香辣",
+        "下饭"
+      ],
+      "spice_level": "辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "五花肉",
+          "amount": "250克",
+          "category": "肉蛋",
+          "grams": 250
+        },
+        {
+          "name": "青尖椒",
+          "amount": "4个",
+          "category": "蔬菜",
+          "grams": 150
+        },
+        {
+          "name": "大蒜",
+          "amount": "4瓣",
+          "category": "调料",
+          "grams": 12
+        },
+        {
+          "name": "豆瓣酱",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "五花肉切薄片，青尖椒去籽切滚刀块。",
+        "热锅不放油，下五花肉中火煸炒三分钟至出油微卷。",
+        "放大蒜片和豆瓣酱一勺，小火炒出红油。",
+        "下青尖椒大火翻炒两分钟至断生。",
+        "淋生抽一勺翻匀，大火收汁半分钟出锅。"
+      ]
+    },
+    {
+      "id": "r22",
+      "name": "酸菜鱼",
+      "category": "热菜",
+      "difficulty": "较难",
+      "time_min": 45,
+      "cost_yuan": 30,
+      "calories": 450,
+      "protein_g": 38,
+      "taste_tags": [
+        "酸辣",
+        "下饭"
+      ],
+      "spice_level": "微辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "海鲜"
+      ],
+      "ingredients": [
+        {
+          "name": "草鱼",
+          "amount": "1条",
+          "category": "水产",
+          "grams": 800
+        },
+        {
+          "name": "酸菜",
+          "amount": "200克",
+          "category": "蔬菜",
+          "grams": 200
+        },
+        {
+          "name": "干辣椒",
+          "amount": "5个",
+          "category": "调料",
+          "grams": 4
+        },
+        {
+          "name": "花椒",
+          "amount": "1小把",
+          "category": "调料",
+          "grams": 3
+        },
+        {
+          "name": "姜",
+          "amount": "4片",
+          "category": "调料",
+          "grams": 8
+        }
+      ],
+      "steps": [
+        "草鱼去骨片成薄片，加少许盐抓匀备用。",
+        "酸菜切段挤干水，姜切片，干辣椒剪成小段。",
+        "热锅下油，炒香姜片、酸菜和干辣椒两分钟。",
+        "倒入清水烧开，下鱼骨煮五分钟熬出鲜味。",
+        "下鱼片煮两分钟变白，撒花椒和干辣椒即成。"
+      ]
+    },
+    {
+      "id": "r23",
+      "name": "韭菜炒鸡蛋",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 12,
+      "cost_yuan": 8,
+      "calories": 320,
+      "protein_g": 20,
+      "taste_tags": [
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "省钱"
+      ],
+      "allergens": [
+        "蛋"
+      ],
+      "ingredients": [
+        {
+          "name": "韭菜",
+          "amount": "200克",
+          "category": "蔬菜",
+          "grams": 200
+        },
+        {
+          "name": "鸡蛋",
+          "amount": "3个",
+          "category": "肉蛋",
+          "grams": 150
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "韭菜洗净沥干，切成三厘米长段。",
+        "鸡蛋三个加盐打散，热锅倒两勺油炒至半凝固盛出。",
+        "锅中留油，下韭菜大火快炒三十秒。",
+        "倒回鸡蛋加盐翻匀，再炒二十秒出锅。"
+      ]
+    },
+    {
+      "id": "r24",
+      "name": "红烧肉",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 90,
+      "cost_yuan": 28,
+      "calories": 780,
+      "protein_g": 28,
+      "taste_tags": [
+        "咸鲜",
+        "下饭",
+        "浓郁"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "五花肉",
+          "amount": "500克",
+          "category": "肉蛋",
+          "grams": 500
+        },
+        {
+          "name": "冰糖",
+          "amount": "20克",
+          "category": "调料",
+          "grams": 20
+        },
+        {
+          "name": "姜",
+          "amount": "4片",
+          "category": "调料",
+          "grams": 8
+        },
+        {
+          "name": "生抽",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "老抽",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "五花肉切三厘米方块，冷水下锅焯三分钟捞出。",
+        "锅中放冰糖二十克，小火炒至枣红色冒小泡。",
+        "下五花肉翻炒上色，加姜片、生抽两勺、老抽一勺。",
+        "加热水没过肉，小火加盖炖六十分钟。",
+        "开盖大火收汁五分钟至汤汁浓稠裹肉。"
+      ]
+    },
+    {
+      "id": "r25",
+      "name": "蒸蛋羹",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 6,
+      "calories": 180,
+      "protein_g": 15,
+      "taste_tags": [
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "减脂",
+        "清淡"
+      ],
+      "allergens": [
+        "蛋"
+      ],
+      "ingredients": [
+        {
+          "name": "鸡蛋",
+          "amount": "3个",
+          "category": "肉蛋",
+          "grams": 150
+        },
+        {
+          "name": "温水",
+          "amount": "200毫升",
+          "category": "其他",
+          "grams": 200
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "生抽",
+          "amount": "少许",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "鸡蛋三个打散，加温水二百毫升搅匀。",
+        "蛋液过筛滤去浮沫，倒入碗中盖保鲜膜。",
+        "水开后中小火蒸十二分钟至凝固。",
+        "取出淋少许生抽，撒小葱末即可。"
+      ]
+    },
+    {
+      "id": "r26",
+      "name": "手撕包菜",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 12,
+      "cost_yuan": 5,
+      "calories": 170,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱",
+        "控糖"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "包菜",
+          "amount": "半个",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "干辣椒",
+          "amount": "2个",
+          "category": "调料",
+          "grams": 2
+        },
+        {
+          "name": "大蒜",
+          "amount": "3瓣",
+          "category": "调料",
+          "grams": 10
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "包菜用手撕成大片洗净沥干，大蒜切片。",
+        "热锅倒两勺油，中火炒香干辣椒和大蒜片。",
+        "下包菜大火翻炒三分钟至边缘变软。",
+        "加盐和少许生抽翻匀，大火再炒一分钟出锅。"
+      ]
+    },
+    {
+      "id": "r27",
+      "name": "莲藕排骨汤",
+      "category": "汤",
+      "difficulty": "中等",
+      "time_min": 80,
+      "cost_yuan": 25,
+      "calories": 380,
+      "protein_g": 26,
+      "taste_tags": [
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "猪小排",
+          "amount": "400克",
+          "category": "肉蛋",
+          "grams": 400
+        },
+        {
+          "name": "莲藕",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "姜",
+          "amount": "4片",
+          "category": "调料",
+          "grams": 8
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        }
+      ],
+      "steps": [
+        "猪小排冷水下锅焯三分钟，捞出冲净血沫。",
+        "莲藕去皮切滚刀块，姜切片。",
+        "排骨、莲藕和姜片入锅，加足量热水。",
+        "大火烧开转小火炖六十分钟。",
+        "加盐调味，撒小葱末，再煮两分钟关火。"
+      ]
+    },
+    {
+      "id": "r28",
+      "name": "番茄牛腩",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 80,
+      "cost_yuan": 38,
+      "calories": 580,
+      "protein_g": 40,
+      "taste_tags": [
+        "酸甜",
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "牛腩",
+          "amount": "500克",
+          "category": "肉蛋",
+          "grams": 500
+        },
+        {
+          "name": "西红柿",
+          "amount": "3个",
+          "category": "蔬菜",
+          "grams": 600
+        },
+        {
+          "name": "洋葱",
+          "amount": "半个",
+          "category": "蔬菜",
+          "grams": 100
+        },
+        {
+          "name": "姜",
+          "amount": "3片",
+          "category": "调料",
+          "grams": 6
+        },
+        {
+          "name": "番茄酱",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "牛腩切块冷水下锅焯三分钟，捞出温水洗净。",
+        "西红柿去皮切块，洋葱切丝，姜切片。",
+        "热锅下油，炒西红柿三分钟至出浓汁。",
+        "下牛腩、洋葱、姜片和番茄酱一勺翻匀。",
+        "加热水小火炖六十分钟至牛腩软烂。"
+      ]
+    },
+    {
+      "id": "r29",
+      "name": "扬州炒饭",
+      "category": "主食",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 10,
+      "calories": 620,
+      "protein_g": 22,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "蛋"
+      ],
+      "ingredients": [
+        {
+          "name": "米饭",
+          "amount": "3碗",
+          "category": "主食",
+          "grams": 450
+        },
+        {
+          "name": "鸡蛋",
+          "amount": "2个",
+          "category": "肉蛋",
+          "grams": 100
+        },
+        {
+          "name": "火腿",
+          "amount": "50克",
+          "category": "肉蛋",
+          "grams": 50
+        },
+        {
+          "name": "豌豆",
+          "amount": "30克",
+          "category": "蔬菜",
+          "grams": 30
+        },
+        {
+          "name": "玉米粒",
+          "amount": "30克",
+          "category": "蔬菜",
+          "grams": 30
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        }
+      ],
+      "steps": [
+        "鸡蛋两个加盐打散，热油炒成碎块盛出。",
+        "锅中下火腿丁、豌豆和玉米粒炒两分钟。",
+        "倒入米饭三碗，大火翻炒三分钟至粒粒散开。",
+        "加回鸡蛋，淋生抽一勺炒匀，撒小葱末出锅。"
+      ]
+    },
+    {
+      "id": "r30",
+      "name": "葱油拌面",
+      "category": "主食",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 6,
+      "calories": 450,
+      "taste_tags": [
+        "咸鲜",
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "面条",
+          "amount": "300克",
+          "category": "主食",
+          "grams": 300
+        },
+        {
+          "name": "小葱",
+          "amount": "4根",
+          "category": "蔬菜",
+          "grams": 40
+        },
+        {
+          "name": "食用油",
+          "amount": "3勺",
+          "category": "调料"
+        },
+        {
+          "name": "生抽",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "白糖",
+          "amount": "半勺",
+          "category": "调料",
+          "grams": 5
+        }
+      ],
+      "steps": [
+        "面条放沸水煮三分钟至断生，捞出沥干。",
+        "小葱四根切长段，冷油下锅小火熬五分钟至焦黄。",
+        "关火加生抽两勺和白糖半勺调成葱油汁。",
+        "面条趁热倒入葱油汁，拌匀装盘。"
+      ]
+    },
+    {
+      "id": "r31",
+      "name": "皮蛋瘦肉粥",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 7,
+      "calories": 260,
+      "protein_g": 14,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "省钱"
+      ],
+      "allergens": [
+        "蛋"
+      ],
+      "ingredients": [
+        {
+          "name": "大米",
+          "amount": "1杯",
+          "category": "主食",
+          "grams": 150
+        },
+        {
+          "name": "猪瘦肉",
+          "amount": "100克",
+          "category": "肉蛋",
+          "grams": 100
+        },
+        {
+          "name": "皮蛋",
+          "amount": "1个",
+          "category": "肉蛋",
+          "grams": 60
+        },
+        {
+          "name": "姜",
+          "amount": "2片",
+          "category": "调料",
+          "grams": 4
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "大米一杯淘洗两遍，加六碗水大火煮开",
+        "转中火熬十分钟，其间搅动两次防粘底",
+        "猪瘦肉一百克切细丝，皮蛋一个切小块，姜两片切末",
+        "肉丝、皮蛋与姜末下锅，中火再煮三分钟",
+        "加盐调味，撒小葱一根的葱花即可出锅"
+      ]
+    },
+    {
+      "id": "r32",
+      "name": "小米南瓜粥",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 5,
+      "calories": 220,
+      "protein_g": 6,
+      "taste_tags": [
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "控糖",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "小米",
+          "amount": "半杯",
+          "category": "主食",
+          "grams": 80
+        },
+        {
+          "name": "南瓜",
+          "amount": "200克",
+          "category": "蔬菜",
+          "grams": 200
+        },
+        {
+          "name": "枸杞",
+          "amount": "少许",
+          "category": "干货",
+          "grams": 5
+        }
+      ],
+      "steps": [
+        "小米半杯淘净，南瓜两百克去皮切一厘米小块",
+        "小米与南瓜加五碗水，大火烧开后转小火",
+        "小火煮十二分钟，其间搅拌三次至南瓜软烂",
+        "撒枸杞五克再煮一分钟，关火焖两分钟即可"
+      ]
+    },
+    {
+      "id": "r33",
+      "name": "番茄鸡蛋面",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 7,
+      "calories": 480,
+      "protein_g": 20,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱",
+        "高蛋白"
+      ],
+      "allergens": [
+        "蛋",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "挂面",
+          "amount": "200克",
+          "category": "主食",
+          "grams": 200
+        },
+        {
+          "name": "西红柿",
+          "amount": "1个",
+          "category": "蔬菜",
+          "grams": 200
+        },
+        {
+          "name": "鸡蛋",
+          "amount": "2个",
+          "category": "肉蛋",
+          "grams": 100
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "西红柿一个切块，鸡蛋两个加少许盐打散",
+        "锅中放一勺油烧热，倒入蛋液炒成大块盛出",
+        "原锅下西红柿块，中火炒两分钟至出红色汤汁",
+        "加两碗清水烧开，下挂面两百克煮三分钟",
+        "倒回鸡蛋块加盐调味，撒小葱葱花出锅"
+      ]
+    },
+    {
+      "id": "r34",
+      "name": "葱花鸡蛋饼",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 12,
+      "cost_yuan": 5,
+      "calories": 380,
+      "protein_g": 16,
+      "taste_tags": [
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱",
+        "高蛋白"
+      ],
+      "allergens": [
+        "蛋",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "面粉",
+          "amount": "1杯",
+          "category": "主食",
+          "grams": 120
+        },
+        {
+          "name": "鸡蛋",
+          "amount": "2个",
+          "category": "肉蛋",
+          "grams": 100
+        },
+        {
+          "name": "小葱",
+          "amount": "2根",
+          "category": "蔬菜",
+          "grams": 20
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "面粉一杯加清水调成稀面糊，静置三分钟",
+        "打入鸡蛋两个，加盐与小葱两根的葱花拌匀",
+        "平底锅刷一勺油，小火烧热后倒入面糊摊平",
+        "小火煎两分钟定型，翻面再煎一分钟至两面金黄"
+      ]
+    },
+    {
+      "id": "r35",
+      "name": "白煮蛋配黄瓜",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 10,
+      "cost_yuan": 4,
+      "calories": 170,
+      "protein_g": 13,
+      "taste_tags": [
+        "清淡",
+        "清爽"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "减脂",
+        "控糖"
+      ],
+      "allergens": [
+        "蛋"
+      ],
+      "ingredients": [
+        {
+          "name": "鸡蛋",
+          "amount": "2个",
+          "category": "肉蛋",
+          "grams": 100
+        },
+        {
+          "name": "黄瓜",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 200
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "鸡蛋两个冷水下锅，水开后中火煮八分钟",
+        "捞出鸡蛋过凉水，剥壳后每个切成四瓣",
+        "黄瓜一根洗净切滚刀块，与鸡蛋一同装盘",
+        "淋生抽一勺拌匀即可食用"
+      ]
+    },
+    {
+      "id": "r36",
+      "name": "燕麦牛奶",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 8,
+      "cost_yuan": 6,
+      "calories": 320,
+      "protein_g": 14,
+      "taste_tags": [
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "控糖",
+        "清淡"
+      ],
+      "allergens": [
+        "奶",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "即食燕麦",
+          "amount": "半杯",
+          "category": "主食",
+          "grams": 60
+        },
+        {
+          "name": "牛奶",
+          "amount": "1盒",
+          "category": "肉蛋",
+          "grams": 250
+        },
+        {
+          "name": "香蕉",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 120
+        }
+      ],
+      "steps": [
+        "即食燕麦半杯倒入碗中，加牛奶一盒二百五十毫升",
+        "放入微波炉高火加热一分半钟，取出搅匀",
+        "香蕉一根剥皮切片，铺在燕麦上即可"
+      ]
+    },
+    {
+      "id": "r37",
+      "name": "吐司煎蛋",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 10,
+      "cost_yuan": 7,
+      "calories": 420,
+      "protein_g": 18,
+      "taste_tags": [
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "蛋",
+        "麸质",
+        "奶"
+      ],
+      "ingredients": [
+        {
+          "name": "吐司",
+          "amount": "2片",
+          "category": "主食",
+          "grams": 80
+        },
+        {
+          "name": "鸡蛋",
+          "amount": "2个",
+          "category": "肉蛋",
+          "grams": 100
+        },
+        {
+          "name": "黄油",
+          "amount": "1小块",
+          "category": "调料",
+          "grams": 10
+        },
+        {
+          "name": "盐",
+          "amount": "少许",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "平底锅放黄油一小块，小火融化后晃匀锅底",
+        "打入鸡蛋两个，小火煎两分钟至蛋白凝固",
+        "撒少许盐，将煎蛋分别放在两片吐司上即可"
+      ]
+    },
+    {
+      "id": "r38",
+      "name": "香煎速冻饺子",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 12,
+      "cost_yuan": 9,
+      "calories": 450,
+      "protein_g": 18,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "速冻饺子",
+          "amount": "12个",
+          "category": "主食",
+          "grams": 300
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "香醋",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "平底锅放一勺油，中火烧热后排入速冻饺子十二个",
+        "中火煎两分钟至底部微黄，倒入半碗清水",
+        "盖盖中火焖五分钟至水干，开盖再煎一分钟",
+        "盛出饺子，配香醋一勺蘸食"
+      ]
+    },
+    {
+      "id": "r39",
+      "name": "西红柿炖豆腐",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 9,
+      "calories": 260,
+      "protein_g": 14,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "省钱"
+      ],
+      "allergens": [
+        "大豆"
+      ],
+      "ingredients": [
+        {
+          "name": "西红柿",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "北豆腐",
+          "amount": "1块",
+          "category": "豆制品",
+          "grams": 400
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "北豆腐一块切两厘米方块，西红柿两个切滚刀块",
+        "锅中放两勺油烧热，下西红柿中火炒三分钟出汁",
+        "加半碗清水烧开，放入豆腐块小火炖八分钟",
+        "加盐调味，撒小葱一根的葱花后出锅"
+      ]
+    },
+    {
+      "id": "r40",
+      "name": "家常豆腐",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 25,
+      "cost_yuan": 11,
+      "calories": 380,
+      "protein_g": 18,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "北豆腐",
+          "amount": "1块",
+          "category": "豆制品",
+          "grams": 400
+        },
+        {
+          "name": "青椒",
+          "amount": "1个",
+          "category": "蔬菜",
+          "grams": 80
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "半根",
+          "category": "蔬菜",
+          "grams": 60
+        },
+        {
+          "name": "生抽",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "3勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "北豆腐一块切一厘米厚片，青椒一个与胡萝卜半根切片",
+        "锅中放三勺油烧热，豆腐片中火煎三分钟至两面金黄",
+        "下青椒片与胡萝卜片，大火翻炒两分钟",
+        "淋生抽两勺，转中火烧一分钟收汁即可"
+      ]
+    },
+    {
+      "id": "r41",
+      "name": "青椒肉丝",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 14,
+      "calories": 420,
+      "protein_g": 26,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "猪里脊",
+          "amount": "250克",
+          "category": "肉蛋",
+          "grams": 250
+        },
+        {
+          "name": "青椒",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 150
+        },
+        {
+          "name": "大蒜",
+          "amount": "3瓣",
+          "category": "调料",
+          "grams": 10
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "猪里脊 250 克顺纹切细丝，加 1 勺生抽抓匀放 5 分钟",
+        "青椒 2 个去籽切丝，大蒜 3 瓣拍碎切成蒜末",
+        "锅中放 2 勺油烧热，下肉丝大火滑炒 1 分钟至变白盛出",
+        "底油下蒜末和青椒丝，大火翻炒 1 分钟至断生",
+        "倒回肉丝翻匀，再炒 30 秒即可出锅"
+      ]
+    },
+    {
+      "id": "r42",
+      "name": "蒜苔炒肉",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 15,
+      "calories": 460,
+      "protein_g": 22,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "蒜苔",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "五花肉",
+          "amount": "150克",
+          "category": "肉蛋",
+          "grams": 150
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "蒜苔 300 克掐去老根，切成长约 4 厘米的段",
+        "五花肉 150 克切薄片，冷锅下锅煸炒 2 分钟出油",
+        "下蒜苔段转大火翻炒 2 分钟，炒到颜色变深绿",
+        "加 1 勺生抽和 2 克盐，继续翻炒 1 分钟入味",
+        "沿锅边淋 1 勺清水，焖 1 分钟后收干汤汁出锅"
+      ]
+    },
+    {
+      "id": "r43",
+      "name": "洋葱炒牛肉",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 18,
+      "cost_yuan": 24,
+      "calories": 400,
+      "protein_g": 30,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "牛肉",
+          "amount": "250克",
+          "category": "肉蛋",
+          "grams": 250
+        },
+        {
+          "name": "洋葱",
+          "amount": "1个",
+          "category": "蔬菜",
+          "grams": 200
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "玉米淀粉",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "牛肉 250 克逆纹切薄片，加 1 勺玉米淀粉和 1 勺生抽抓匀",
+        "洋葱 1 个剥皮切粗丝，抖散后备用",
+        "锅中放 2 勺油烧至微冒烟，下牛肉大火滑炒 40 秒盛出",
+        "底油下洋葱丝，中火翻炒 2 分钟至边缘透明",
+        "倒回牛肉，大火快炒 30 秒，肉片断生即出锅"
+      ]
+    },
+    {
+      "id": "r44",
+      "name": "芹菜炒香干",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 10,
+      "calories": 300,
+      "protein_g": 16,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "减脂",
+        "省钱"
+      ],
+      "allergens": [
+        "大豆"
+      ],
+      "ingredients": [
+        {
+          "name": "芹菜",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "香干",
+          "amount": "200克",
+          "category": "豆制品",
+          "grams": 200
+        },
+        {
+          "name": "大蒜",
+          "amount": "3瓣",
+          "category": "调料",
+          "grams": 10
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "芹菜 300 克撕去老筋，斜切成 4 厘米长段",
+        "香干 200 克切 0.5 厘米厚的条，大蒜 3 瓣切片",
+        "锅中放 2 勺油，下蒜片小火爆香 20 秒",
+        "下香干条中火煎 1 分钟，煎到两面微微发黄",
+        "倒入芹菜段大火炒 1 分半，加 3 克盐炒匀出锅"
+      ]
+    },
+    {
+      "id": "r45",
+      "name": "香菇滑鸡",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 19,
+      "calories": 380,
+      "protein_g": 30,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "鸡腿肉",
+          "amount": "300克",
+          "category": "肉蛋",
+          "grams": 300
+        },
+        {
+          "name": "鲜香菇",
+          "amount": "6朵",
+          "category": "菌菇",
+          "grams": 150
+        },
+        {
+          "name": "姜",
+          "amount": "3片",
+          "category": "调料",
+          "grams": 10
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "玉米淀粉",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "鸡腿肉 300 克切 3 厘米块，加 1 勺生抽和 1 勺玉米淀粉抓匀",
+        "鲜香菇 6 朵去蒂切片，姜 3 片切细丝",
+        "锅中放 2 勺油烧热，下姜丝和鸡块大火翻炒 2 分钟",
+        "下香菇片继续炒 2 分钟，炒到香菇变软出汁",
+        "淋小半碗水，中火焖 3 分钟至鸡肉熟透收汁"
+      ]
+    },
+    {
+      "id": "r46",
+      "name": "酱爆鸡丁",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 16,
+      "calories": 430,
+      "protein_g": 28,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "鸡胸肉",
+          "amount": "250克",
+          "category": "肉蛋",
+          "grams": 250
+        },
+        {
+          "name": "黄瓜",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 150
+        },
+        {
+          "name": "甜面酱",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "鸡胸肉 250 克切 1.5 厘米丁，加 1 勺生抽抓匀备用",
+        "黄瓜 1 根去瓤切丁，蒜末姜末各备少许",
+        "锅中放 2 勺油烧热，下鸡丁大火翻炒 2 分钟至变白",
+        "转小火加 1 勺甜面酱，快速炒 30 秒炒出酱香",
+        "倒入黄瓜丁，大火翻炒 1 分钟裹匀酱汁出锅"
+      ]
+    },
+    {
+      "id": "r47",
+      "name": "土豆烧鸡块",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 30,
+      "cost_yuan": 20,
+      "calories": 560,
+      "protein_g": 30,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "鸡腿",
+          "amount": "400克",
+          "category": "肉蛋",
+          "grams": 400
+        },
+        {
+          "name": "土豆",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "姜",
+          "amount": "4片",
+          "category": "调料",
+          "grams": 12
+        },
+        {
+          "name": "生抽",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "老抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "鸡腿 400 克剁成 4 厘米块，冷水下锅焯 3 分钟捞起",
+        "土豆 2 个去皮切滚刀块，姜 4 片备用",
+        "锅中放 2 勺油，下姜片和鸡块中火煸炒 3 分钟上色",
+        "加 2 勺生抽和 1 勺老抽炒匀，倒热水没过鸡块",
+        "放入土豆块，中小火炖 15 分钟至土豆软糯收汁"
+      ]
+    },
+    {
+      "id": "r48",
+      "name": "冬瓜烧肉",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 25,
+      "cost_yuan": 13,
+      "calories": 420,
+      "protein_g": 16,
+      "taste_tags": [
+        "咸鲜",
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "五花肉",
+          "amount": "200克",
+          "category": "肉蛋",
+          "grams": 200
+        },
+        {
+          "name": "冬瓜",
+          "amount": "400克",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "姜",
+          "amount": "3片",
+          "category": "调料",
+          "grams": 8
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "五花肉 200 克切 0.5 厘米厚片，姜 3 片切丝",
+        "锅中放 1 勺油，下肉片中小火煸炒 3 分钟至卷边出油",
+        "加姜丝和 1 勺生抽，翻炒 30 秒炒出香味",
+        "冬瓜 400 克去皮切 1 厘米厚片，铺入锅中",
+        "加小半碗热水，中火烧 8 分钟至冬瓜透明入味"
+      ]
+    },
+    {
+      "id": "r49",
+      "name": "干煸杏鲍菇",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 18,
+      "cost_yuan": 9,
+      "calories": 200,
+      "protein_g": 8,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "减脂",
+        "清淡"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "杏鲍菇",
+          "amount": "3个",
+          "category": "菌菇",
+          "grams": 300
+        },
+        {
+          "name": "大蒜",
+          "amount": "4瓣",
+          "category": "调料",
+          "grams": 12
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "杏鲍菇 3 个顺长切 0.3 厘米厚片，表面划十字花刀",
+        "大蒜 4 瓣切末，锅中放 2 勺油烧热",
+        "下杏鲍菇片铺平，中火干煸 3 分钟至两面金黄",
+        "撒入蒜末炒 30 秒，炒出蒜香",
+        "淋 1 勺生抽翻匀，大火收干水分关火"
+      ]
+    },
+    {
+      "id": "r50",
+      "name": "红烧茄子",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 25,
+      "cost_yuan": 10,
+      "calories": 320,
+      "protein_g": 6,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "茄子",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "大蒜",
+          "amount": "4瓣",
+          "category": "调料",
+          "grams": 12
+        },
+        {
+          "name": "生抽",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "白糖",
+          "amount": "1勺",
+          "category": "调料",
+          "grams": 10
+        },
+        {
+          "name": "食用油",
+          "amount": "3勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "茄子 2 个切滚刀块，泡淡盐水 3 分钟后捞出沥干",
+        "大蒜 4 瓣切末，1 勺生抽加 1 勺白糖调成料汁",
+        "锅中放 3 勺油烧热，下茄子中火煎 4 分钟至软塌",
+        "下蒜末炒 30 秒，倒入料汁翻匀",
+        "加小半碗水，中火烧 5 分钟至汤汁浓稠裹住茄子"
+      ]
+    },
+    {
+      "id": "r51",
+      "name": "地三鲜",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 30,
+      "cost_yuan": 12,
+      "calories": 420,
+      "protein_g": 8,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "土豆",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "茄子",
+          "amount": "1个",
+          "category": "蔬菜",
+          "grams": 250
+        },
+        {
+          "name": "青椒",
+          "amount": "1个",
+          "category": "蔬菜",
+          "grams": 100
+        },
+        {
+          "name": "生抽",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "4勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "土豆去皮切滚刀块，茄子切块，青椒切片。",
+        "锅中放四勺油烧热，中火把土豆块炸三分钟至金黄。",
+        "下茄子块中火煎两分钟，再放青椒片翻炒一分钟。",
+        "倒入两勺生抽，大火翻炒半分钟收汁后盛出。"
+      ]
+    },
+    {
+      "id": "r52",
+      "name": "肉末茄子",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 25,
+      "cost_yuan": 14,
+      "calories": 400,
+      "protein_g": 15,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "茄子",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "猪肉末",
+          "amount": "150克",
+          "category": "肉蛋",
+          "grams": 150
+        },
+        {
+          "name": "大蒜",
+          "amount": "3瓣",
+          "category": "调料",
+          "grams": 10
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "3勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "茄子切长条，大蒜切末，猪肉末备好待用。",
+        "锅放三勺油，中火将茄子条煎五分钟至软盛出。",
+        "另起锅爆香蒜末，下猪肉末中火炒两分钟变色。",
+        "放回茄子条，加一勺生抽和半碗水，小火焖三分钟。"
+      ]
+    },
+    {
+      "id": "r53",
+      "name": "咖喱土豆鸡",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 30,
+      "cost_yuan": 22,
+      "calories": 620,
+      "protein_g": 30,
+      "taste_tags": [
+        "浓郁",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "鸡腿肉",
+          "amount": "300克",
+          "category": "肉蛋",
+          "grams": 300
+        },
+        {
+          "name": "土豆",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 100
+        },
+        {
+          "name": "咖喱块",
+          "amount": "2块",
+          "category": "调料",
+          "grams": 40
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "鸡腿肉切块，土豆和胡萝卜去皮切滚刀块。",
+        "锅中放一勺油，中火把鸡腿肉块炒三分钟至变色。",
+        "加入土豆和胡萝卜块，倒水没过食材煮开。",
+        "转小火炖十分钟，放两块咖喱块搅匀化开。",
+        "小火再煮五分钟，汤汁变浓稠即可关火。"
+      ]
+    },
+    {
+      "id": "r54",
+      "name": "白菜炖粉条",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 25,
+      "cost_yuan": 11,
+      "calories": 380,
+      "protein_g": 12,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "白菜",
+          "amount": "400克",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "红薯粉条",
+          "amount": "100克",
+          "category": "主食",
+          "grams": 100
+        },
+        {
+          "name": "五花肉",
+          "amount": "100克",
+          "category": "肉蛋",
+          "grams": 100
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "红薯粉条用温水泡软，白菜切片，五花肉切薄片。",
+        "锅中放一勺油，中火煸炒五花肉片三分钟出油。",
+        "下白菜片大火翻炒两分钟，加一勺生抽炒匀。",
+        "倒入热水没过食材，放粉条小火炖八分钟。"
+      ]
+    },
+    {
+      "id": "r55",
+      "name": "芹菜炒牛肉",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 18,
+      "cost_yuan": 24,
+      "calories": 390,
+      "protein_g": 30,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "牛肉",
+          "amount": "250克",
+          "category": "肉蛋",
+          "grams": 250
+        },
+        {
+          "name": "芹菜",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "玉米淀粉",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "牛肉切薄片，加一勺玉米淀粉抓匀静置五分钟。",
+        "芹菜去叶切段，放入开水里焯半分钟捞出。",
+        "锅中放两勺油烧热，大火把牛肉片炒一分钟盛出。",
+        "锅留底油下芹菜段，加一勺生抽大火炒一分钟。",
+        "倒回牛肉片，大火快速翻炒三十秒出锅。"
+      ]
+    },
+    {
+      "id": "r56",
+      "name": "韭菜炒豆芽",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 12,
+      "cost_yuan": 6,
+      "calories": 180,
+      "protein_g": 6,
+      "taste_tags": [
+        "清爽",
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "减脂",
+        "省钱",
+        "清淡"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "韭菜",
+          "amount": "200克",
+          "category": "蔬菜",
+          "grams": 200
+        },
+        {
+          "name": "绿豆芽",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "韭菜洗净切段，绿豆芽洗净沥干水分。",
+        "锅中放两勺油烧热，大火下绿豆芽炒一分钟。",
+        "加韭菜段和两克盐，大火翻炒三十秒即出锅。"
+      ]
+    },
+    {
+      "id": "r57",
+      "name": "蒜蓉菠菜",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 10,
+      "cost_yuan": 6,
+      "calories": 150,
+      "protein_g": 6,
+      "taste_tags": [
+        "清淡",
+        "清爽"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "减脂",
+        "控糖",
+        "清淡",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "菠菜",
+          "amount": "400克",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "大蒜",
+          "amount": "4瓣",
+          "category": "调料",
+          "grams": 12
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "菠菜洗净切长段，大蒜四瓣切成蒜末。",
+        "水烧开后放菠菜焯二十秒，捞出沥干水分。",
+        "锅中放一勺油爆香蒜末，下菠菜加盐翻炒半分钟。"
+      ]
+    },
+    {
+      "id": "r58",
+      "name": "清炒莴笋",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 12,
+      "cost_yuan": 7,
+      "calories": 160,
+      "protein_g": 5,
+      "taste_tags": [
+        "清爽",
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "减脂",
+        "清淡"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "莴笋",
+          "amount": "2根",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "大蒜",
+          "amount": "3瓣",
+          "category": "调料",
+          "grams": 10
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "莴笋去皮切薄片，大蒜三瓣切片备用。",
+        "锅中放一勺油烧热，中火炒香蒜片二十秒。",
+        "转大火下莴笋片翻炒两分钟，加盐炒匀关火。"
+      ]
+    },
+    {
+      "id": "r59",
+      "name": "蒜蓉粉丝蒸娃娃菜",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 10,
+      "calories": 220,
+      "protein_g": 6,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "省钱"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "娃娃菜",
+          "amount": "2颗",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "粉丝",
+          "amount": "1把",
+          "category": "主食",
+          "grams": 80
+        },
+        {
+          "name": "大蒜",
+          "amount": "5瓣",
+          "category": "调料",
+          "grams": 15
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "粉丝用温水泡十分钟，娃娃菜竖切成四瓣。",
+        "娃娃菜铺盘底放上粉丝，大蒜切末撒在面上。",
+        "水开后上锅大火蒸八分钟，取出倒掉多余水。",
+        "淋一勺生抽，另烧两勺热油浇在蒜末上。"
+      ]
+    },
+    {
+      "id": "r60",
+      "name": "番茄炒菜花",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 9,
+      "calories": 200,
+      "protein_g": 7,
+      "taste_tags": [
+        "酸甜",
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "减脂",
+        "控糖",
+        "清淡"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "菜花",
+          "amount": "1颗",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "西红柿",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 250
+        },
+        {
+          "name": "大蒜",
+          "amount": "3瓣",
+          "category": "调料",
+          "grams": 10
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "菜花掰成小朵，西红柿切块，大蒜切末。",
+        "菜花放开水里焯一分钟，捞出沥干水分。",
+        "锅中放两勺油爆香蒜末，下西红柿中火炒三分钟。",
+        "倒入菜花大火翻炒两分钟，加盐炒匀即出锅。"
+      ]
+    },
+    {
+      "id": "r61",
+      "name": "手撕鸡丝",
+      "category": "凉菜",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 15,
+      "calories": 320,
+      "protein_g": 30,
+      "taste_tags": [
+        "清爽",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "减脂"
+      ],
+      "allergens": [
+        "大豆",
+        "芝麻",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "鸡胸肉",
+          "amount": "300克",
+          "category": "肉蛋",
+          "grams": 300
+        },
+        {
+          "name": "黄瓜",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 150
+        },
+        {
+          "name": "大蒜",
+          "amount": "3瓣",
+          "category": "调料",
+          "grams": 10
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "香油",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "鸡胸肉冷水下锅，中火煮十分钟捞出放凉。",
+        "黄瓜切细丝铺盘底，鸡肉顺纹撕成细丝摆上。",
+        "大蒜剁末，加一勺生抽、一勺香油调成料汁。",
+        "料汁浇在鸡丝上拌匀，静置五分钟即可上桌。"
+      ]
+    },
+    {
+      "id": "r62",
+      "name": "凉拌木耳",
+      "category": "凉菜",
+      "difficulty": "简单",
+      "time_min": 10,
+      "cost_yuan": 6,
+      "calories": 120,
+      "protein_g": 4,
+      "taste_tags": [
+        "清爽",
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "减脂",
+        "控糖",
+        "清淡"
+      ],
+      "allergens": [
+        "芝麻"
+      ],
+      "ingredients": [
+        {
+          "name": "干木耳",
+          "amount": "15克",
+          "category": "干货",
+          "grams": 15
+        },
+        {
+          "name": "青椒",
+          "amount": "1个",
+          "category": "蔬菜",
+          "grams": 80
+        },
+        {
+          "name": "大蒜",
+          "amount": "3瓣",
+          "category": "调料",
+          "grams": 10
+        },
+        {
+          "name": "香醋",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "香油",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "干木耳用温水泡发十分钟，撕成小朵洗净。",
+        "水开后木耳焯两分钟，捞出过凉水沥干。",
+        "青椒切细丝，大蒜剁成末，与木耳一同装盘。",
+        "淋一勺香醋、一勺香油拌匀，冷藏五分钟更爽脆。"
+      ]
+    },
+    {
+      "id": "r63",
+      "name": "凉拌土豆丝",
+      "category": "凉菜",
+      "difficulty": "简单",
+      "time_min": 12,
+      "cost_yuan": 5,
+      "calories": 220,
+      "protein_g": 4,
+      "taste_tags": [
+        "清爽",
+        "酸甜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱",
+        "清淡"
+      ],
+      "allergens": [
+        "芝麻"
+      ],
+      "ingredients": [
+        {
+          "name": "土豆",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "青椒",
+          "amount": "1个",
+          "category": "蔬菜",
+          "grams": 80
+        },
+        {
+          "name": "白醋",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "香油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "土豆去皮切成细丝，清水冲洗两遍去淀粉。",
+        "水开下土豆丝焯一分钟，捞出过凉水沥干。",
+        "青椒切丝与土豆丝拌匀，加半小勺盐、一勺白醋、一勺香油。",
+        "拌匀后静置三分钟入味即可装盘。"
+      ]
+    },
+    {
+      "id": "r64",
+      "name": "番茄豆腐汤",
+      "category": "汤",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 8,
+      "calories": 180,
+      "protein_g": 12,
+      "taste_tags": [
+        "酸甜",
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "省钱"
+      ],
+      "allergens": [
+        "大豆"
+      ],
+      "ingredients": [
+        {
+          "name": "西红柿",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 250
+        },
+        {
+          "name": "北豆腐",
+          "amount": "1块",
+          "category": "豆制品",
+          "grams": 300
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "西红柿去蒂切小块，北豆腐切两厘米见方的块。",
+        "锅内放一勺油，中火炒西红柿三分钟出汁。",
+        "加清水八百毫升烧开，下豆腐块小火煮五分钟。",
+        "加半小勺盐调味，撒上小葱末即可关火。"
+      ]
+    },
+    {
+      "id": "r65",
+      "name": "香菇豆腐汤",
+      "category": "汤",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 9,
+      "calories": 190,
+      "protein_g": 13,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "减脂"
+      ],
+      "allergens": [
+        "大豆"
+      ],
+      "ingredients": [
+        {
+          "name": "鲜香菇",
+          "amount": "5朵",
+          "category": "菌菇",
+          "grams": 120
+        },
+        {
+          "name": "北豆腐",
+          "amount": "1块",
+          "category": "豆制品",
+          "grams": 300
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "鲜香菇洗净切片，北豆腐切小方块备用。",
+        "锅中加清水八百毫升，放香菇片大火烧开。",
+        "水开后下豆腐块，转中火煮六分钟。",
+        "加半小勺盐调味后撒小葱末即可盛出。"
+      ]
+    },
+    {
+      "id": "r66",
+      "name": "萝卜丝汤",
+      "category": "汤",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 6,
+      "calories": 120,
+      "protein_g": 3,
+      "taste_tags": [
+        "清淡",
+        "清爽"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "减脂",
+        "省钱"
+      ],
+      "allergens": [
+        "芝麻"
+      ],
+      "ingredients": [
+        {
+          "name": "白萝卜",
+          "amount": "400克",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "姜",
+          "amount": "3片",
+          "category": "调料",
+          "grams": 8
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "香油",
+          "amount": "少许",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "白萝卜去皮切细丝，姜片切成姜丝备用。",
+        "锅中加清水八百毫升，放姜丝大火烧开。",
+        "下萝卜丝转中火煮六分钟至变软透明。",
+        "加半小勺盐，淋少许香油，撒小葱末出锅。"
+      ]
+    },
+    {
+      "id": "r67",
+      "name": "青椒土豆丝",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 7,
+      "calories": 240,
+      "protein_g": 5,
+      "taste_tags": [
+        "清爽",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱",
+        "清淡"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "土豆",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "青椒",
+          "amount": "1个",
+          "category": "蔬菜",
+          "grams": 80
+        },
+        {
+          "name": "大蒜",
+          "amount": "3瓣",
+          "category": "调料",
+          "grams": 10
+        },
+        {
+          "name": "白醋",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "土豆去皮切细丝，泡清水五分钟去掉淀粉。",
+        "青椒去籽切丝，大蒜拍碎切成蒜末。",
+        "热锅放两勺油，爆香蒜末后下土豆丝大火翻炒两分钟。",
+        "加青椒丝继续翻炒一分钟，淋一勺白醋炒匀出锅。"
+      ]
+    },
+    {
+      "id": "r68",
+      "name": "蒜香鸡翅",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 25,
+      "cost_yuan": 20,
+      "calories": 520,
+      "protein_g": 34,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "鸡翅中",
+          "amount": "8个",
+          "category": "肉蛋",
+          "grams": 400
+        },
+        {
+          "name": "大蒜",
+          "amount": "5瓣",
+          "category": "调料",
+          "grams": 15
+        },
+        {
+          "name": "生抽",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "蜂蜜",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "鸡翅中两面各划两刀，方便入味。",
+        "大蒜剁成蒜末，加两勺生抽、一勺蜂蜜调成酱汁。",
+        "鸡翅与酱汁拌匀，静置十分钟。",
+        "平底锅放一勺油，中小火煎鸡翅两面各四分钟。",
+        "倒入剩余蒜末酱汁，小火翻匀收汁两分钟出锅。"
+      ]
+    },
+    {
+      "id": "r69",
+      "name": "香菇蒸鸡",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 25,
+      "cost_yuan": 20,
+      "calories": 400,
+      "protein_g": 32,
+      "taste_tags": [
+        "咸鲜",
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "清淡"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "鸡腿肉",
+          "amount": "300克",
+          "category": "肉蛋",
+          "grams": 300
+        },
+        {
+          "name": "干香菇",
+          "amount": "6朵",
+          "category": "干货",
+          "grams": 20
+        },
+        {
+          "name": "姜",
+          "amount": "3片",
+          "category": "调料",
+          "grams": 8
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "玉米淀粉",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "干香菇用热水泡发十分钟，挤干后切厚片。",
+        "鸡腿肉切三厘米块，加一勺生抽、一勺玉米淀粉抓匀。",
+        "拌入香菇片和姜片，腌五分钟后平铺在盘中。",
+        "水开后大火蒸十二分钟，取出即可上桌。"
+      ]
+    },
+    {
+      "id": "r70",
+      "name": "南瓜蒸排骨",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 30,
+      "cost_yuan": 24,
+      "calories": 520,
+      "protein_g": 28,
+      "taste_tags": [
+        "咸鲜",
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "猪小排",
+          "amount": "400克",
+          "category": "肉蛋",
+          "grams": 400
+        },
+        {
+          "name": "南瓜",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "姜",
+          "amount": "3片",
+          "category": "调料",
+          "grams": 8
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "玉米淀粉",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "猪小排斩小块，清水泡五分钟去血水沥干。",
+        "排骨加一勺生抽、一勺玉米淀粉、姜片抓匀。",
+        "南瓜去皮切两厘米厚片，平铺在盘底。",
+        "排骨铺在南瓜片上，静置十分钟入味。",
+        "水开后大火蒸十五分钟，关火焖两分钟出锅。"
+      ]
+    },
+    {
+      "id": "r71",
+      "name": "洋葱土豆片",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 18,
+      "cost_yuan": 8,
+      "calories": 300,
+      "protein_g": 6,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "土豆",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "洋葱",
+          "amount": "1个",
+          "category": "蔬菜",
+          "grams": 200
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "土豆去皮切薄片，清水冲去表面淀粉沥干",
+        "洋葱切粗丝，锅热后倒两勺油爆香洋葱约一分钟",
+        "下土豆片中火翻炒三分钟，让每片都沾上油",
+        "沿锅边淋一勺生抽，转大火再炒两分钟至土豆边缘微焦",
+        "撒半小勺盐翻匀，土豆能轻松戳透即可出锅"
+      ]
+    },
+    {
+      "id": "r72",
+      "name": "番茄牛肉",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 30,
+      "cost_yuan": 26,
+      "calories": 430,
+      "protein_g": 32,
+      "taste_tags": [
+        "酸甜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "牛肉",
+          "amount": "300克",
+          "category": "肉蛋",
+          "grams": 300
+        },
+        {
+          "name": "西红柿",
+          "amount": "3个",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "姜",
+          "amount": "3片",
+          "category": "调料",
+          "grams": 8
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "牛肉逆纹切薄片，加一勺生抽抓匀静置五分钟",
+        "西红柿顶部划十字，开水烫半分钟去皮切块",
+        "锅烧热倒两勺油，下姜片和牛肉片大火滑炒一分钟盛出",
+        "原锅下西红柿块中火炒三分钟，炒到出红汤变软",
+        "倒回牛肉片，小火焖两分钟，汤汁略收即可关火"
+      ]
+    },
+    {
+      "id": "r73",
+      "name": "番茄炖牛腩",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 40,
+      "cost_yuan": 32,
+      "calories": 560,
+      "protein_g": 34,
+      "taste_tags": [
+        "酸甜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "牛腩",
+          "amount": "500克",
+          "category": "肉蛋",
+          "grams": 500
+        },
+        {
+          "name": "西红柿",
+          "amount": "3个",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "洋葱",
+          "amount": "半个",
+          "category": "蔬菜",
+          "grams": 100
+        },
+        {
+          "name": "姜",
+          "amount": "3片",
+          "category": "调料",
+          "grams": 8
+        },
+        {
+          "name": "番茄酱",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "牛腩切块冷水下锅，水开后焯三分钟捞出洗净",
+        "锅倒两勺油炒香姜片和洋葱块，约两分钟出甜味",
+        "下西红柿块和一勺番茄酱，中火炒四分钟至软烂出汁",
+        "放牛腩块翻匀，加热水没过食材，大火烧开后转小火炖二十五分钟",
+        "汤汁浓稠时加一勺生抽和盐，再煮两分钟收味"
+      ]
+    },
+    {
+      "id": "r74",
+      "name": "萝卜炖牛腩",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 40,
+      "cost_yuan": 30,
+      "calories": 540,
+      "protein_g": 33,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "牛腩",
+          "amount": "500克",
+          "category": "肉蛋",
+          "grams": 500
+        },
+        {
+          "name": "白萝卜",
+          "amount": "400克",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "姜",
+          "amount": "4片",
+          "category": "调料",
+          "grams": 12
+        },
+        {
+          "name": "八角",
+          "amount": "2个",
+          "category": "调料",
+          "grams": 5
+        },
+        {
+          "name": "生抽",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "牛腩切块冷水下锅，水开后焯三分钟撇净浮沫捞出",
+        "白萝卜去皮切滚刀块，锅倒两勺油炒香姜片和两个八角",
+        "下牛腩块翻炒三分钟，淋两勺生抽炒上色",
+        "加开水没过牛腩，大火烧开转小火炖二十分钟",
+        "放白萝卜块继续炖十分钟，萝卜透明软糯后加盐调味"
+      ]
+    },
+    {
+      "id": "r75",
+      "name": "黄豆焖鸡",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 40,
+      "cost_yuan": 20,
+      "calories": 600,
+      "protein_g": 38,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "鸡腿",
+          "amount": "400克",
+          "category": "肉蛋",
+          "grams": 400
+        },
+        {
+          "name": "黄豆",
+          "amount": "100克",
+          "category": "干货",
+          "grams": 100
+        },
+        {
+          "name": "姜",
+          "amount": "3片",
+          "category": "调料",
+          "grams": 8
+        },
+        {
+          "name": "生抽",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "黄豆提前用清水泡四小时以上，沥干备用",
+        "鸡腿剁成块，冷水下锅焯两分钟去血水",
+        "锅倒两勺油炒香姜片，下鸡块中火煎到两面微黄",
+        "加两勺生抽翻匀，倒入黄豆和没过食材的热水",
+        "大火烧开转小火焖二十五分钟，黄豆粉糯后大火收汁两分钟"
+      ]
+    },
+    {
+      "id": "r76",
+      "name": "花菜炒肉",
+      "category": "热菜",
+      "difficulty": "简单",
+      "time_min": 35,
+      "cost_yuan": 14,
+      "calories": 400,
+      "protein_g": 16,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "菜花",
+          "amount": "1颗",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "五花肉",
+          "amount": "150克",
+          "category": "肉蛋",
+          "grams": 150
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "菜花掰成小朵，放淡盐水里泡五分钟再冲净",
+        "五花肉切薄片，锅烧热后下肉片中火煸炒三分钟出油",
+        "拨开肉片下菜花，大火翻炒四分钟至菜花边缘微焦",
+        "淋一勺生抽，沿锅边加两勺清水，盖盖焖三分钟",
+        "开盖大火收干汤汁，菜花熟透带脆即可盛出"
+      ]
+    },
+    {
+      "id": "r77",
+      "name": "香菇炖豆腐",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 35,
+      "cost_yuan": 12,
+      "calories": 360,
+      "protein_g": 20,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "清淡"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "北豆腐",
+          "amount": "1块",
+          "category": "豆制品",
+          "grams": 400
+        },
+        {
+          "name": "鲜香菇",
+          "amount": "6朵",
+          "category": "菌菇",
+          "grams": 150
+        },
+        {
+          "name": "生抽",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "2勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "北豆腐切两厘米方块，放淡盐水里浸五分钟去豆腥",
+        "鲜香菇去蒂切片，锅倒两勺油先把香菇中火炒两分钟出香",
+        "下豆腐块，轻轻推炒避免碎块，煎约三分钟",
+        "淋两勺生抽，加半碗热水，转小火炖八分钟让豆腐入味",
+        "汤汁收到剩三分之一时撒少许盐，晃锅出锅"
+      ]
+    },
+    {
+      "id": "r78",
+      "name": "玉米炖排骨",
+      "category": "汤",
+      "difficulty": "中等",
+      "time_min": 40,
+      "cost_yuan": 22,
+      "calories": 480,
+      "protein_g": 26,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "清淡"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "猪小排",
+          "amount": "400克",
+          "category": "肉蛋",
+          "grams": 400
+        },
+        {
+          "name": "玉米",
+          "amount": "2根",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 100
+        },
+        {
+          "name": "姜",
+          "amount": "3片",
+          "category": "调料",
+          "grams": 8
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "猪小排冷水下锅，加姜片焯三分钟撇沫捞出",
+        "玉米切段，胡萝卜滚刀切块，一起放进砂锅",
+        "放入排骨和姜片，加足量清水，大火烧开",
+        "转小火盖盖炖二十五分钟，中途撇一次浮沫",
+        "玉米香甜、排骨脱骨后加盐调味，再煮两分钟关火"
+      ]
+    },
+    {
+      "id": "r79",
+      "name": "山药炖鸡",
+      "category": "汤",
+      "difficulty": "中等",
+      "time_min": 40,
+      "cost_yuan": 22,
+      "calories": 460,
+      "protein_g": 34,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "清淡"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "鸡腿",
+          "amount": "400克",
+          "category": "肉蛋",
+          "grams": 400
+        },
+        {
+          "name": "山药",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "姜",
+          "amount": "3片",
+          "category": "调料",
+          "grams": 8
+        },
+        {
+          "name": "枸杞",
+          "amount": "少许",
+          "category": "干货",
+          "grams": 5
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "鸡腿剁成小块，冷水下锅焯两分钟去血水捞出",
+        "山药去皮切段，泡在清水里防止发黑",
+        "砂锅放鸡块和姜片，加足量清水大火烧开",
+        "转小火炖二十分钟，再下山药段炖十分钟",
+        "放少许枸杞煮两分钟，加盐调味后关火"
+      ]
+    },
+    {
+      "id": "r80",
+      "name": "茄子煲",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 35,
+      "cost_yuan": 13,
+      "calories": 380,
+      "protein_g": 14,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "茄子",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 400
+        },
+        {
+          "name": "猪肉末",
+          "amount": "150克",
+          "category": "肉蛋",
+          "grams": 150
+        },
+        {
+          "name": "大蒜",
+          "amount": "4瓣",
+          "category": "调料",
+          "grams": 12
+        },
+        {
+          "name": "生抽",
+          "amount": "2勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "3勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "茄子切长条，撒少许盐抓匀静置五分钟挤去水分",
+        "猪肉末加半勺生抽拌匀，砂锅倒三勺油爆香蒜末",
+        "下肉末中火炒三分钟至变色散开",
+        "放茄子条翻炒两分钟，加一勺生抽和半碗热水",
+        "盖盖小火焖十分钟，茄子软塌后大火收汁一分钟"
+      ]
+    },
+    {
+      "id": "r81",
+      "name": "芋头蒸排骨",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 40,
+      "cost_yuan": 23,
+      "calories": 540,
+      "protein_g": 26,
+      "taste_tags": [
+        "咸鲜",
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "猪小排",
+          "amount": "400克",
+          "category": "肉蛋",
+          "grams": 400
+        },
+        {
+          "name": "芋头",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "姜",
+          "amount": "3片",
+          "category": "调料",
+          "grams": 8
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "猪小排剁成三厘米段，加一勺生抽和姜片抓匀",
+        "芋头去皮切两厘米滚刀块，铺在深盘底部垫底",
+        "排骨平铺在芋头上，水开后大火蒸二十五分钟",
+        "关火焖两分钟再取出，趁热上桌即可"
+      ]
+    },
+    {
+      "id": "r82",
+      "name": "干锅土豆片",
+      "category": "热菜",
+      "difficulty": "中等",
+      "time_min": 35,
+      "cost_yuan": 11,
+      "calories": 420,
+      "protein_g": 10,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "土豆",
+          "amount": "3个",
+          "category": "蔬菜",
+          "grams": 450
+        },
+        {
+          "name": "五花肉",
+          "amount": "100克",
+          "category": "肉蛋",
+          "grams": 100
+        },
+        {
+          "name": "大蒜",
+          "amount": "4瓣",
+          "category": "调料",
+          "grams": 12
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "3勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "土豆削皮切三毫米厚片，清水冲去表面淀粉",
+        "五花肉切薄片，大蒜拍碎切成蒜片备用",
+        "锅中倒三勺食用油烧热，中火把土豆片煎至两面金黄",
+        "锅内留底油，下五花肉片煸炒出油至微焦",
+        "加蒜片爆香，倒回土豆片淋一勺生抽炒两分钟"
+      ]
+    },
+    {
+      "id": "r83",
+      "name": "白粥配榨菜",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 3,
+      "calories": 200,
+      "protein_g": 4,
+      "taste_tags": [
+        "清淡",
+        "清爽"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "大米",
+          "amount": "1杯",
+          "category": "主食",
+          "grams": 150
+        },
+        {
+          "name": "榨菜",
+          "amount": "1小包",
+          "category": "其他",
+          "grams": 50
+        }
+      ],
+      "steps": [
+        "大米一杯淘洗两遍，加六杯清水入锅",
+        "大火烧开后转小火，盖盖熬煮十八分钟",
+        "米粒开花粥汤浓稠，配一小包榨菜同吃"
+      ]
+    },
+    {
+      "id": "r84",
+      "name": "红薯粥",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 5,
+      "calories": 260,
+      "protein_g": 5,
+      "taste_tags": [
+        "清淡",
+        "酸甜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "控糖",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "红薯",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "大米",
+          "amount": "半杯",
+          "category": "主食",
+          "grams": 80
+        }
+      ],
+      "steps": [
+        "大米半杯淘洗干净，加五杯水大火烧开",
+        "红薯去皮切两厘米方块，下锅转小火煮",
+        "锅盖留一条缝小火慢熬十八分钟，甜香浓稠"
+      ]
+    },
+    {
+      "id": "r85",
+      "name": "山药小米粥",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 6,
+      "calories": 240,
+      "protein_g": 6,
+      "taste_tags": [
+        "清淡",
+        "清爽"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "控糖"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "山药",
+          "amount": "200克",
+          "category": "蔬菜",
+          "grams": 200
+        },
+        {
+          "name": "小米",
+          "amount": "半杯",
+          "category": "主食",
+          "grams": 80
+        },
+        {
+          "name": "枸杞",
+          "amount": "少许",
+          "category": "干货",
+          "grams": 5
+        }
+      ],
+      "steps": [
+        "小米半杯淘洗一遍，加五杯清水大火烧开",
+        "山药去皮切小丁，下锅转小火煮十五分钟",
+        "撒入少许枸杞再煮两分钟，关火稍焖"
+      ]
+    },
+    {
+      "id": "r86",
+      "name": "南瓜粥",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 5,
+      "calories": 220,
+      "protein_g": 4,
+      "taste_tags": [
+        "清淡",
+        "酸甜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "控糖"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "南瓜",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "大米",
+          "amount": "半杯",
+          "category": "主食",
+          "grams": 80
+        }
+      ],
+      "steps": [
+        "大米半杯淘净入锅，加五杯清水大火烧开",
+        "南瓜去皮去瓤切小块，下锅转小火煮十八分钟",
+        "用勺背把南瓜压成泥，搅匀成金黄浓粥"
+      ]
+    },
+    {
+      "id": "r87",
+      "name": "紫薯粥",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 6,
+      "calories": 250,
+      "protein_g": 5,
+      "taste_tags": [
+        "清淡",
+        "酸甜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "控糖"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "紫薯",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "大米",
+          "amount": "半杯",
+          "category": "主食",
+          "grams": 80
+        }
+      ],
+      "steps": [
+        "大米半杯淘洗两遍，加五杯清水大火煮开",
+        "紫薯削皮切小块下锅，转小火盖盖煮十八分钟",
+        "粥色转深紫、米粒开花时关火盛出"
+      ]
+    },
+    {
+      "id": "r88",
+      "name": "蔬菜粥",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 6,
+      "calories": 230,
+      "protein_g": 5,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "减脂"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "大米",
+          "amount": "半杯",
+          "category": "主食",
+          "grams": 80
+        },
+        {
+          "name": "上海青",
+          "amount": "200克",
+          "category": "蔬菜",
+          "grams": 200
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "半根",
+          "category": "蔬菜",
+          "grams": 60
+        }
+      ],
+      "steps": [
+        "大米半杯淘净，加五杯清水大火烧开转小火",
+        "上海青洗净切碎，胡萝卜半根切成细末",
+        "先下胡萝卜末煮三分钟，再放青菜碎烫一分钟",
+        "加半勺盐搅匀调味，关火盛出趁热喝"
+      ]
+    },
+    {
+      "id": "r89",
+      "name": "玉米糊",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 10,
+      "cost_yuan": 3,
+      "calories": 180,
+      "protein_g": 4,
+      "taste_tags": [
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "玉米面",
+          "amount": "1碗",
+          "category": "主食",
+          "grams": 80
+        },
+        {
+          "name": "白糖",
+          "amount": "1勺",
+          "category": "调料",
+          "grams": 10
+        }
+      ],
+      "steps": [
+        "玉米面一碗加半碗清水，搅成无颗粒面糊",
+        "锅中烧开四碗水，慢慢倒入面糊边倒边搅",
+        "小火煮五分钟至黏稠，加一勺白糖搅匀"
+      ]
+    },
+    {
+      "id": "r90",
+      "name": "玉米面发糕",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 25,
+      "cost_yuan": 4,
+      "calories": 240,
+      "protein_g": 6,
+      "taste_tags": [
+        "清淡",
+        "酸甜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "玉米面",
+          "amount": "1碗",
+          "category": "主食",
+          "grams": 100
+        },
+        {
+          "name": "白糖",
+          "amount": "2勺",
+          "category": "调料",
+          "grams": 20
+        },
+        {
+          "name": "酵母",
+          "amount": "少许",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "酵母和两勺白糖用温水化开，倒入玉米面",
+        "加温水搅成稠面糊，盖好静置发酵一小时",
+        "面糊体积变大起泡，倒入刷油模具铺平",
+        "水开后上锅大火蒸二十分钟",
+        "关火焖三分钟再取出，晾凉切方块"
+      ]
+    },
+    {
+      "id": "r91",
+      "name": "糯米鸡",
+      "category": "早餐",
+      "difficulty": "中等",
+      "time_min": 25,
+      "cost_yuan": 10,
+      "calories": 420,
+      "protein_g": 20,
+      "taste_tags": [
+        "咸鲜",
+        "浓郁"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "糯米",
+          "amount": "1杯",
+          "category": "主食",
+          "grams": 150
+        },
+        {
+          "name": "鸡腿肉",
+          "amount": "150克",
+          "category": "肉蛋",
+          "grams": 150
+        },
+        {
+          "name": "干香菇",
+          "amount": "4朵",
+          "category": "干货",
+          "grams": 12
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "糯米淘净加水300毫升，上锅大火蒸15分钟",
+        "干香菇温水泡软，捞出切成小丁",
+        "鸡腿肉切小块下热锅，中火炒2分钟",
+        "加香菇丁和1勺生抽，翻炒1分钟关火",
+        "香菇鸡肉铺在糯米饭上，回锅再蒸5分钟"
+      ]
+    },
+    {
+      "id": "r92",
+      "name": "鲜肉小馄饨",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 10,
+      "calories": 380,
+      "protein_g": 18,
+      "taste_tags": [
+        "咸鲜",
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "馄饨皮",
+          "amount": "20张",
+          "category": "主食",
+          "grams": 150
+        },
+        {
+          "name": "猪肉末",
+          "amount": "150克",
+          "category": "肉蛋",
+          "grams": 150
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "猪肉末加1勺生抽和一半葱花，搅上劲",
+        "馄饨皮摊平抹少量肉馅，对折捏紧封口",
+        "水烧开后下馄饨，中火煮3分钟至浮起",
+        "连汤盛入碗中，撒上剩余葱花即可"
+      ]
+    },
+    {
+      "id": "r93",
+      "name": "白菜猪肉包",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 12,
+      "cost_yuan": 7,
+      "calories": 360,
+      "protein_g": 14,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "面粉",
+          "amount": "200克",
+          "category": "主食",
+          "grams": 200
+        },
+        {
+          "name": "白菜",
+          "amount": "200克",
+          "category": "蔬菜",
+          "grams": 200
+        },
+        {
+          "name": "猪肉末",
+          "amount": "100克",
+          "category": "肉蛋",
+          "grams": 100
+        },
+        {
+          "name": "姜",
+          "amount": "2片",
+          "category": "调料",
+          "grams": 5
+        }
+      ],
+      "steps": [
+        "面粉加温水揉成软面团，盖上醒2分钟",
+        "白菜切碎挤干水分，拌入猪肉末和姜末",
+        "面团分6份擀成圆皮，包入馅料捏紧口",
+        "包子摆入蒸锅，水开后大火蒸8分钟"
+      ]
+    },
+    {
+      "id": "r94",
+      "name": "豆浆配蒸红薯",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 6,
+      "calories": 300,
+      "protein_g": 12,
+      "taste_tags": [
+        "清淡",
+        "清爽"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "清淡",
+        "省钱"
+      ],
+      "allergens": [
+        "大豆"
+      ],
+      "ingredients": [
+        {
+          "name": "黄豆",
+          "amount": "50克",
+          "category": "干货",
+          "grams": 50
+        },
+        {
+          "name": "红薯",
+          "amount": "250克",
+          "category": "蔬菜",
+          "grams": 250
+        }
+      ],
+      "steps": [
+        "黄豆淘洗干净，加800毫升清水放入豆浆机",
+        "红薯去皮切厚块，摆入蒸锅蒸屉中",
+        "豆浆机启动打浆，蒸锅大火蒸15分钟",
+        "红薯取出装盘，配热豆浆一起食用"
+      ]
+    },
+    {
+      "id": "r95",
+      "name": "蒸红薯",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 10,
+      "cost_yuan": 4,
+      "calories": 180,
+      "protein_g": 3,
+      "taste_tags": [
+        "清淡",
+        "酸甜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "控糖",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "红薯",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 300
+        }
+      ],
+      "steps": [
+        "红薯洗净带皮切成2厘米厚片",
+        "蒸锅加水烧开，红薯片摆入蒸屉大火蒸8分钟",
+        "筷子能轻松扎透即取出，稍凉后食用"
+      ]
+    },
+    {
+      "id": "r96",
+      "name": "水煮玉米",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 12,
+      "cost_yuan": 5,
+      "calories": 200,
+      "protein_g": 5,
+      "taste_tags": [
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "玉米",
+          "amount": "2根",
+          "category": "蔬菜",
+          "grams": 400
+        }
+      ],
+      "steps": [
+        "玉米剥去外层老皮，留下两层内层薄皮",
+        "玉米放入锅中加水没过，大火烧开",
+        "转中火煮8分钟，捞出沥水即可食用"
+      ]
+    },
+    {
+      "id": "r97",
+      "name": "豆浆油条",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 10,
+      "cost_yuan": 6,
+      "calories": 420,
+      "protein_g": 12,
+      "taste_tags": [
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "大豆",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "黄豆",
+          "amount": "50克",
+          "category": "干货",
+          "grams": 50
+        },
+        {
+          "name": "油条",
+          "amount": "2根",
+          "category": "主食",
+          "grams": 150
+        }
+      ],
+      "steps": [
+        "黄豆洗净加700毫升清水，放入豆浆机",
+        "油条切5厘米长段，放干锅小火烘2分钟",
+        "豆浆机打好倒出，配热油条趁热吃"
+      ]
+    },
+    {
+      "id": "r98",
+      "name": "豆腐脑",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 10,
+      "cost_yuan": 5,
+      "calories": 180,
+      "protein_g": 12,
+      "taste_tags": [
+        "咸鲜",
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "清淡"
+      ],
+      "allergens": [
+        "大豆",
+        "芝麻",
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "内酯豆腐",
+          "amount": "1盒",
+          "category": "豆制品",
+          "grams": 300
+        },
+        {
+          "name": "生抽",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "榨菜",
+          "amount": "少许",
+          "category": "其他",
+          "grams": 20
+        },
+        {
+          "name": "香油",
+          "amount": "少许",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "内酯豆腐连盒倒扣碗中，用勺背压成小块",
+        "上锅水开后中火蒸5分钟，取出沥掉汤水",
+        "淋1勺生抽，撒20克榨菜末和几滴香油"
+      ]
+    },
+    {
+      "id": "r99",
+      "name": "馒头配咸菜",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 10,
+      "cost_yuan": 4,
+      "calories": 300,
+      "protein_g": 8,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱",
+        "清淡"
+      ],
+      "allergens": [
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "馒头",
+          "amount": "2个",
+          "category": "主食",
+          "grams": 200
+        },
+        {
+          "name": "咸菜",
+          "amount": "少许",
+          "category": "其他",
+          "grams": 30
+        }
+      ],
+      "steps": [
+        "馒头切成1厘米厚片，摆入蒸屉",
+        "咸菜取30克切成细末，装小碟",
+        "蒸锅水开后中火蒸5分钟，与咸菜同上桌"
+      ]
+    },
+    {
+      "id": "r100",
+      "name": "燕麦香蕉粥",
+      "category": "早餐",
+      "difficulty": "简单",
+      "time_min": 10,
+      "cost_yuan": 5,
+      "calories": 280,
+      "protein_g": 8,
+      "taste_tags": [
+        "清淡",
+        "酸甜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "高蛋白"
+      ],
+      "allergens": [
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "即食燕麦",
+          "amount": "半杯",
+          "category": "主食",
+          "grams": 60
+        },
+        {
+          "name": "香蕉",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 120
+        }
+      ],
+      "steps": [
+        "锅中加400毫升清水，大火烧开",
+        "倒入60克即食燕麦，小火煮3分钟",
+        "香蕉去皮切薄片，放入粥中搅匀即可"
+      ]
+    }
   ]
 }

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import math
+from typing import Optional
 
 from recipe_planner.db import load_db
 from recipe_planner.models import (
@@ -69,8 +70,20 @@ def recipe_conflicts(r: Recipe, c: UserConstraints, meal: Optional[str] = None) 
     return conflicts
 
 
+def _rotation_bonus(days_ago: Optional[int]) -> float:
+    """轮换加分（docs/12 阶段二 2.6）：取值与常量**只有一处** —— `preference.rotation_bonus`。
+
+    延迟导入是有意的：`preference` → `events` → 数据库后端会拉进整个 storage 栈，
+    而 `storage.repositories` 又反过来 import `core`；顶层互相 import 只会炸在
+    "谁先被导入"上（`db_events` 里那条注释说的是同一件事）。
+    """
+    from recipe_planner import preference
+
+    return preference.rotation_bonus(days_ago)
+
+
 def recipe_score(r: Recipe, c: UserConstraints) -> float:
-    """软偏好评分：目标标签、口味标签、**逐菜权重**。
+    """软偏好评分：目标标签、口味标签、**逐菜权重**、**轮换**。
 
     docs/12 阶段二：`c.dish_weights` 有值时用它（一串带时间戳的事件算出来的
     "会衰减的记忆"，见 `preference.py`）；**空字典时保持老行为**（喜欢就 +8）——
@@ -88,6 +101,12 @@ def recipe_score(r: Recipe, c: UserConstraints) -> float:
         score += float(weights.get(r.id, 0.0))
     elif r.id in set(c.liked_dishes):
         score += 8.0  # 老行为：客户喜欢的菜强烈优先（没有事件时不知道"多久没吃了"）
+    # 轮换（docs/12 阶段二 2.6）：好久没吃的菜**一点点**优先。
+    # 只有"吃过"的菜才在这个表里（没吃过的不算 0 天，也不该被当成"该吃了"），
+    # 空表时这段完全不生效 —— 与权重是同一条零回归纪律。
+    last_seen = getattr(c, "dish_last_seen", None) or {}
+    if last_seen:
+        score += _rotation_bonus(last_seen.get(r.id))
     return score
 
 

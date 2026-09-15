@@ -149,6 +149,7 @@ st.markdown(
     .state.loved{ color:var(--brand-ink); }
     .state.hated{ color:var(--ink2); }
     /* 今晚大卡：首屏唯一焦点（4.6 / V-08） */
+    .dish-note{ margin-top:6px; font-size:13px; line-height:1.5; color:var(--brand-ink); }
     .hero{ background:var(--panel); border:1px solid var(--brand-line);
            border-left:5px solid var(--brand); border-radius:14px; padding:16px 20px; }
     .hero-kicker{ font-size:13px; font-weight:600; color:var(--brand-ink); letter-spacing:.03em; }
@@ -367,10 +368,14 @@ def build_constraints(inp: dict) -> UserConstraints:
     profile_now = prof.load_profile()
     # 逐菜权重（docs/12 阶段二）：事件算"会衰减的记忆"，老档案里没有事件的部分补位。
     # 没有信号时是**空字典** → `recipe_score` 回退到老的"喜欢就 +8"。
+    # 两个信号**一次读出来**（`planning_signals`）：权重看"多久以前"，上次吃看"多久没吃"，
+    # 分开读两遍事件的话，两次之间事件变了就会出现"权重按这批算、轮换按那批算"。
     try:
-        weights = preference.dish_weights(profile=profile_now, by_name=NAME2ID)
-    except Exception:                      # 权重算不出来时**绝不能挡住排菜**
-        weights = {}
+        signals = preference.planning_signals(profile=profile_now, by_name=NAME2ID)
+    except Exception:                      # 偏好信号算不出来时**绝不能挡住排菜**
+        signals = {}
+    weights = signals.get("dish_weights") or {}
+    last_seen = signals.get("dish_last_seen") or {}
     return UserConstraints(
         people=inp["people"], days=inp["days"], dishes_per_day=int(inp["dishes_per_day"]),
         allergens=inp.get("allergens", []), spice_level=inp.get("spice", "不辣"),
@@ -384,6 +389,7 @@ def build_constraints(inp: dict) -> UserConstraints:
         liked_dishes=[NAME2ID[n] for n in liked if n in NAME2ID],
         disliked_dishes=[NAME2ID[n] for n in disliked if n in NAME2ID],
         dish_weights=weights,
+        dish_last_seen=last_seen,
         meals=_picked_meals(inp),                      # docs/10：吃哪几顿
         dishes_per_meal=_dishes_per_meal(inp),         # 每餐几道菜
         breakfast_max_time_min=int(inp.get("breakfast_max_time", BREAKFAST_MAX_TIME_DEFAULT)),
@@ -1215,8 +1221,11 @@ def _row_of(rows, day: int, meal: str):
     return next((r for r in rows if r.day == day and r.meal == meal), None)
 
 
-def _dish_card(r, dish, is_loved: bool, is_hated: bool) -> str:
-    """菜品卡：等高四段，芯片固定 3 个中性灰，状态用文字 + 底色（4.5 / V-06 / V-07）。"""
+def _dish_card(r, dish, is_loved: bool, is_hated: bool, note: str = "") -> str:
+    """菜品卡：等高四段，芯片固定 3 个中性灰，状态用文字 + 底色（4.5 / V-06 / V-07）。
+
+    `note`：这一道自己的话（docs/12 阶段二 2.6 的"好久没吃"）—— 没有就不占位置。
+    """
     state = ("<span class='state loved'>已收藏</span>" if is_loved
              else ("<span class='state hated'>已排除</span>" if is_hated else ""))
     third = r.spice_level if r.spice_level != "不辣" else r.category
@@ -1227,8 +1236,54 @@ def _dish_card(r, dish, is_loved: bool, is_hated: bool) -> str:
         f"<div class='dish-card{' loved' if is_loved else (' hated' if is_hated else '')}'>"
         f"<div class='dish-row'><div class='dish-name'>{r.name}</div>{state}</div>"
         f"<div class='dish-meta'>{chips}</div>"
-        f"<div class='dish-reason'>{dish.reason or '家常好味。'}</div>"
+        + (f"<div class='dish-note'>{note}</div>" if note else "")
+        + f"<div class='dish-reason'>{dish.reason or '家常好味。'}</div>"
         "</div>")
+
+
+def _days_ago_text(days: int) -> str:
+    """「30 天前」这种人话（一个月以上换成月，免得"上次 214 天前"要心算）。"""
+    if days >= 365:
+        return "一年前"
+    if days >= 60:
+        return f"约 {round(days / 30)} 个月前"
+    return f"{days} 天前"
+
+
+def _last_seen_now() -> dict[str, int]:
+    """每道菜"上次吃是多少天前"—— **渲染时现算**，不用方案里存的那一份：
+    方案可能是三天前排的，拿旧数字说"上次 5 天前"会是错的。
+    读不到就当没有（这个提示是加分项，绝不该让页面打不开）。"""
+    try:
+        return preference.last_eaten()
+    except Exception:
+        return {}
+
+
+def _last_seen_note(recipe_id: str, last_seen: dict) -> str:
+    """「好久没吃这道了」—— 只在**真的好久**（≥30 天）时说，且说的是**事实**。
+
+    刻意不写"因为"："排这道是因为你好久没吃"只有当轮换分真起了作用才成立，
+    而卡片上无从判断（可能是定住的、可能是就它最合适）。说事实不会骗人；
+    轮换本身确实在 `recipe_score` 里生效（`preference.rotation_bonus`）。
+    """
+    days = (last_seen or {}).get(recipe_id)
+    if not isinstance(days, int) or days < preference.STALE_DAYS:
+        return ""
+    return f"好久没吃这道了 · 上次 {_days_ago_text(days)}"
+
+
+def _eating_overview(disliked_names) -> tuple[dict, dict]:
+    """吃过记录 + 三堆归类（档案页「最近的吃法」用）。
+
+    读不出来就当"没有记录"：这是把已有的事说给人听，**不该因为它打不开档案页**。
+    """
+    try:
+        history = preference.eating_history()
+        dislike_ids = {NAME2ID[n] for n in disliked_names if n in NAME2ID}
+        return history, preference.buckets(history, exclude=dislike_ids)
+    except Exception:
+        return {}, {"recent": [], "new": [], "stale": []}
 
 
 def _meal_head(plan_day, db, c) -> None:
@@ -1287,7 +1342,7 @@ def _dish_actions(plan_day: int, dish, is_loved: bool, is_hated: bool, locked: b
 
 
 def _plan_day_section(day_no: int, *, result, c, db, summary, start_date, today_idx,
-                      liked_now, hated_now):
+                      liked_now, hated_now, last_seen=None):
     """「本周计划」里**这一天**的那一段：段头 + 一顿一张卡。
 
     只画选中的那一天（docs/11 的用户反馈：原来把 N 天一路铺下来，
@@ -1342,7 +1397,8 @@ def _plan_day_section(day_no: int, *, result, c, db, summary, start_date, today_
                 r = db.by_id(dish.recipe_id)
                 if r is None:
                     continue
-                st.markdown(_dish_card(r, dish, r.name in liked_now, r.name in hated_now),
+                st.markdown(_dish_card(r, dish, r.name in liked_now, r.name in hated_now,
+                                       _last_seen_note(r.id, last_seen)),
                             unsafe_allow_html=True)
                 if not is_past:
                     got = _dish_actions(plan_day.day, dish, r.name in liked_now,
@@ -1542,7 +1598,8 @@ def render_plan() -> None:
                "不喜欢 = 换掉并记住，以后不再出现。")
     pending = _plan_day_section(day_no, result=result, c=c, db=db, summary=summary,
                                 start_date=start_date, today_idx=today_idx,
-                                liked_now=liked_now, hated_now=hated_now)
+                                liked_now=liked_now, hated_now=hated_now,
+                                last_seen=_last_seen_now())
 
     if st.session_state.get("relax"):
         _relax_options(c, result.issues, swap_failed=True)
@@ -1833,6 +1890,7 @@ def render_profile() -> None:
     liked = prof.liked_names(KNOWN_NAMES)
     disliked = prof.disliked_names(KNOWN_NAMES)
     unrated = [r for r in db.recipes if r.name not in liked and r.name not in disliked]
+    history, groups = _eating_overview(disliked)
 
     st.markdown(
         "<div class='statrow'>"
@@ -1880,7 +1938,59 @@ def render_profile() -> None:
         ui.set_notice("info", text)
         st.session_state["stale"] = True
 
-    tab_lists, tab_browse = st.tabs(["我的喜好列表", "全部菜品挑选"])
+    def render_recent() -> None:
+        """「最近的吃法」（docs/12 阶段二 2.6）：把"越用越懂你"变成**看得见**的东西。
+
+        三件事说清楚，免得用户误读：
+        1. 这里算的是"**吃过**"（点「做完了」或打过分），**不是"排过"** ——
+           排进菜单只是排了，还没下锅；拿它当吃过的证据会变成自我实现
+           （算法排得越多，越显得"你常吃"，其实是你还没做）；
+        2. 「习惯 / 偶尔」只在**吃过 3 次以上**时给（`preference.stability`），
+           次数不够就说"刚开始"，不硬下结论；
+        3. **不喜欢**的菜不进「好久没吃」—— 用户明确说过不要，再提醒就是顶嘴。
+        """
+        st.markdown(f"#### 最近的吃法（{len(history)} 道有记录）")
+        st.caption("这里记的是**吃过**：在菜单上点过「做完了」、或者给做过的菜打过分。"
+                   "只是排进菜单还不算 —— 排了没做，不算吃过。"
+                   "有记录之后，好久没动的菜在重排时会**稍微**往前站一点。")
+        if not history:
+            st.markdown("<p class='line'>还没有吃过记录。在菜单上点「做完了」（或者给做过的菜"
+                        "打分），这里就会开始记得你最近常吃什么、哪道好久没动了。</p>",
+                        unsafe_allow_html=True)
+            return
+
+        def block(col, title: str, hint: str, ids: list[str], empty: str) -> None:
+            with col:
+                st.markdown(f"**{title}**（{len(ids)}）")
+                st.caption(hint)
+                if not ids:
+                    st.markdown(f"<p class='line'>{empty}</p>", unsafe_allow_html=True)
+                for rid in ids[:12]:
+                    r = db.by_id(rid)
+                    if r is None:
+                        continue
+                    h = history.get(rid) or {}
+                    st_info = h.get("stability") or {}
+                    label = st_info.get("label") or "刚开始"
+                    bits = [f"吃过 {h.get('n', 0)} 次", f"上次 {_days_ago_text(h.get('last_days') or 0)}"]
+                    if label != "刚开始" and st_info.get("interval_days"):
+                        bits.append(f"平均每 {st_info['interval_days']:.0f} 天一次")
+                    st.markdown(f"**{r.name}** <span class='chip'>{label}</span>"
+                                f"<span class='line'>　{' · '.join(bits)}</span>",
+                                unsafe_allow_html=True)
+                if len(ids) > 12:
+                    st.markdown(f"<p class='line'>…还有 {len(ids) - 12} 道</p>",
+                                unsafe_allow_html=True)
+
+        c1, c2, c3 = st.columns(3)
+        block(c1, "最近常吃", "近两周吃了两次以上", groups["recent"], "这两周还没重复吃过什么。")
+        block(c2, "好久没吃", "上次吃在一个月以前（不改口味，只是提醒）",
+              groups["stale"], "没有好久没吃的菜。")
+        block(c3, "刚开始爱吃", "只吃过一两次、就在这两周", groups["new"], "还没有新面孔。")
+        st.caption("轮换只占**很小**的权重（上限 1.5 分）：它只在你没表态的菜之间换着来，"
+                   "永远不会盖过你明确说过的「好吃 / 喜欢 / 不喜欢」。")
+
+    tab_lists, tab_recent, tab_browse = st.tabs(["我的喜好列表", "最近的吃法", "全部菜品挑选"])
 
     with tab_lists:
         action = None
@@ -1996,6 +2106,9 @@ def render_profile() -> None:
                 st.rerun()
         st.caption("隐私：档案只保存在这台机器上，不会上传、也不需要账号；"
                    "误清空可以点上面的「撤销」找回。")
+
+    with tab_recent:
+        render_recent()
 
     with tab_browse:
         st.markdown("**按分类浏览，直接标记喜欢 / 不喜欢**")

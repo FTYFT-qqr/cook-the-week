@@ -179,6 +179,14 @@ def set_done(record_id: Optional[str], day: int, done: bool = True,
             update["done_days"] = sorted(days)
         recs[i] = r.model_copy(update=update)
         _write(recs)
+        if done:
+            # 「吃过」的最直接证据（docs/12 阶段二 2.6）：标记做完**不改菜单**，
+            # 所以推不出差异事件，只能在这里显式记一条（每道菜一条）。
+            try:
+                events.record(events.done_events(slot, day=day, source="做完了"),
+                              plan_id=record_id)
+            except Exception:                    # 记事件失败绝不能弄坏"标记做完"这件事本身
+                logger.exception("写偏好事件失败（已忽略）")
         return recs[i]
     return None
 

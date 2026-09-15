@@ -110,6 +110,10 @@ class UserConstraints(BaseModel):
     # **空字典 = 还没有偏好信号** → `recipe_score` 回退到老行为（"喜欢就 +8"），所以
     # 老数据/老测试一行都不用改；有信号时才换成"会随时间衰减"的权重。
     dish_weights: dict[str, float] = {}
+    # 上次吃是多少天前 `{菜谱 id: 天数}`（docs/12 阶段二 2.6）：只收"确实吃过"的菜
+    # （点过「做完了」或打过分），用来"换着吃"—— **空字典 = 没有吃过记录 = 老行为**，
+    # 所以它和 `dish_weights` 一样是零回归的换挡开关。
+    dish_last_seen: dict[str, int] = {}
     customer_name: str = ""  # 客户标识（预留多客户画像）
     must_include_recipes: list[str] = []  # 调试/演示用：必须包含的菜（id）
 

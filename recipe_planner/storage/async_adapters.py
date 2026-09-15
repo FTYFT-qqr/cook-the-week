@@ -243,19 +243,22 @@ def job_repo():
     return MemoryJobRepo
 
 
-async def recent_events(days: int = 180) -> list[dict]:
-    """最近 N 天的偏好事件（docs/12 阶段二）。
+async def recent_events(days: Optional[int] = 180) -> list[dict]:
+    """最近 N 天的偏好事件（docs/12 阶段二）。`days=None` = **全部**（不设时间窗）。
 
     **路由要算权重就得走这里**：`events.recent()` 是同步门面（内部 `sync_bridge.run`），
     在事件循环里直接调会阻塞循环 —— 与"路由不要调 store/profile 这些同步门面"是同一条纪律。
+
+    权重只需要近 90 天（更早的衰减到 0），但"**上次吃是多少天前**"（`dish_last_seen`）
+    恰恰要看很久以前 —— 所以那个信号必须用 `days=None` 读全量，不能被窗口截掉。
     """
     if _is_db():
         from recipe_planner.storage import db_events
 
-        return await db_events._recent(days, None)
+        return await db_events._load() if days is None else await db_events._recent(days, None)
     from recipe_planner import events as events_mod
 
-    return events_mod.recent(days)
+    return events_mod.load_events() if days is None else events_mod.recent(days)
 
 
 async def commit() -> None:

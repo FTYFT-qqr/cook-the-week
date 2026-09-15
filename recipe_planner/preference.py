@@ -25,7 +25,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Optional
+from typing import Iterable, Optional
 
 from recipe_planner import events as ev
 
@@ -47,6 +47,9 @@ DIRECTION: dict[str, float] = {
     ev.SKIP: -0.3,         # 因为这顿不做饭被去掉：比"被换掉"轻
     ev.SELECT: 0.2,        # 被重新排进来：弱正（是算法选的，不该给太重的分）
     ev.RATE_OK: 0.0,
+    # "做完了"**不给权重**：它是"吃过"的**事实**（给 2.6 的"上次多久没吃"用），
+    # 不是偏好表态 —— 做过一顿饭不代表想再做，把它算进排序会让菜单越排越窄。
+    ev.DONE: 0.0,
 }
 
 GAIN = 8.0
@@ -179,3 +182,127 @@ def stability(events: list[dict], recipe_id: str) -> dict:
 
 def _when(e: dict) -> Optional[datetime]:
     return ev._when(e)
+
+
+# ---------------------------------------------------------------- 「吃过」与轮换（2.6 用户可见）
+#
+# 2.3–2.5 的权重解决"排什么"，这一段解决"**排过之后记不记得**"：
+# 用户要看得到"这道好久没吃了""这道最近常吃"，菜单上也该说一句为什么是它。
+#
+# **`select` 不算吃过**：把菜排进菜单只是"排了"，还没下锅 ——
+# 拿它当"吃了"会让"最近常吃"变成"最近常排"，而算法自己排的菜当然显得常排
+# （自我实现：越排越像爱吃）。所以只有**用户自己动作**过的事件才算：
+# 点「做完了」、或者给这顿打分（打分本来就发生在做完之后）。
+EATEN_ACTIONS = frozenset({ev.DONE, ev.RATE_GOOD, ev.RATE_OK, ev.RATE_NEVER})
+
+RECENT_DAYS = 14    # "最近常吃"看这 14 天
+STALE_DAYS = 30     # 超过 30 天没吃 = "好久没吃"
+FRESH_DAYS = 14     # 超过 14 天没吃 → 开始轮到它
+ROTATION_MAX = 1.5  # 轮换最多加这么多分（**必须小于 2**，见 `rotation_bonus`）
+
+
+def eaten_events(events: Iterable[dict]) -> list[dict]:
+    """只留下"确实吃过"的事件（做完了 / 打过分）。"""
+    return [e for e in events if str(e.get("action") or "") in EATEN_ACTIONS]
+
+
+def last_eaten(events: Optional[list[dict]] = None, *,
+               today: Optional[date] = None) -> dict[str, int]:
+    """每道菜"**上次吃是多少天前**"（没吃过的不在里面）。
+
+    与权重不同，这里**不设时间窗**：一年前吃过的菜正是"好久没吃"最该提醒的对象，
+    被窗口截掉就等于这个功能只在有近期记录时才存在。
+    """
+    today = today or date.today()
+    events = ev.load_events() if events is None else events
+    out: dict[str, int] = {}
+    for e in eaten_events(events):
+        rid, when = e.get("recipe_id"), _when(e)
+        if not rid or when is None:
+            continue
+        age = max(0, (today - when.date()).days)
+        if rid not in out or age < out[rid]:
+            out[rid] = age
+    return out
+
+
+def rotation_bonus(days_ago: Optional[int]) -> float:
+    """好久没吃 → **一点点**优先（"换着吃"）。
+
+    **上限必须小于 2**：用户明确表态的差距最小是 2 分（好吃 +10 / 喜欢 +8），
+    轮换是"没别的话说时换着来"，永远不能翻过用户自己说过的话。
+    """
+    if days_ago is None:
+        return 0.0
+    if days_ago >= STALE_DAYS:
+        return ROTATION_MAX
+    if days_ago >= FRESH_DAYS:
+        return ROTATION_MAX / 2
+    return 0.0
+
+
+def eating_history(events: Optional[list[dict]] = None, *,
+                   today: Optional[date] = None) -> dict[str, dict]:
+    """每道菜"吃过几次、上次多久前、最近两周几次、是习惯还是偶尔"。
+
+    稳定度（`stability`）**只在这里展示、不参与排序** —— 一周排一次的场景样本太少
+    （见模块开头 ①），所以它只用来给用户一句人话，不用来决定排什么。
+    """
+    today = today or date.today()
+    events = ev.load_events() if events is None else events
+    eaten = eaten_events(events)
+    out: dict[str, dict] = {}
+    for rid in sorted({str(e.get("recipe_id")) for e in eaten if e.get("recipe_id")}):
+        mine = [e for e in eaten if str(e.get("recipe_id")) == rid]
+        ages = sorted(a for a in ((today - w.date()).days for w in map(_when, mine)
+                                  if w is not None) if a >= 0)
+        out[rid] = {
+            "n": len(ages),
+            "last_days": ages[0] if ages else None,
+            "recent": sum(1 for a in ages if a <= RECENT_DAYS),
+            "stability": stability(mine, rid),
+        }
+    return out
+
+
+def buckets(history: dict[str, dict], *, exclude: Iterable[str] = ()) -> dict[str, list[str]]:
+    """把吃过的东西分成三堆（**顺序即界面顺序**）：
+
+    - `recent` 最近常吃：近 14 天里吃了 ≥2 次；
+    - `new` 刚开始爱吃：只吃过 1–2 次、且是近 14 天内的事；
+    - `stale` 好久没吃：上次吃在 30 天以前。
+
+    `exclude`：已经在「不喜欢」里的菜 **不进 `stale`** —— 用户明确说过不要，
+    再提醒"好久没吃"就是跟用户顶嘴（`recent`/`new` 不过是事实，留着）。
+    """
+    skip = set(exclude)
+    recent, new, stale = [], [], []
+    for rid, h in history.items():
+        last = h.get("last_days")
+        if last is None:
+            continue
+        if h.get("recent", 0) >= 2:
+            recent.append(rid)
+        elif h.get("n", 0) <= 2 and last <= RECENT_DAYS:
+            new.append(rid)
+        elif last >= STALE_DAYS and rid not in skip:
+            stale.append(rid)
+    recent.sort(key=lambda r: (-history[r]["recent"], history[r]["last_days"]))
+    new.sort(key=lambda r: history[r]["last_days"])
+    stale.sort(key=lambda r: -history[r]["last_days"])
+    return {"recent": recent, "new": new, "stale": stale}
+
+
+def planning_signals(*, events: Optional[list[dict]] = None, profile: Optional[dict] = None,
+                     by_name: Optional[dict[str, str]] = None,
+                     today: Optional[date] = None) -> dict:
+    """排菜要用的两样东西**一次读出来**：逐菜权重 + 上次吃是多少天前。
+
+    分开读两遍事件不只是浪费 —— 两次读之间事件还可能变（并发写信），
+    同一个方案里"权重按这批事件算、轮换按那批事件算"，出了问题没法复现。
+    """
+    events = ev.load_events() if events is None else events
+    return {
+        "dish_weights": dish_weights(events=events, profile=profile, by_name=by_name, today=today),
+        "dish_last_seen": last_eaten(events, today=today),
+    }

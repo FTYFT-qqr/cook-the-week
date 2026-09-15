@@ -72,11 +72,15 @@ async def _with_profile(payload: dict) -> dict:
 
     # 逐菜权重（docs/12 阶段二）：由事件算"会衰减的记忆"，老档案里没有事件的部分补位。
     # 没有信号时是**空字典** → `recipe_score` 回退到老的"喜欢就 +8"，行为零变化。
+    #
+    # `days=None`（全量）而不是默认的 180 天：权重只看近 90 天够了，但**"上次吃是多少天前"**
+    # 恰恰要看很久以前 —— 被窗口截掉，"好久没吃"就只在有近期记录时才存在。
     from recipe_planner import preference
 
-    events = await data.recent_events()
-    payload["dish_weights"] = preference.dish_weights(
-        events=events, profile=profile, by_name=name2id)
+    events = await data.recent_events(days=None)
+    signals = preference.planning_signals(events=events, profile=profile, by_name=name2id)
+    payload["dish_weights"] = signals["dish_weights"]
+    payload["dish_last_seen"] = signals["dish_last_seen"]
     return payload
 
 

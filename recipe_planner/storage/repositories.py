@@ -430,7 +430,20 @@ class PlanRepo:
                 row.done_at = datetime.now(timezone.utc) if done else None
             await s.flush()
             plan = await _load_plan(s, plan_id)
-            return await _record(s, plan)
+            row = await _record(s, plan)
+        if done and row is not None:
+            # 「吃过」的证据（docs/12 阶段二 2.6）：与 JSON 后端 `store.set_done` 同一件事。
+            # 放在 session_scope **外面**、并 await 异步实现：这里已经跑在数据库线程里，
+            # 不能再调同步门面 `data_events.record()`（docs/07 踩坑 #9）。
+            try:
+                from recipe_planner import events as events_mod   # 延迟导入，避免循环
+
+                await data_events._record(
+                    events_mod.done_events(row.result.slot(day, target), day=day, source="接口"),
+                    plan_id=plan_id)
+            except Exception:
+                logging.getLogger("recipe_planner.events").exception("写偏好事件失败（已忽略）")
+        return row
 
     @staticmethod
     async def set_checked(plan_id: Optional[str], names: list[str]) -> Optional[PlanRecord]:

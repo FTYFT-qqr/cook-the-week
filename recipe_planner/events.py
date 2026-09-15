@@ -40,9 +40,10 @@ UNLOCK = "unlock"
 RATE_GOOD = "rate_good"    # 好吃
 RATE_OK = "rate_ok"        # 一般
 RATE_NEVER = "rate_never"  # 下次不做
+DONE = "done"              # 这顿做完了（docs/12 阶段二 2.6：「吃过」的最直接证据）
 
 ACTIONS = frozenset({SELECT, SWAP_OUT, SKIP, LIKE, UNLIKE, DISLIKE, UNDISLIKE,
-                     LOCK, UNLOCK, RATE_GOOD, RATE_OK, RATE_NEVER})
+                     LOCK, UNLOCK, RATE_GOOD, RATE_OK, RATE_NEVER, DONE})
 
 # 允许的界面/来源（只做人话标注，不参与计算）
 SOURCES = frozenset({"今晚页", "今天页", "本周计划", "口味档案", "做完了打分", "排一周", "接口"})
@@ -96,6 +97,22 @@ def menu_events(before: Optional[PlanResult], after: PlanResult, *,
 
 def _set_diff(old: Iterable[str], new: Iterable[str]) -> tuple[set, set]:
     return set(old or []) - set(new or []), set(new or []) - set(old or [])
+
+
+def done_events(slot, *, day: Optional[int] = None, source: str = "") -> list[dict]:
+    """这一顿「做完了」→ 逐菜一条 `done` 事件（docs/12 阶段二 2.6）。
+
+    为什么单独一个动作：菜单类事件的入口是"改动前后比一比"，而**标记做完不改菜单** ——
+    它没有差异可推，只能显式记一条。而它恰恰是"**确实吃过**"最直接的证据：
+    `select` 只是"排进了菜单"，拿它当吃过的证据会变成自我实现（算法排得越多越像爱吃）。
+
+    **取消标记不写事件**：饭已经下肚了，取消只是"标错了"，不是"没吃过"。
+    """
+    if slot is None:
+        return []
+    return [{"recipe_id": rid, "action": DONE, "meal": getattr(slot, "meal", "") or "",
+             "day_no": day, "source": source}
+            for rid in slot.recipe_ids()]
 
 
 def profile_events(before: dict, after: dict, *, by_name: dict[str, str],

@@ -116,6 +116,8 @@ def build_prompt(c: UserConstraints, candidates: list[Recipe], feedback: str | N
 - {budget_text}
 
 【每天每道菜给出 1 句中文理由（为什么选它，结合当天搭配/软偏好），不超过 40 字。】
+理由只可使用候选菜谱中的可核对事实、客户偏好命中和当前餐次搭配；不要写“营养搭配均衡”或“滋润暖胃”等无法由数据证明的结论。
+减脂/控糖/高蛋白只表示菜谱标签方向，不等于营养计算；系统会依据同一套评分明细重建最终展示理由。
 
 {catalog_text(candidates, set(c.liked_dishes))}
 
@@ -195,10 +197,15 @@ def llm_plan(c: UserConstraints, candidates: list[Recipe], feedback: str | None 
         plans = _parse_plans(data, c)
         if plans is None:
             return None, "LLM JSON 结构与要求不符"
-        # 清洗：仅保留候选 id
+        # 清洗：仅保留候选 id；理由也统一由确定性事实重建，避免模型编造因果。
         valid_ids = {r.id for r in candidates}
+        by_id = {r.id: r for r in candidates}
         for p in plans:
             p.dishes = [d for d in p.dishes if d.recipe_id in valid_ids]
+            for dish in p.dishes:
+                recipe = by_id.get(dish.recipe_id)
+                if recipe is not None:
+                    dish.reason = make_reason(recipe, c)
         return plans, None
     except Exception as exc:  # 网络/鉴权/超时等一律降级
         return None, f"{type(exc).__name__}: {exc}"

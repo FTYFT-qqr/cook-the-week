@@ -82,6 +82,57 @@ def _rotation_bonus(days_ago: Optional[int]) -> float:
     return preference.rotation_bonus(days_ago)
 
 
+PROTEIN_HIGH_MIN_G = 20.0
+STRUCTURE_REASON_LABELS = (
+    "这一顿先安排蛋白来源",
+    "这一顿补一道蔬菜",
+    "这一顿补一碗汤",
+)
+
+
+def _goal_reason(goal: str) -> str:
+    """把内部目标值翻译成不越过营养数据边界的用户文案。"""
+    return {
+        "减脂": "偏清淡/低热量方向",
+        "控糖": "控糖饮食方向（非营养计算）",
+        "高蛋白": "蛋白质较高",
+    }.get(goal, f"符合「{goal}」方向")
+
+
+def score_parts(r: Recipe, c: UserConstraints) -> list[dict[str, object]]:
+    """返回这道菜实际获得的软评分明细。
+
+    这是推荐理由与排序共用的唯一事实入口：每个分值都必须能在这里找到来源。
+    不把缺失营养字段当成 0，也不在这里做营养计算；当前目标仍是菜谱标签方向。
+    """
+    parts: list[dict[str, object]] = []
+    if c.goal != "随便" and c.goal in r.goal_tags:
+        goal_text = _goal_reason(c.goal)
+        if c.goal == "高蛋白" and (r.protein_g is None or r.protein_g < PROTEIN_HIGH_MIN_G):
+            goal_text = "高蛋白标签方向"
+        parts.append({"kind": "goal_tag", "score": 5.0, "text": goal_text})
+    if c.goal == "省钱" and r.cost_yuan <= 10:
+        parts.append({"kind": "budget", "score": 2.0, "text": "成本友好"})
+    for taste in sorted(set(c.taste_tags) & set(r.taste_tags)):
+        parts.append({"kind": "taste", "score": 1.5, "text": f"符合「{taste}」口味"})
+    weights = getattr(c, "dish_weights", None) or {}
+    if weights:
+        weight = float(weights.get(r.id, 0.0))
+        if weight:
+            text = "按你的偏好优先" if weight > 0 else "按你的反馈暂时避开"
+            parts.append({"kind": "preference_weight", "score": weight, "text": text})
+    elif r.id in set(c.liked_dishes):
+        parts.append({"kind": "liked", "score": 8.0, "text": "你喜欢这道菜"})
+    # 轮换（docs/12 阶段二 2.6）：好久没吃的菜**一点点**优先。
+    # 只有确实吃过的菜才在这个表里；空表时完全不生效，保持老行为。
+    last_seen = getattr(c, "dish_last_seen", None) or {}
+    if last_seen:
+        rotation = _rotation_bonus(last_seen.get(r.id))
+        if rotation:
+            parts.append({"kind": "rotation", "score": rotation, "text": "有一阵子没吃，帮你换换口味"})
+    return parts
+
+
 def recipe_score(r: Recipe, c: UserConstraints) -> float:
     """软偏好评分：目标标签、口味标签、**逐菜权重**、**轮换**。
 
@@ -89,25 +140,7 @@ def recipe_score(r: Recipe, c: UserConstraints) -> float:
     "会衰减的记忆"，见 `preference.py`）；**空字典时保持老行为**（喜欢就 +8）——
     所以这条改动对老数据与既有测试是零影响，有偏好信号时才换挡。
     """
-    score = 0.0
-    if c.goal != "随便" and c.goal in r.goal_tags:
-        score += 5.0
-    if c.goal == "省钱" and r.cost_yuan <= 10:
-        score += 2.0
-    overlap = set(c.taste_tags) & set(r.taste_tags)
-    score += 1.5 * len(overlap)
-    weights = getattr(c, "dish_weights", None) or {}
-    if weights:
-        score += float(weights.get(r.id, 0.0))
-    elif r.id in set(c.liked_dishes):
-        score += 8.0  # 老行为：客户喜欢的菜强烈优先（没有事件时不知道"多久没吃了"）
-    # 轮换（docs/12 阶段二 2.6）：好久没吃的菜**一点点**优先。
-    # 只有"吃过"的菜才在这个表里（没吃过的不算 0 天，也不该被当成"该吃了"），
-    # 空表时这段完全不生效 —— 与权重是同一条零回归纪律。
-    last_seen = getattr(c, "dish_last_seen", None) or {}
-    if last_seen:
-        score += _rotation_bonus(last_seen.get(r.id))
-    return score
+    return sum(float(part["score"]) for part in score_parts(r, c))
 
 
 def retrieve_candidates(db: RecipeDB, c: UserConstraints,
@@ -195,28 +228,44 @@ def _day_total_cost(plan: DayPlan, db: RecipeDB, c: UserConstraints) -> float:
     return total
 
 
-def make_reason(r: Recipe, c: UserConstraints) -> str:
-    """模板化理由（确定性计划用）。"""
-    bits = []
-    if c.goal != "随便" and c.goal in r.goal_tags:
-        bits.append(f"契合你的「{c.goal}」目标")
-    elif r.goal_tags:
-        bits.append("营养搭配均衡")
-    if r.time_min <= 20:
-        bits.append("快手省时")
-    if r.cost_yuan <= 12:
-        bits.append("成本友好")
-    if r.category == "汤":
-        bits.append("滋润暖胃")
-    if not bits:
-        bits.append("家常好味")
-    return f"{r.name}：{'，'.join(bits)}。约 {r.time_min} 分钟，成本约 {r.cost_yuan} 元/份（{r.category}）。"
-
-
 def _has_protein(r: Recipe) -> bool:
     return any(ing.category in PROTEIN_CATS for ing in r.ingredients) or any(
         w in r.name for w in MAIN_PROTEIN_WORDS
     )
+
+
+def _structure_reason(r: Recipe, prefer_protein: bool) -> str | None:
+    """把确定性排菜的结构规则翻成可回溯的理由。"""
+    if prefer_protein and _has_protein(r):
+        return "这一顿先安排蛋白来源"
+    if not prefer_protein:
+        if r.category == "汤":
+            return "这一顿补一碗汤"
+        if not _has_protein(r):
+            return "这一顿补一道蔬菜"
+    return None
+
+
+def make_reason(r: Recipe, c: UserConstraints, *, structure_reason: str | None = None) -> str:
+    """由真实评分明细、结构规则和菜谱事实生成模板化理由。"""
+    bits = [str(part["text"]) for part in score_parts(r, c) if float(part["score"]) != 0]
+    if r.time_min <= 20:
+        bits.append("快手省时")
+    if r.cost_yuan <= 12:
+        bits.append("成本友好")
+    if structure_reason:
+        bits.append(structure_reason)
+    if not bits:
+        bits.append("符合当前筛选条件")
+    return f"{r.name}：{'，'.join(dict.fromkeys(bits))}。约 {r.time_min} 分钟，成本约 {r.cost_yuan} 元/份（{r.category}）。"
+
+
+def reason_is_consistent(r: Recipe, c: UserConstraints, reason: str) -> bool:
+    """判断理由是否由当前评分/事实或确定性结构规则生成。"""
+    expected = {make_reason(r, c)}
+    expected.update(make_reason(r, c, structure_reason=label)
+                    for label in STRUCTURE_REASON_LABELS)
+    return reason in expected
 
 
 def plan_deterministic(candidates: list[Recipe], db: RecipeDB, c: UserConstraints) -> tuple[list[DayPlan], list[ValidationIssue]]:
@@ -284,7 +333,10 @@ def plan_deterministic(candidates: list[Recipe], db: RecipeDB, c: UserConstraint
                 pool.remove(chosen)
                 used_ids.add(chosen.id)
                 day_used.add(chosen.id)
-                plan_slot.dishes.append(ChosenDish(recipe_id=chosen.id, reason=make_reason(chosen, c)))
+                plan_slot.dishes.append(
+                    ChosenDish(recipe_id=chosen.id,
+                               reason=make_reason(chosen, c,
+                                                 structure_reason=_structure_reason(chosen, prefer_protein))))
                 spent += chosen.cost_yuan * c.people / 2.0
                 prefer_protein = not _has_protein(chosen)
 

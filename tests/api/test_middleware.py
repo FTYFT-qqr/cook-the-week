@@ -94,6 +94,17 @@ def test_log_formatter_falls_back_when_no_request():
     assert json.loads(JsonFormatter().format(rec))["request_id"] == "-"
 
 
+def test_third_party_http_logs_are_quiet():
+    """访问日志的唯一入口是 recipe_planner.access，避免 httpx 再打一份。"""
+    from recipe_planner.infra.logging import setup_logging
+
+    setup_logging(to_file=False)
+    assert logging.getLogger("httpx").level >= logging.WARNING
+    assert logging.getLogger("httpcore").level >= logging.WARNING
+    assert logging.getLogger("uvicorn.access").level >= logging.WARNING
+    assert logging.getLogger("uvicorn.access").disabled is True
+
+
 # ---------------------------------------------------------------- 中间件 7
 
 async def test_404_is_problem_json_with_human_message_and_next_steps(client):

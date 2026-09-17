@@ -25,12 +25,39 @@ from recipe_planner.storage.orm import Base
 # 注意：不用 pytest 的 tmp_path（它落在系统 TEMP 上，本项目环境对该目录无写权限）
 TMP_ROOT = Path(__file__).resolve().parent.parent / ".tmp" / "pytest"
 EXPECTED_TABLES = set(Base.metadata.tables)
+_CREATED_DB_PATHS: set[Path] = set()
 
 
 def _db_path(tag: str) -> Path:
     TMP_ROOT.mkdir(parents=True, exist_ok=True)
     path = TMP_ROOT / f"mig_{tag}_{uuid4().hex[:8]}.db"
+    _CREATED_DB_PATHS.add(path)
     return path
+
+
+def _remove_sqlite_files(path: Path) -> None:
+    """清理本模块精确创建的 SQLite 文件及 WAL/SHM 伴生文件。"""
+    failures: list[str] = []
+    for suffix in ("", "-wal", "-shm"):
+        candidate = Path(f"{path}{suffix}")
+        try:
+            candidate.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            failures.append(f"{candidate}: {exc}")
+    if failures:
+        raise AssertionError("SQLite 迁移测试临时文件清理失败：" + "；".join(failures))
+
+
+@pytest.fixture(autouse=True)
+def cleanup_created_databases():
+    """每个迁移用例结束后清理它创建的库，避免回归越跑临时文件越多。"""
+    yield
+    paths = list(_CREATED_DB_PATHS)
+    _CREATED_DB_PATHS.clear()
+    for path in paths:
+        _remove_sqlite_files(path)
 
 
 def _url(path: Path) -> str:

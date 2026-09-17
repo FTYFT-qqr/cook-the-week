@@ -1064,6 +1064,8 @@ def render_create() -> None:
             spice = st.radio("能接受的辣度", SPICE_LEVELS, horizontal=True, key="spice")
         with g2[1]:
             goal = st.selectbox("目标", GOALS, key="goal")
+            if goal in {"减脂", "控糖", "高蛋白"}:
+                st.caption(rep.nutrition_boundary_text(goal))
         with g2[2]:
             allergens = st.multiselect("过敏原 / 忌口（硬排除）", ALLERGENS, key="allergens")
         with g2[3]:
@@ -1575,12 +1577,14 @@ def render_plan() -> None:
          "warn" if summary.hardest_minutes >= 60 else ""),
     ]
     if c.goal != "随便":
-        stat.append((f"{summary.goal_hit} 道", f"契合「{c.goal}」", ""))
+        stat.append((f"{summary.goal_hit} 道", f"「{c.goal}」标签方向命中", ""))
     st.markdown("<div class='statrow'>" + "".join(
         f"<div class='stat {cls}'><div class='n'>{n}</div><div class='l'>{l}</div></div>"
         for n, l, cls in stat) + "</div>", unsafe_allow_html=True)
     st.markdown(f"<p class='line'>结构：{rep.structure_line(result, db)}；"
                 "花费按菜谱 2 人份单价折算，实际以当地物价为准</p>", unsafe_allow_html=True)
+    if boundary := rep.nutrition_boundary_text(c.goal):
+        st.caption(boundary)
 
     # ---- 忌口安全：只在需要时“喊”（4.6-6）
     if summary.allergen_issues:

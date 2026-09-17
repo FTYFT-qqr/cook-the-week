@@ -78,17 +78,21 @@ USE_API=1 API_BASE_URL=http://127.0.0.1:8000 streamlit run app.py
 ## 怎么验证它是好的
 
 ```bash
-python -m pytest tests                     # 399 项：领域逻辑 / 内核 / 存储双后端 / 接口
-python scripts/self_check.py               # 170 项：交付前自测（数据完整性、边界、降级）
-STORAGE=json python scripts/self_check.py  # 173 项：JSON 后端同一套
-python scripts/smoke_app.py                # 201 项：用 AppTest 真点界面（含点按钮、翻页、撤销）
-SMOKE_STORAGE=db python scripts/smoke_app.py
-python scripts/smoke_api_app.py            # 44 项：起真 uvicorn，走完整服务化链路
-python scripts/verify_migration.py         # 18 项：JSON 与数据库内容逐字段等价
+python -m pytest tests                     # 领域逻辑 / 内核 / 存储双后端 / 接口
+python scripts/self_check.py               # 交付前自测（默认 DB）
+STORAGE=json python scripts/self_check.py  # JSON 后端同一套
+python scripts/smoke_app.py                # AppTest 界面回归（默认 JSON）
+SMOKE_STORAGE=db python scripts/smoke_app.py # DB 后端界面回归
+python scripts/smoke_api_app.py            # 真 uvicorn 服务化链路
+python scripts/verify_migration.py         # JSON 与数据库内容逐字段等价
+python scripts/evaluate_recommendations.py # 固定场景推荐质量基线（只读业务数据）
+# Windows PowerShell 可直接运行统一入口（自动设置 UTF-8，任一步失败即退出）：
+powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 ```
 
-数字会随功能变化，跑一遍以输出为准。`self_check` 与 `smoke_app` 的"项数"是 `check()` 调用计数，
-不是断言数；`pytest` 是用例数。
+日常验收以命令退出码为准，数量会随功能变化。`self_check` 与 `smoke_app` 的"项数"是 `check()` 调用计数，
+不是断言数；`pytest` 是用例数。Windows PowerShell 推荐使用 `scripts/verify.ps1`，避免默认代码页导致
+中文或 `✔` 输出触发假失败。
 
 **这些脚本只写临时目录**（`.tmp/`），不会碰 `data/` 里的真实数据 —— 这一条是几次数据事故换来的，
 `scripts/isolate_tmp.py` + `tests/test_isolate_tmp.py` 专门守着它。
@@ -113,8 +117,8 @@ recipe_planner/
   storage/                  SQLAlchemy 2.0 async + Alembic 迁移 + 仓储层
 data/recipes.json           菜谱库：100 道（含 3–5 步做法）
 data/                       你的数据（app.db / 档案 / 方案）—— **已被 .gitignore 排除**
-docs/                       13 篇设计文档：产品、体验、界面规范、后端、体检报告、实施记录
-tests/ scripts/             399 条测试 + 4 个自测脚本
+docs/                       编号设计、交接、体检与实施文档
+tests/ scripts/             自动化测试与自测脚本
 ```
 
 **两个开关决定部署形态**（都是环境变量，随时可回退）：
@@ -143,7 +147,8 @@ tests/ scripts/             399 条测试 + 4 个自测脚本
 - **`docs/README.md`** —— 全部文档的索引与阅读顺序
 
 其余：`01` 产品设计 · `02/03/04` 三轮评审意见 · `05` 功能与交互设计 · `06` 界面设计规范 ·
-`08` 后端架构 · `09` 后端实现计划 · `10` 全天菜单 · `11` 项目体检报告 · `12` 理想功能对照与改进方案（含各阶段实施记录）。
+`08` 后端架构 · `09` 后端实现计划 · `10` 全天菜单 · `11` 项目体检报告 · `12` 理想功能对照与改进方案 ·
+`13` 最终验收与推进方案（当前完成度和收尾任务的唯一入口）。
 
 ## 已知边界
 

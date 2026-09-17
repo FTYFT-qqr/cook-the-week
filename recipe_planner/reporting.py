@@ -15,6 +15,15 @@ from recipe_planner.models import MEAL, DayPlan, PlanResult, RecipeDB, Validatio
 
 # ---------------------------------------------------------------- 抬头文案
 
+NUTRITION_GOALS = {"减脂", "控糖", "高蛋白"}
+
+
+def nutrition_boundary_text(goal: str) -> str:
+    """目标标签的用户可见边界说明，避免把方向性推荐说成营养结论。"""
+    if goal in NUTRITION_GOALS:
+        return "当前按菜谱标签与已录入数据做方向性推荐，不等于营养计算或专业建议。"
+    return ""
+
 def menu_title(c, single: str = "一周晚餐菜单") -> str:
     """整份菜单叫什么：只做晚餐时原样返回 `single`（三个出口的老写法不一样，各自保持不变）。
 

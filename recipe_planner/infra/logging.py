@@ -101,7 +101,12 @@ def setup_logging(level: int | str | None = None, to_file: bool = True) -> loggi
         except OSError:                   # 只读环境/无权限：日志必须有，文件可以没有
             pass
 
-    # 第三方库的访问日志会盖掉我们自己的结构化格式，降噪
-    for noisy in ("uvicorn.access", "watchfiles", "asyncio"):
+    # 访问日志只保留 recipe_planner.access 这一条结构化记录。httpx/httpcore
+    # 和 uvicorn.access 的 INFO 请求日志会把同一个请求再记一遍，造成重复与噪声。
+    for noisy in ("httpx", "httpcore", "watchfiles", "asyncio"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
+    uvicorn_access = logging.getLogger("uvicorn.access")
+    uvicorn_access.setLevel(logging.WARNING)
+    uvicorn_access.disabled = True
+    uvicorn_access.propagate = False
     return root

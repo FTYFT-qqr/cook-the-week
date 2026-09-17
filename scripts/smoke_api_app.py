@@ -81,7 +81,8 @@ import uvicorn                                                                # 
 from recipe_planner.api.main import create_app                                # noqa: E402
 
 _server = uvicorn.Server(uvicorn.Config(create_app(), host="127.0.0.1", port=PORT,
-                                        log_level="warning"))
+                                        log_level="warning", access_log=False,
+                                        log_config=None))
 _thread = threading.Thread(target=_server.run, name="smoke-uvicorn", daemon=True)
 _thread.start()
 _deadline = time.monotonic() + 20

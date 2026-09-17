@@ -101,31 +101,57 @@ def build_result(days: int = 3, people: int = 2, dishes_per_day: int = 2,
         estimated_cost_yuan=80.0)
 
 
-def _db_url() -> str:
+def _db_path() -> Path:
     TMP_ROOT.mkdir(parents=True, exist_ok=True)
-    path = (TMP_ROOT / f"api_{uuid4().hex[:8]}.db").as_posix()
-    return f"sqlite+aiosqlite:///{path}"
+    return TMP_ROOT / f"api_{uuid4().hex[:8]}.db"
+
+
+def _db_url(path: Path) -> str:
+    return f"sqlite+aiosqlite:///{path.as_posix()}"
+
+
+def _remove_sqlite_files(path: Path) -> None:
+    """删除本夹具创建的 SQLite 主文件及 WAL/SHM 伴生文件。
+
+    只接收本夹具刚生成的精确路径，绝不扫描或触碰用户数据目录。
+    清理失败要让测试失败：如果连接仍被持有，继续跑回归只会让临时库持续泄漏。
+    """
+    failures: list[str] = []
+    for suffix in ("", "-wal", "-shm"):
+        candidate = Path(f"{path}{suffix}")
+        try:
+            candidate.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            failures.append(f"{candidate}: {exc}")
+    if failures:
+        raise AssertionError("SQLite 测试临时文件清理失败：" + "；".join(failures))
 
 
 @pytest_asyncio.fixture()
 async def api(monkeypatch):
     """(client, app) —— 指向临时库、已种数据的接口客户端。"""
+    db_path = _db_path()
     monkeypatch.setenv("STORAGE", "db")
-    monkeypatch.setenv("DATABASE_URL", _db_url())
+    monkeypatch.setenv("DATABASE_URL", _db_url(db_path))
     monkeypatch.setenv("DEEPSEEK_API_KEY", "")
     reset_engine()
     engine = get_engine()
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    await RecipeRepo.upsert_many(RECIPES)
-    await ProfileRepo.save_profile(PROFILE)
-    record = await PlanRepo.save_plan(build_result(), START, "第一次排的")
-    app = create_app()
-    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        yield client, app, record
-    await engine.dispose()
-    reset_engine()
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        await RecipeRepo.upsert_many(RECIPES)
+        await ProfileRepo.save_profile(PROFILE)
+        record = await PlanRepo.save_plan(build_result(), START, "第一次排的")
+        app = create_app()
+        transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            yield client, app, record
+    finally:
+        await engine.dispose()
+        reset_engine()
+        _remove_sqlite_files(db_path)
 
 
 @pytest_asyncio.fixture()

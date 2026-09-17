@@ -1,0 +1,10 @@
+{
+  "customer_name": "测试家庭",
+  "liked_dishes": ["番茄炒蛋"],
+  "disliked_dishes": ["小葱拌豆腐"],
+  "ratings": {"番茄炒蛋": {"score": 2, "date": "09/10"}},
+  "history": {
+    "番茄炒蛋": {"since": "09/10", "source": "迁移 fixture"},
+    "小葱拌豆腐": {"since": "09/10", "source": "迁移 fixture"}
+  }
+}

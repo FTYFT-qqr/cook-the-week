@@ -64,8 +64,10 @@ python -m recipe_planner.storage.import_json      # 建库 + 导入 100 道菜�
 streamlit run app.py                              # 打开 http://localhost:8501
 ```
 
-**没有 API key 也能跑**：调不到模型时会自动走**确定性兜底排菜**（同一套硬约束与买菜清单），
-只是少了"一句理由"那种润色。`DEEPSEEK_API_KEY` 留空即可。
+**AI 不是可用性的硬依赖**：配置 API 时，模型只在本地过滤后的候选池里组合菜单，
+并在校验失败时至多重排一次；未配置时直接走确定性算法。两条路径都经过同一套本地硬约束、
+校验、买菜清单和最终理由重建（过敏/忌口、预算、每顿结构不会交给模型决定）。
+`DEEPSEEK_API_KEY` 留空即可，服务化模式只是把同一条流水线交给 FastAPI worker 执行。
 
 服务化模式（界面与排菜拆成两个进程，多端/局域网用）：
 
@@ -84,7 +86,8 @@ STORAGE=json python scripts/self_check.py  # JSON 后端同一套
 python scripts/smoke_app.py                # AppTest 界面回归（默认 JSON）
 SMOKE_STORAGE=db python scripts/smoke_app.py # DB 后端界面回归
 python scripts/smoke_api_app.py            # 真 uvicorn 服务化链路
-python scripts/verify_migration.py         # JSON 与数据库内容逐字段等价
+python scripts/verify_migration.py         # 隔离固定快照：验证 JSON → SQLite 迁移等价
+python scripts/audit_live_data.py          # 真实数据只读审计（不要求与旧 JSON 相等）
 python scripts/evaluate_recommendations.py # 固定场景推荐质量基线（只读业务数据）
 # Windows PowerShell 可直接运行统一入口（自动设置 UTF-8，任一步失败即退出）：
 powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
@@ -125,14 +128,14 @@ tests/ scripts/             自动化测试与自测脚本
 
 | 开关 | 取值 | 含义 |
 |---|---|---|
-| `STORAGE` | `db`（默认）/ `json` | 数据放 SQLite 还是 JSON 文件；两条路语义一致，`verify_migration.py` 守着等价性 |
+| `STORAGE` | `db`（默认）/ `json` | 数据放 SQLite 还是 JSON 文件；两条路语义一致，固定快照迁移测试守着等价性 |
 | `USE_API` | `0`（默认）/ `1` | 界面直连领域层，还是走 FastAPI（带任务队列、SSE 进度、多端） |
 
 ## 几个刻意的设计决定
 
 | 决定 | 为什么 |
 |---|---|
-| **硬约束不交给模型** | 过敏、辣度、时长、预算、每顿结构都由代码校验，模型只负责"选得好看、说得像人话"。修不动就退确定性方案 —— 宁可不好看，不能排错 |
+| **硬约束不交给模型** | 过敏、辣度、时长、预算、每顿结构都由代码校验；模型只在候选池里组合，最终理由也由本地事实重建。修不动就退确定性方案 —— 宁可不好看，不能排错 |
 | **每个副作用只有一个入口** | 菜单类事件只挂在"保存方案"那一处，档案类只挂在"保存档案"那一处，于是界面 / API / 两种存储**全覆盖**，按钮再加也不会漏 |
 | **新机制用"空值 = 老行为"换挡** | 逐菜权重、轮换加分、"上次吃"都是空字典就不生效；老数据、老测试一行不改也不回归 |
 | **文案只说事实** | 菜单上写"好久没吃这道了 · 上次约 2 个月前"，不写"因为…" —— 卡片上判断不出这一道是不是算法特意挑的，写"因为"就是说谎 |

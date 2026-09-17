@@ -11,15 +11,27 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from recipe_planner.models import Recipe, RecipeDB
 
-DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "recipes.json"
+DEFAULT_DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "recipes.json"
+# 保留 `DATA_FILE` 作为兼容别名；运行时读取走函数，迁移/测试可安全注入固定快照。
+DATA_FILE = DEFAULT_DATA_FILE
+
+
+def recipes_path() -> Path:
+    """菜谱 JSON 路径。
+
+    生产默认仍是 `data/recipes.json`；`RECIPE_DB_FILE` 只给隔离迁移校验和
+    测试使用，避免验证脚本为了读 fixture 去碰真实用户数据。
+    """
+    return Path(os.environ.get("RECIPE_DB_FILE", str(DEFAULT_DATA_FILE)))
 
 
 def _load_json_db(path: Path | str | None = None) -> RecipeDB:
-    p = Path(path) if path else DATA_FILE
+    p = Path(path) if path else recipes_path()
     with open(p, encoding="utf-8") as f:
         raw = json.load(f)
     return RecipeDB(recipes=[Recipe(**r) for r in raw.get("recipes", [])])

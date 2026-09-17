@@ -91,6 +91,7 @@ try {
     $env:PYTHONUTF8 = '1'
     $env:PYTHONIOENCODING = 'utf-8'
 
+    Invoke-VerificationStep 'tracked secret scan' @('scripts\scan_tracked_secrets.py')
     Invoke-VerificationStep 'pytest' @('-m', 'pytest', 'tests')
     Invoke-VerificationStep 'recommendation evaluation' @('scripts\evaluate_recommendations.py')
     Invoke-VerificationStep 'self_check (DB)' @('scripts\self_check.py')

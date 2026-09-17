@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import shutil
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -35,10 +36,10 @@ def _sources() -> dict[str, Path]:
     """
     from recipe_planner import profile as profile_mod
     from recipe_planner import store as store_mod
-    from recipe_planner.db import DATA_FILE
+    from recipe_planner.db import recipes_path
 
     return {
-        "recipes.json": DATA_FILE,
+        "recipes.json": recipes_path(),
         "saved_plans.json": store_mod.plans_path(),
         "customer_profile.json": profile_mod.profile_path(),
     }
@@ -53,7 +54,9 @@ def ensure_schema() -> None:
 
 def _backup() -> Path:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    dest = DATA / "backup" / stamp
+    # 正常导入仍备份到 data/backup；隔离迁移校验可把备份放进自己的临时目录。
+    backup_root = Path(os.environ.get("MIGRATION_BACKUP_DIR", str(DATA / "backup")))
+    dest = backup_root / stamp
     dest.mkdir(parents=True, exist_ok=True)
     for name, src in _sources().items():
         if src.exists():

@@ -1,0 +1,46 @@
+{
+  "recipes": [
+    {
+      "id": "fixture-egg",
+      "name": "番茄炒蛋",
+      "category": "热菜",
+      "description": "家常快手菜",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 8,
+      "calories": 420,
+      "protein_g": 24,
+      "taste_tags": ["咸鲜", "下饭"],
+      "spice_level": "不辣",
+      "goal_tags": ["高蛋白"],
+      "allergens": ["蛋"],
+      "steps": ["番茄切块", "鸡蛋炒熟", "合炒调味"],
+      "video_url": "",
+      "ingredients": [
+        {"name": "番茄", "amount": "2个", "category": "蔬菜", "grams": 400},
+        {"name": "鸡蛋", "amount": "3个", "category": "肉蛋", "grams": 150}
+      ]
+    },
+    {
+      "id": "fixture-tofu",
+      "name": "小葱拌豆腐",
+      "category": "凉菜",
+      "description": "清爽凉拌",
+      "difficulty": "简单",
+      "time_min": 8,
+      "cost_yuan": 5,
+      "calories": 180,
+      "protein_g": 12,
+      "taste_tags": ["清淡", "清爽"],
+      "spice_level": "不辣",
+      "goal_tags": ["清淡"],
+      "allergens": ["大豆"],
+      "steps": ["豆腐切块", "小葱切末", "拌匀调味"],
+      "video_url": "https://example.com/tofu",
+      "ingredients": [
+        {"name": "豆腐", "amount": "1盒", "category": "豆制品", "grams": 300},
+        {"name": "小葱", "amount": "1根", "category": "蔬菜", "grams": 10}
+      ]
+    }
+  ]
+}

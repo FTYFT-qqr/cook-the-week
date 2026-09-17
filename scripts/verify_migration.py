@@ -1,133 +1,164 @@
-"""迁移等价校验（docs/09 P0-5）：证明"JSON 里的东西，库里一模一样"。
+"""隔离固定快照迁移校验（docs/15 F-02）。
 
-比对三类：
-1. 菜谱：条数 + 每条的字段逐一比对（含食材与克数）；
-2. 方案：每份的 天数/菜/天数跳过/勾选/已完成 与 JSON 一致，并用领域层重算摘要（花费/命中/最费时）；
-3. 档案：喜欢/不喜欢/评分集合完全相等（来源痕迹来源一致）。
+本脚本只验证“这组固定 JSON 能否完整导入一份全新的 SQLite”：
 
-运行：python scripts/verify_migration.py   （需要已执行 import_json）
+* 固定 fixture 与真实 `data/` 完全分离；
+* 每次使用新的临时数据库，连续运行不会改变真实用户数据；
+* 方案、勾选、完成状态、偏好和评分逐字段比较；
+* 当前正在使用的数据库由 `audit_live_data.py` 单独做只读审计，不能拿它和
+  迁移前冻结的 JSON 强行比较。
 """
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+FIXTURES = ROOT / "tests" / "fixtures" / "migration_baseline"
 sys.path.insert(0, str(ROOT))
-os.environ.setdefault("STORAGE", "db")
-
-from recipe_planner import reporting as rep  # noqa: E402
-from recipe_planner import store  # noqa: E402
-from recipe_planner.db import _load_json_db  # noqa: E402
-from recipe_planner.db import load_db as load_db_current  # noqa: E402
-from recipe_planner.models import PlanRecord  # noqa: E402
-
-DATA = ROOT / "data"
-PASS, FAIL = 0, []
 
 
-def check(name: str, cond: bool, detail: str = "") -> None:
-    global PASS
-    if cond:
-        PASS += 1
-        print(f"  ✔ {name}")
-    else:
-        FAIL.append(name)
-        print(f"  ✘ {name}  {detail}")
+def _read(path: Path):
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
-def read_json(name: str):
-    p = DATA / name
-    if not p.exists():
-        return {}
-    try:
-        return json.loads(p.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+def _recipe_snapshot(recipe):
+    return {
+        "id": recipe.id,
+        "name": recipe.name,
+        "category": recipe.category,
+        "description": recipe.description,
+        "difficulty": recipe.difficulty,
+        "time_min": recipe.time_min,
+        "cost_yuan": float(recipe.cost_yuan),
+        "calories": recipe.calories,
+        "protein_g": float(recipe.protein_g) if recipe.protein_g is not None else None,
+        "taste_tags": list(recipe.taste_tags),
+        "spice_level": recipe.spice_level,
+        "goal_tags": list(recipe.goal_tags),
+        "allergens": list(recipe.allergens),
+        "steps": list(recipe.steps),
+        "video_url": recipe.video_url,
+        "ingredients": [
+            {"name": i.name, "amount": i.amount, "category": i.category,
+             "grams": float(i.grams) if i.grams is not None else None}
+            for i in recipe.ingredients
+        ],
+    }
+
+
+def _plan_snapshot(record):
+    return {
+        "id": record.id,
+        "start_date": record.start_date,
+        "done_days": sorted(record.done_days),
+        "done_slots": sorted(record.done_slots),
+        "checked_items": sorted(record.checked_items),
+        "constraints": json.loads(record.result.constraints.model_dump_json()),
+        "days": [
+            {"day": p.day, "meal": p.meal, "skipped": p.skipped, "people": p.people,
+             "dishes": [{"recipe_id": d.recipe_id, "reason": d.reason} for d in p.dishes]}
+            for p in record.result.days
+        ],
+        "shopping": [
+            {"name": item.name, "category": item.category, "amount": item.amount,
+             "needed": item.needed, "for_recipes": list(item.for_recipes)}
+            for item in record.result.shopping
+        ],
+    }
+
+
+def _profile_snapshot(profile: dict) -> dict:
+    return {
+        "liked_dishes": sorted(profile.get("liked_dishes", [])),
+        "disliked_dishes": sorted(profile.get("disliked_dishes", [])),
+        "ratings": {name: int((info or {}).get("score", 1))
+                    for name, info in sorted((profile.get("ratings") or {}).items())},
+    }
 
 
 def main() -> int:
-    json_db = _load_json_db()
-    db = load_db_current()
-    print(f"[1] 菜谱：JSON {len(json_db.recipes)} 道 → DB {len(db.recipes)} 道")
-    check("菜谱条数一致", len(json_db.recipes) == len(db.recipes))
-    by_id = {r.id: r for r in db.recipes}
-    mismatched = []
-    for r in json_db.recipes:
-        d = by_id.get(r.id)
-        if d is None:
-            mismatched.append(f"缺少 {r.id}")
-            continue
-        for field in ("name", "category", "difficulty", "time_min", "spice_level",
-                      "cost_yuan", "calories", "protein_g", "taste_tags", "goal_tags", "allergens",
-                      "steps", "video_url"):
-            if getattr(r, field) != getattr(d, field):
-                mismatched.append(f"{r.id}.{field}: {getattr(r, field)} != {getattr(d, field)}")
-        if len(r.ingredients) != len(d.ingredients):
-            mismatched.append(f"{r.id}.ingredients 数量不同")
-        else:
-            for a, b in zip(r.ingredients, d.ingredients):
-                if (a.name, a.amount, a.category, a.grams) != (b.name, b.amount, b.category, b.grams):
-                    mismatched.append(f"{r.id} 食材 {a.name} 不一致")
-    check("每条菜谱的字段与食材逐一一致", not mismatched, "; ".join(mismatched[:4]))
-
-    raw_plans = read_json("saved_plans.json")
-    json_plans = raw_plans.get("plans", []) if isinstance(raw_plans, dict) else raw_plans
-    db_plans = {r.id: r for r in store.load_records()}
-    print(f"[2] 方案：JSON {len(json_plans or [])} 份 → DB {len(db_plans)} 份")
-    # 校验的是"**迁移没丢东西**"，不是"库里不许比 JSON 多"：
-    # 迁完之后用户接着在界面/服务端排的新方案只会进库，JSON 那份是冻结的迁移基线。
-    # 拿两边条数相等当条件的话，用户每排一次新方案这里就会红一次（假警报）。
-    missing = [j.get("id") for j in (json_plans or []) if j.get("id") not in db_plans]
-    check("JSON 里每一份方案都还在库里", not missing,
-          f"库里找不到：{missing}（JSON {len(json_plans or [])} 份 / DB {len(db_plans)} 份）")
-    if len(db_plans) > len(json_plans or []):
-        extra = sorted(set(db_plans) - {j.get("id") for j in (json_plans or [])})
-        print(f"    （库里有 {len(extra)} 份是迁移之后新排的，不参与比对：{extra}）")
-    for item in json_plans or []:
-        try:
-            j = PlanRecord.model_validate(item)
-        except Exception:
-            continue
-        d = db_plans.get(j.id)
-        if d is None:
-            check(f"方案 {j.id} 已入库", False)
-            continue
-        jd = [(p.day, [x.recipe_id for x in p.dishes], p.skipped, p.people) for p in j.result.days]
-        dd = [(p.day, [x.recipe_id for x in p.dishes], p.skipped, p.people) for p in d.result.days]
-        check(f"方案 {j.label} 的每天菜与状态一致（{len(jd)} 天）", jd == dd, f"{jd} != {dd}")
-        check(f"方案 {j.label} 的勾选一致", sorted(j.checked_items) == sorted(d.checked_items),
-              f"{j.checked_items} != {d.checked_items}")
-        check(f"方案 {j.label} 的已做过一致", sorted(j.done_days) == sorted(d.done_days))
-        sj = rep.plan_summary(j.result, json_db, j.start_date)
-        sd = rep.plan_summary(d.result, db, d.start_date)
-        check(f"方案 {j.label} 的成本/天数/命中重算一致",
-              (round(sj.total_cost, 1), sj.days, sj.liked_hit) ==
-              (round(sd.total_cost, 1), sd.days, sd.liked_hit),
-              f"{(sj.total_cost, sj.days, sj.liked_hit)} != {(sd.total_cost, sd.days, sd.liked_hit)}")
-
-    prof_json = read_json("customer_profile.json")
-    prof_db = store.__dict__  # 仅为可读性；下面直接用 profile 模块
-    from recipe_planner import profile as prof  # noqa: E402
-    live = prof.load_profile()
-    print(f"[3] 档案：JSON 喜欢 {len(prof_json.get('liked_dishes', []))} / "
-          f"不喜欢 {len(prof_json.get('disliked_dishes', []))} → DB 喜欢 "
-          f"{len(live.get('liked_dishes', []))} / 不喜欢 {len(live.get('disliked_dishes', []))}")
-    check("喜欢的菜一致", sorted(prof_json.get("liked_dishes", [])) == sorted(live.get("liked_dishes", [])),
-          f"{prof_json.get('liked_dishes')} != {live.get('liked_dishes')}")
-    check("不喜欢的菜一致", sorted(prof_json.get("disliked_dishes", [])) ==
-          sorted(live.get("disliked_dishes", [])))
-    check("评分一致", {k: v.get("score") for k, v in (prof_json.get("ratings") or {}).items()} ==
-          {k: v.get("score") for k, v in (live.get("ratings") or {}).items()})
-
-    print(f"\n结果: {PASS} 通过, {len(FAIL)} 失败")
-    if FAIL:
-        print("失败项:", FAIL)
+    if not FIXTURES.is_dir():
+        print(f"✘ 缺少迁移 fixture：{FIXTURES}")
         return 1
-    print("✅ 迁移等价校验通过：JSON 与数据库内容一致")
-    return 0
+
+    temp_root = Path(tempfile.mkdtemp(prefix="migration-", dir=ROOT / ".tmp"))
+    db_path = temp_root / "app.db"
+    backup_path = temp_root / "backup"
+    keys = (
+        "STORAGE", "USE_API", "DATABASE_URL", "RECIPE_DB_FILE",
+        "RECIPE_PLAN_FILE", "RECIPE_PROFILE_FILE", "MIGRATION_BACKUP_DIR",
+    )
+    previous = {key: os.environ.get(key) for key in keys}
+    try:
+        os.environ.update({
+            "STORAGE": "db",
+            "USE_API": "0",
+            "DATABASE_URL": f"sqlite+aiosqlite:///{db_path.as_posix()}",
+            "RECIPE_DB_FILE": str(FIXTURES / "recipes.json"),
+            "RECIPE_PLAN_FILE": str(FIXTURES / "saved_plans.json"),
+            "RECIPE_PROFILE_FILE": str(FIXTURES / "customer_profile.json"),
+            "MIGRATION_BACKUP_DIR": str(backup_path),
+        })
+
+        from recipe_planner import db, profile, store
+        from recipe_planner.storage import import_json
+        from recipe_planner.storage.engine import reset_engine
+        from recipe_planner.models import PlanRecord
+
+        fixture_recipes = db._load_json_db(FIXTURES / "recipes.json")
+        fixture_plans = _read(FIXTURES / "saved_plans.json").get("plans", [])
+        fixture_profile = _read(FIXTURES / "customer_profile.json")
+        result = import_json.import_all()
+        print(f"[迁移] 菜谱 {result['recipes']} 道，方案 {result['plans']} 份")
+
+        imported_recipes = db.load_db()
+        actual_recipes = sorted((_recipe_snapshot(r) for r in imported_recipes.recipes),
+                                key=lambda x: x["id"])
+        expected_recipes = sorted((_recipe_snapshot(r) for r in fixture_recipes.recipes),
+                                  key=lambda x: x["id"])
+        if actual_recipes != expected_recipes:
+            print("✘ 菜谱或食材逐字段不一致")
+            return 1
+        print("  ✔ 菜谱与食材逐字段一致")
+
+        actual_plans = sorted((_plan_snapshot(r) for r in store.load_records()),
+                              key=lambda x: x["id"])
+        expected_plans = sorted(
+            (_plan_snapshot(PlanRecord.model_validate(item)) for item in fixture_plans),
+            key=lambda x: x["id"])
+        if actual_plans != expected_plans:
+            print("✘ 方案、菜、清单、勾选或完成状态不一致")
+            print(f"  expected={expected_plans}")
+            print(f"  actual={actual_plans}")
+            return 1
+        print("  ✔ 方案、菜、清单、勾选与完成状态一致")
+
+        actual_profile = _profile_snapshot(profile.load_profile())
+        expected_profile = _profile_snapshot(fixture_profile)
+        if actual_profile != expected_profile:
+            print("✘ 偏好或评分不一致")
+            print(f"  expected={expected_profile}")
+            print(f"  actual={actual_profile}")
+            return 1
+        print("  ✔ 喜欢、不喜欢与评分一致")
+        print("✅ 隔离固定快照迁移校验通过；真实 data/ 未参与比较")
+        return 0
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        try:
+            reset_engine()
+        except UnboundLocalError:
+            pass
+        shutil.rmtree(temp_root, ignore_errors=False)
 
 
 if __name__ == "__main__":

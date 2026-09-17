@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "plans": [
+    {
+      "id": "fixture-plan",
+      "created_at": "2026-09-10 18:00",
+      "start_date": "2026-09-14",
+      "label": "9/14–9/20",
+      "change_note": "迁移固定快照",
+      "done_days": [1],
+      "done_slots": ["1|晚餐"],
+      "checked_items": ["番茄"],
+      "result": {
+        "constraints": {
+          "people": 2,
+          "days": 2,
+          "dishes_per_day": 2,
+          "allergens": [],
+          "spice_level": "不辣",
+          "taste_tags": ["清淡"],
+          "goal": "随便",
+          "max_time_min": 40,
+          "skill": "新手",
+          "cook_start": "18:30",
+          "budget_per_person_day": 30,
+          "pantry_items": [],
+          "liked_dishes": ["fixture-egg"],
+          "disliked_dishes": ["fixture-tofu"],
+          "dish_weights": {},
+          "dish_last_seen": {},
+          "customer_name": "测试家庭",
+          "must_include_recipes": [],
+          "meals": ["晚餐"],
+          "dishes_per_meal": {"晚餐": 2},
+          "breakfast_max_time_min": 15
+        },
+        "candidate_count": 2,
+        "days": [
+          {
+            "day": 1,
+            "meal": "晚餐",
+            "dishes": [
+              {"recipe_id": "fixture-egg", "reason": "高蛋白快手"},
+              {"recipe_id": "fixture-tofu", "reason": "清爽搭配"}
+            ],
+            "skipped": false,
+            "people": null
+          },
+          {"day": 2, "meal": "晚餐", "dishes": [], "skipped": true, "people": null}
+        ],
+        "issues": [],
+        "repairs_used": 0,
+        "shopping": [
+          {
+            "name": "番茄",
+            "category": "蔬菜",
+            "amount": "2个",
+            "needed": true,
+            "for_recipes": ["fixture-egg"]
+          }
+        ],
+        "llm_used": false,
+        "llm_error": null,
+        "latency_sec": 0,
+        "estimated_cost_yuan": 13,
+        "final": true,
+        "trace": []
+      }
+    }
+  ]
+}

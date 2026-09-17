@@ -45,7 +45,7 @@ DIRECTION: dict[str, float] = {
     ev.UNLOCK: 0.0,
     ev.SWAP_OUT: -0.6,     # 被换掉过：短期内别再排到它
     ev.SKIP: -0.3,         # 因为这顿不做饭被去掉：比"被换掉"轻
-    ev.SELECT: 0.2,        # 被重新排进来：弱正（是算法选的，不该给太重的分）
+    ev.SELECT: 0.0,        # 仅表示曝光；系统排进菜单不等于用户主动选择
     ev.RATE_OK: 0.0,
     # "做完了"**不给权重**：它是"吃过"的**事实**（给 2.6 的"上次多久没吃"用），
     # 不是偏好表态 —— 做过一顿饭不代表想再做，把它算进排序会让菜单越排越窄。
@@ -199,6 +199,8 @@ RECENT_DAYS = 14    # "最近常吃"看这 14 天
 STALE_DAYS = 30     # 超过 30 天没吃 = "好久没吃"
 FRESH_DAYS = 14     # 超过 14 天没吃 → 开始轮到它
 ROTATION_MAX = 1.5  # 轮换最多加这么多分（**必须小于 2**，见 `rotation_bonus`）
+ROTATION_MIN = -3.0 # 刚吃过的短期惩罚；硬约束与永久不喜欢优先级更高
+SNOOZE_DAYS = 7     # 临时避开默认有效期，不改变永久偏好档案
 
 
 def eaten_events(events: Iterable[dict]) -> list[dict]:
@@ -226,19 +228,57 @@ def last_eaten(events: Optional[list[dict]] = None, *,
     return out
 
 
-def rotation_bonus(days_ago: Optional[int]) -> float:
-    """好久没吃 → **一点点**优先（"换着吃"）。
+def rotation_adjustment(days_ago: Optional[int]) -> float:
+    """按距上次真实食用的天数做轮换调整。
 
-    **上限必须小于 2**：用户明确表态的差距最小是 2 分（好吃 +10 / 喜欢 +8），
-    轮换是"没别的话说时换着来"，永远不能翻过用户自己说过的话。
+    近期食用会短期扣分，避免连续两周完全复用；较久未吃才给小幅正分。
+    轮换调整不是硬约束，明确的过敏/永久不喜欢仍在候选过滤层优先处理。
     """
     if days_ago is None:
         return 0.0
-    if days_ago >= STALE_DAYS:
-        return ROTATION_MAX
-    if days_ago >= FRESH_DAYS:
+    if days_ago <= 2:
+        return ROTATION_MIN
+    if days_ago <= 6:
+        return -1.5
+    if days_ago < FRESH_DAYS:
+        return -0.5
+    if days_ago < STALE_DAYS:
         return ROTATION_MAX / 2
-    return 0.0
+    return ROTATION_MAX
+
+
+def rotation_bonus(days_ago: Optional[int]) -> float:
+    """兼容旧调用方的别名；新代码请使用 `rotation_adjustment`。"""
+    return rotation_adjustment(days_ago)
+
+
+def active_snoozes(events: Iterable[dict] | None = None, *,
+                   today: Optional[date] = None) -> set[str]:
+    """返回仍在有效期内的临时避开菜谱 id。
+
+    同一道菜按事件时间顺序解释：最新的 `unsnooze` 可提前恢复，新的 `snooze`
+    会重新开始 7 天；没有时间戳的脏事件不激活，避免永久误排除。
+    """
+    today = today or date.today()
+    source = list(ev.load_events() if events is None else events)
+    def order_key(pair: tuple[int, dict]) -> tuple[int, str, int]:
+        when = _when(pair[1])
+        # 统一成字符串排序，兼容 JSON 的 naive 时间和 DB 的带时区时间。
+        return (1, "", pair[0]) if when is None else (0, when.isoformat(), pair[0])
+
+    ordered = sorted(enumerate(source), key=order_key)
+    state: dict[str, bool] = {}
+    for _, item in ordered:
+        rid = str(item.get("recipe_id") or "")
+        action = str(item.get("action") or "")
+        if not rid:
+            continue
+        if action == ev.UNSNOOZE:
+            state[rid] = False
+        elif action == ev.SNOOZE:
+            age = _age_days(_when(item), today)
+            state[rid] = age is not None and age < SNOOZE_DAYS
+    return {rid for rid, enabled in state.items() if enabled}
 
 
 def eating_history(events: Optional[list[dict]] = None, *,
@@ -305,4 +345,5 @@ def planning_signals(*, events: Optional[list[dict]] = None, profile: Optional[d
     return {
         "dish_weights": dish_weights(events=events, profile=profile, by_name=by_name, today=today),
         "dish_last_seen": last_eaten(events, today=today),
+        "snoozed_dishes": sorted(active_snoozes(events, today=today)),
     }

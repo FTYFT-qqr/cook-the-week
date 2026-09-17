@@ -20,6 +20,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 
 from recipe_planner import actions
+from recipe_planner import events as ev
 from recipe_planner import profile as prof
 from recipe_planner.models import PlanRecord, RecipeDB
 from recipe_planner.storage import async_adapters as data
@@ -47,7 +48,8 @@ def _envelope(outcome: actions.ActionOutcome, log_id: Optional[int],
 async def _persist_plan(record: PlanRecord, outcome: actions.ActionOutcome, db: RecipeDB,
                         note: Optional[str] = None) -> Optional[int]:
     """把改动落到库里：菜单/清单/花费重算 → 更新方案 → 记一条操作日志。"""
-    if outcome.days is not None or "must_include_recipes" in outcome.extra:
+    if (outcome.days is not None or "must_include_recipes" in outcome.extra
+            or "snoozed_dishes" in outcome.extra):
         result = actions.apply_to_result(record, outcome, db)
         await data.update_result(record.id, result, note or "")
     log_id = await data.add_log(record.id, outcome.kind, outcome.message,
@@ -131,6 +133,12 @@ async def dish_feedback(body: FeedbackIn, day: int, recipe_id: str,
         new_profile = prof.apply_feedback_to_dict(profile, actions.name_of(db, recipe_id),
                                                  action, known, source="菜单页")
         await data.save_profile(new_profile)
+    elif body.op in ("snooze", "unsnooze"):
+        await data.record_events([{
+            "recipe_id": recipe_id,
+            "action": ev.SNOOZE if body.op == "snooze" else ev.UNSNOOZE,
+            "meal": body.meal or "", "day_no": day, "source": "菜单页",
+        }], plan_id=record.id)
 
     log_id = await _persist_plan(record, outcome, db)
     payload: dict = {"day_detail": _day_payload(await _fresh(record, db) or record,

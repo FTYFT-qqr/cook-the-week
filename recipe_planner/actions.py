@@ -336,16 +336,17 @@ def _profile_undo(plan_id: str, recipe_id: str, day: int, previous_profile: dict
 
 def feedback(record: PlanRecord, db: RecipeDB, day: int, recipe_id: str, op: str,
              previous_profile: dict, meal: Optional[str] = None) -> ActionOutcome:
-    """喜欢 / 不喜欢 / 定住 / 取消定住。
+    """喜欢 / 不喜欢 / 定住 / 取消定住 / 临时避开。
 
     - 喜欢：只写档案，**本次菜单不动**；
     - 不喜欢：写档案 + 把这道换掉（以后不再出现）；
     - 定住 / 取消定住：只改这一道菜的"必须保留"标记。
+    - 临时避开：写 7 天事件 + 尽量替换这一道，不改永久偏好档案。
     """
     c = record.result.constraints
     plan_day = _day_of(record, day, meal)
     place = _place(c, plan_day.day, plan_day.meal if c.is_multi_meal() else None)
-    if recipe_id not in [d.recipe_id for d in plan_day.dishes]:
+    if op != "unsnooze" and recipe_id not in [d.recipe_id for d in plan_day.dishes]:
         raise ActionError("dish_not_in_day", f"{place}没有这道菜。",
                           [{"op": "view_plan", "label": "看看这一周"}], status=404)
     name = _name(db, recipe_id)
@@ -386,6 +387,36 @@ def feedback(record: PlanRecord, db: RecipeDB, day: int, recipe_id: str, op: str
                    "replaced_by": new_recipe.name if new_recipe else None},
             undo=_profile_undo(record.id, recipe_id, day, previous_profile),
             next_steps=[] if new_recipe else _relax_steps("no_candidate"))
+
+    if op in ("snooze", "unsnooze"):
+        active = set(getattr(c, "snoozed_dishes", None) or [])
+        if op == "snooze":
+            active.add(recipe_id)
+            temporary = c.model_copy(update={"snoozed_dishes": sorted(active)})
+            new_days, new_recipe = swap_dish(record.result.days, day, recipe_id, db,
+                                              temporary, meal)
+            if new_recipe is not None:
+                message = (f"已把「{name}」临时避开 7 天，{place}换成「{new_recipe.name}」；"
+                           "永久口味档案没改。")
+            else:
+                message = (f"已把「{name}」临时避开 7 天；本次没有可替换的菜，"
+                           f"{_other_days_text(_day_count(record), day)}。")
+            return ActionOutcome(
+                kind=op, message=message, days=new_days if new_recipe else None,
+                extra={"day": day, "recipe_id": recipe_id,
+                       "replaced_by": new_recipe.name if new_recipe else None,
+                       "snoozed_dishes": sorted(active)},
+                undo={"label": "撤销临时避开", "method": "POST",
+                      "path": f"/api/v1/plans/{record.id}/dishes/{day}/{recipe_id}/feedback",
+                      "body": {"op": "unsnooze", **_meal_field(meal)}},
+                next_steps=[] if new_recipe else _relax_steps("no_candidate"))
+        active.discard(recipe_id)
+        return ActionOutcome(
+            kind=op, message=f"已恢复「{name}」的临时避开，7 天内可以再次安排（本次菜单未改）。",
+            extra={"day": day, "recipe_id": recipe_id, "snoozed_dishes": sorted(active)},
+            undo={"label": "重新临时避开", "method": "POST",
+                  "path": f"/api/v1/plans/{record.id}/dishes/{day}/{recipe_id}/feedback",
+                  "body": {"op": "snooze", **_meal_field(meal)}})
 
     raise ActionError("unknown_feedback_op", "不认识的反馈类型。", status=422)
 
@@ -464,5 +495,7 @@ def apply_to_result(record: PlanRecord, outcome: ActionOutcome, db: RecipeDB) ->
         result.days = [p.model_copy(deep=True) for p in outcome.days]
     if "must_include_recipes" in outcome.extra:
         result.constraints.must_include_recipes = list(outcome.extra["must_include_recipes"])
+    if "snoozed_dishes" in outcome.extra:
+        result.constraints.snoozed_dishes = list(outcome.extra["snoozed_dishes"])
     refresh_result(result, db)
     return result

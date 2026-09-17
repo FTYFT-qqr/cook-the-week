@@ -41,9 +41,12 @@ RATE_GOOD = "rate_good"    # 好吃
 RATE_OK = "rate_ok"        # 一般
 RATE_NEVER = "rate_never"  # 下次不做
 DONE = "done"              # 这顿做完了（docs/12 阶段二 2.6：「吃过」的最直接证据）
+SNOOZE = "snooze"          # 临时避开：默认 7 天后自动恢复
+UNSNOOZE = "unsnooze"      # 提前取消临时避开
 
 ACTIONS = frozenset({SELECT, SWAP_OUT, SKIP, LIKE, UNLIKE, DISLIKE, UNDISLIKE,
-                     LOCK, UNLOCK, RATE_GOOD, RATE_OK, RATE_NEVER, DONE})
+                     LOCK, UNLOCK, RATE_GOOD, RATE_OK, RATE_NEVER, DONE,
+                     SNOOZE, UNSNOOZE})
 
 # 允许的界面/来源（只做人话标注，不参与计算）
 SOURCES = frozenset({"今晚页", "今天页", "本周计划", "口味档案", "做完了打分", "排一周", "接口"})

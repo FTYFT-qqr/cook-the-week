@@ -121,6 +121,8 @@ class UserConstraints(BaseModel):
     # （点过「做完了」或打过分），用来"换着吃"—— **空字典 = 没有吃过记录 = 老行为**，
     # 所以它和 `dish_weights` 一样是零回归的换挡开关。
     dish_last_seen: dict[str, int] = {}
+    # 临时避开由事件计算，默认 7 天后恢复；不写入永久喜欢/不喜欢档案。
+    snoozed_dishes: list[str] = []
     customer_name: str = ""  # 客户标识（预留多客户画像）
     must_include_recipes: list[str] = []  # 调试/演示用：必须包含的菜（id）
 

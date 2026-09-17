@@ -298,3 +298,16 @@ def test_多顿时LLM结果要三餐齐全():
                              "dishes": [{"recipe_id": "r31", "reason": "a"},
                                         {"recipe_id": "r32", "reason": "b"}]}
     assert _parse_plans(wrong_count, c) is None, "早餐多排了一道也要判不通过"
+
+
+def test_LLM菜单结构不要求模型生成理由():
+    c = _three_meals(days=1)
+    raw = {"days": [
+        {"day": 1, "meal": "早餐", "dishes": [{"recipe_id": "r31"}]},
+        {"day": 1, "meal": "午餐", "dishes": [{"recipe_id": "r01"}, {"recipe_id": "r04"}]},
+        {"day": 1, "meal": "晚餐", "dishes": [{"recipe_id": "r05"}, {"recipe_id": "r06"},
+                                                      {"recipe_id": "r10"}]},
+    ]}
+    plans = _parse_plans(raw, c)
+    assert plans is not None
+    assert all(d.reason == "" for p in plans for d in p.dishes)

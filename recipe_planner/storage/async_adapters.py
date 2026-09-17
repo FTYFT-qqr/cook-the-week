@@ -261,6 +261,17 @@ async def recent_events(days: Optional[int] = 180) -> list[dict]:
     return events_mod.load_events() if days is None else events_mod.recent(days)
 
 
+async def record_events(items: list[dict], plan_id: Optional[str] = None) -> int:
+    """异步记录偏好事件；JSON/SQLite 共享同一动作词表与事件形状。"""
+    if _is_db():
+        from recipe_planner.storage import db_events
+
+        return await db_events._record(items, plan_id=plan_id)
+    from recipe_planner import events as events_mod
+
+    return events_mod.record(items, plan_id=plan_id)
+
+
 async def commit() -> None:
     """把**本次请求**的会话立刻提交（`session_scope()` 拿到的就是请求级那一个）。
 

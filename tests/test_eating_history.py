@@ -83,14 +83,20 @@ def test_坏时间戳不会把整批记录弄丢():
 
 def test_轮换加分阶梯():
     assert pf.rotation_bonus(None) == 0.0
-    assert pf.rotation_bonus(3) == 0.0            # 刚吃过，别连着排
-    assert pf.rotation_bonus(pf.FRESH_DAYS) == pf.ROTATION_MAX / 2
-    assert pf.rotation_bonus(pf.STALE_DAYS) == pf.ROTATION_MAX
+    assert pf.rotation_adjustment(0) == pf.ROTATION_MIN
+    assert pf.rotation_adjustment(2) == pf.ROTATION_MIN
+    assert pf.rotation_adjustment(3) == -1.5       # 最近吃过，先换换口味
+    assert pf.rotation_adjustment(6) == -1.5
+    assert pf.rotation_adjustment(7) == -0.5
+    assert pf.rotation_adjustment(13) == -0.5
+    assert pf.rotation_adjustment(pf.FRESH_DAYS) == pf.ROTATION_MAX / 2
+    assert pf.rotation_adjustment(pf.STALE_DAYS) == pf.ROTATION_MAX
 
 
 def test_轮换永远翻不过用户明确表态():
     """**这条是设计约束，不是巧合**：好吃 +10 必须仍然压得住"喜欢 +8 + 好久没吃"。"""
     assert pf.ROTATION_MAX < 2.0
+    assert pf.ROTATION_MIN > -8.0
     c = UserConstraints(people=2, days=3, dish_weights={"b": 8.0},
                         dish_last_seen={"a": 400})
     assert recipe_score(_db().recipes[0], c) == pf.ROTATION_MAX
@@ -166,6 +172,15 @@ def test_计划信号一次读全量且两个都在():
     assert got["dish_last_seen"] == {"a": 200}          # 200 天前的"吃过"仍然在
     # 权重只认近 90 天：200 天前的 done 本来是 0 分，b 的"喜欢"是 8 分
     assert got["dish_weights"] == {"b": 8.0}
+
+
+def test_临时避开七天后自动恢复且可提前取消():
+    active = [_e("a", ev.SNOOZE, 3)]
+    assert pf.active_snoozes(active, today=TODAY) == {"a"}
+    assert pf.active_snoozes([_e("a", ev.SNOOZE, 7)], today=TODAY) == set()
+    assert pf.active_snoozes(active + [_e("a", ev.UNSNOOZE, 1)], today=TODAY) == set()
+    assert pf.active_snoozes(active + [_e("a", ev.UNSNOOZE, 1),
+                                      _e("a", ev.SNOOZE, 0)], today=TODAY) == {"a"}
 
 
 # ---------------------------------------------------------------- 两种后端：标记做完要落事件

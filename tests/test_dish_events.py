@@ -140,6 +140,15 @@ def test_换掉的菜短期内是负分():
     assert got["r02"] < 0
 
 
+def test_系统曝光不再贡献正权重():
+    assert pf.weights_from_events([_ev("r01", ev.SELECT, 1)], today=TODAY) == {}
+
+
+def test_临时避开是事件而不是永久不喜欢():
+    assert ev.SNOOZE in ev.ACTIONS and ev.UNSNOOZE in ev.ACTIONS
+    assert ev.DISLIKE != ev.SNOOZE
+
+
 def test_定住比喜欢更重():
     lock = pf.weights_from_events([_ev("r09", ev.LOCK, 1)], today=TODAY)["r09"]
     like = pf.weights_from_events([_ev("r09", ev.LIKE, 1)], today=TODAY)["r09"]

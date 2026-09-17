@@ -290,6 +290,47 @@ async def test_dislike_replaces_the_dish_on_that_day_only(api, client):
     assert "以后不再出现" in body["message"]
 
 
+async def test_snooze_replaces_without_changing_permanent_profile(api, client):
+    _, _, record = api
+    before_profile = (await client.get("/api/v1/profile")).json()
+    dish = (await client.get(f"/api/v1/plans/{record.id}/days/2")).json()["dishes"][0]
+
+    r = await client.post(
+        f"/api/v1/plans/{record.id}/dishes/2/{dish['recipe_id']}/feedback",
+        json={"op": "snooze"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    profile = (await client.get("/api/v1/profile")).json()
+
+    assert dish["recipe_id"] not in profile["liked_dishes"]
+    assert dish["recipe_id"] not in profile["disliked_dishes"]
+    assert dish["recipe_id"] not in before_profile["liked_dishes"]
+    assert dish["recipe_id"] not in before_profile["disliked_dishes"]
+    assert dish["recipe_id"] in profile["snoozed_dishes"]
+    assert "临时避开 7 天" in body["message"]
+    assert body["undo_hint"]["body"]["op"] == "unsnooze"
+
+    undo = await client.request(body["undo_hint"]["method"], body["undo_hint"]["path"],
+                                json=body["undo_hint"]["body"])
+    assert undo.status_code == 200, undo.text
+    assert dish["recipe_id"] not in (await client.get("/api/v1/profile")).json()["snoozed_dishes"]
+
+
+async def test_profile_snooze_endpoints_are_reversible(api, client):
+    _, _, record = api
+    recipe_id = (await client.get(f"/api/v1/plans/{record.id}/days/1")).json()["dishes"][0]["recipe_id"]
+
+    r = await client.post(f"/api/v1/profile/snooze/{recipe_id}")
+    assert r.status_code == 200, r.text
+    assert recipe_id in r.json()["data"]["snoozed_dishes"]
+    assert recipe_id in (await client.get("/api/v1/profile")).json()["snoozed_dishes"]
+
+    r2 = await client.delete(f"/api/v1/profile/snooze/{recipe_id}")
+    assert r2.status_code == 200, r2.text
+    assert recipe_id not in r2.json()["data"]["snoozed_dishes"]
+    assert recipe_id not in (await client.get("/api/v1/profile")).json()["snoozed_dishes"]
+
+
 async def test_lock_keeps_the_dish_through_replan(api, client):
     _, _, record = api
     before = await snapshot()

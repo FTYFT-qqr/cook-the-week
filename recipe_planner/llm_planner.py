@@ -74,14 +74,14 @@ def _meal_brief(c: UserConstraints) -> tuple[str, str, str]:
         meal = meals[0]
         return (f"安排 {c.days} 天（每天1顿{meal}）的菜单",
                 f"每天恰好选 {c.dishes_for(meal)} 道菜。",
-                '{"days": [{"day": 1, "dishes": [{"recipe_id": "r01", "reason": "..."}}, '
-                '{"recipe_id": "r02", "reason": "..."}]}, ...]}')
+                '{"days": [{"day": 1, "dishes": [{"recipe_id": "r01"}, '
+                '{"recipe_id": "r02"}]}, ...]}')
     per_meal = "、".join(f"{m}{c.dishes_for(m)}道" for m in meals)
     return (f"安排 {c.days} 天的**全天**菜单（每天 {len(meals)} 顿：{'/'.join(meals)}）",
             f"每天每一顿都要排，道数是：{per_meal}；每条都必须带 meal 字段，"
             f"取值只能是 {'/'.join(meals)} 之一。",
-            '{"days": [{"day": 1, "meal": "早餐", "dishes": [{"recipe_id": "r31", "reason": "..."}]}, '
-            '{"day": 1, "meal": "晚餐", "dishes": [{"recipe_id": "r01", "reason": "..."}]}, ...]}')
+            '{"days": [{"day": 1, "meal": "早餐", "dishes": [{"recipe_id": "r31"}]}, '
+            '{"day": 1, "meal": "晚餐", "dishes": [{"recipe_id": "r01"}]}, ...]}')
 
 
 def build_prompt(c: UserConstraints, candidates: list[Recipe], feedback: str | None = None) -> str:
@@ -115,9 +115,7 @@ def build_prompt(c: UserConstraints, candidates: list[Recipe], feedback: str | N
 - {taste_text}
 - {budget_text}
 
-【每天每道菜给出 1 句中文理由（为什么选它，结合当天搭配/软偏好），不超过 40 字。】
-理由只可使用候选菜谱中的可核对事实、客户偏好命中和当前餐次搭配；不要写“营养搭配均衡”或“滋润暖胃”等无法由数据证明的结论。
-减脂/控糖/高蛋白只表示菜谱标签方向，不等于营养计算；系统会依据同一套评分明细重建最终展示理由。
+模型只负责返回菜单结构，不要生成理由、营养结论或其它解释文字；理由由本地事实在解析后统一重建。
 
 {catalog_text(candidates, set(c.liked_dishes))}
 
@@ -152,7 +150,7 @@ def _parse_plans(raw: dict, c: UserConstraints) -> list[DayPlan] | None:
         for p in plans:
             if len(p.dishes) != c.dishes_for(p.meal):
                 return None
-            if any(not d.recipe_id or not d.reason for d in p.dishes):
+            if any(not d.recipe_id for d in p.dishes):
                 return None
         return plans
 
@@ -170,7 +168,7 @@ def _parse_plans(raw: dict, c: UserConstraints) -> list[DayPlan] | None:
     for p in plans:
         if len(p.dishes) != c.dishes_for(p.meal):
             return None
-        if any(not d.recipe_id or not d.reason for d in p.dishes):
+        if any(not d.recipe_id for d in p.dishes):
             return None
     return plans
 

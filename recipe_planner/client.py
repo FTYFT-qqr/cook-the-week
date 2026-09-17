@@ -271,6 +271,7 @@ def _record_from_detail(detail: dict) -> PlanRecord:
             meals=list(c.get("meals") or ["晚餐"]),
             dishes_per_meal=dict(c.get("dishes_per_meal") or {}),
             breakfast_max_time_min=int(c.get("breakfast_max_time_min") or 15),
+            snoozed_dishes=list(c.get("snoozed_dishes") or []),
         ),
         candidate_count=0,
         days=[DayPlan(day=int(d.get("day") or 0), meal=d.get("meal") or MEAL,
@@ -564,9 +565,23 @@ def rate_day(record_id: str, day: int, score: int, meal: Optional[str] = None) -
 
 def dish_feedback(record_id: str, day: int, recipe_id: str, op: str,
                   meal: Optional[str] = None) -> dict:
-    """菜单上对某一道菜的表态：like / dislike / lock / unlock（`meal` = 这道菜在哪一顿）。"""
+    """菜单上对某一道菜的表态：like / dislike / lock / unlock / snooze / unsnooze。"""
     out = _request("POST", f"/plans/{record_id}/dishes/{int(day)}/{recipe_id}/feedback",
                    body={"op": op, "meal": meal})
+    _invalidate()
+    return out
+
+
+def snooze_recipe(recipe_id: str) -> dict:
+    """临时避开一道菜 7 天，不修改永久偏好。"""
+    out = _request("POST", f"/profile/snooze/{recipe_id}")
+    _invalidate()
+    return out
+
+
+def unsnooze_recipe(recipe_id: str) -> dict:
+    """提前取消一道菜的临时避开。"""
+    out = _request("DELETE", f"/profile/snooze/{recipe_id}")
     _invalidate()
     return out
 
@@ -598,6 +613,7 @@ def load_profile() -> dict:
         "disliked_dishes": list(data.get("disliked_dishes") or []),
         "ratings": dict(data.get("ratings") or {}),
         "history": history,
+        "snoozed_dishes": list(data.get("snoozed_dishes") or []),
     }
     with _lock:
         _profile_cache = profile

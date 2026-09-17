@@ -16,10 +16,10 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from recipe_planner import preference  # noqa: E402
 from recipe_planner.core import (  # noqa: E402
     _has_protein,
     plan_deterministic,
-    reason_is_consistent,
     retrieve_candidates,
     validate_plan,
 )
@@ -28,6 +28,8 @@ from recipe_planner.models import UserConstraints  # noqa: E402
 
 
 DEFAULT_OUTPUT_DIR = ROOT / ".tmp" / "recommendation-evaluation"
+CROSS_WEEK_JACCARD_MAX = 0.60
+GOAL_HIT_RATE_MIN = 0.50
 
 
 def _scenarios() -> dict[str, UserConstraints]:
@@ -81,24 +83,83 @@ def _structure(plans, db) -> dict[str, int | float | None]:
 
 
 def _reason_metrics(plans, db, constraints: UserConstraints) -> dict[str, int | float]:
+    """独立按菜谱事实核对理由，不调用理由生成器或一致性模板。"""
     total = 0
     consistent = 0
-    forbidden = ("营养搭配均衡", "滋润暖胃")
     for plan in plans:
         for dish in plan.dishes:
             recipe = db.by_id(dish.recipe_id)
             if recipe is None:
                 continue
             total += 1
-            if reason_is_consistent(recipe, constraints, dish.reason):
+            if _reason_facts_are_consistent(recipe, constraints, dish.reason):
                 consistent += 1
-            if any(text in dish.reason for text in forbidden):
-                consistent = max(0, consistent - 1)
     return {
         "total": total,
         "consistent": consistent,
         "rate": round(consistent / total, 4) if total else 1.0,
     }
+
+
+def _reason_facts_are_consistent(recipe, constraints: UserConstraints, reason: str) -> bool:
+    """只看可从输入独立推出的事实，避免与 `make_reason()` 共享模板。"""
+    if not reason.startswith(f"{recipe.name}："):
+        return False
+    tail = f"约 {recipe.time_min} 分钟，成本约 {recipe.cost_yuan} 元/份（{recipe.category}）。"
+    if tail not in reason:
+        return False
+    if recipe.time_min <= 20 and "快手省时" not in reason:
+        return False
+    if recipe.time_min > 20 and "快手省时" in reason:
+        return False
+    if recipe.cost_yuan <= 12 and "成本友好" not in reason:
+        return False
+    if recipe.cost_yuan > 12 and "成本友好" in reason:
+        return False
+
+    expected_goal = {
+        "减脂": "偏清淡/低热量方向",
+        "控糖": "控糖饮食方向（非营养计算）",
+        "高蛋白": "蛋白质较高" if (recipe.protein_g or 0) >= 20 else "高蛋白标签方向",
+    }.get(constraints.goal)
+    if constraints.goal != "随便" and constraints.goal in recipe.goal_tags:
+        if expected_goal and expected_goal not in reason:
+            return False
+    elif expected_goal and expected_goal in reason:
+        return False
+
+    for taste in sorted(set(constraints.taste_tags) & set(recipe.taste_tags)):
+        if f"符合「{taste}」口味" not in reason:
+            return False
+
+    weights = getattr(constraints, "dish_weights", None) or {}
+    if weights:
+        weight = float(weights.get(recipe.id, 0.0))
+        if weight > 0 and "按你的偏好优先" not in reason:
+            return False
+        if weight < 0 and "按你的反馈暂时避开" not in reason:
+            return False
+    elif recipe.id in set(constraints.liked_dishes) and "你喜欢这道菜" not in reason:
+        return False
+
+    rotation = preference.rotation_adjustment(
+        (getattr(constraints, "dish_last_seen", None) or {}).get(recipe.id)
+    )
+    if rotation < 0 and "最近吃过，先换换口味" not in reason:
+        return False
+    if rotation > 0 and "有一阵子没吃，帮你换换口味" not in reason:
+        return False
+    if rotation == 0 and ("最近吃过，先换换口味" in reason
+                          or "有一阵子没吃，帮你换换口味" in reason):
+        return False
+
+    if "这一顿先安排蛋白来源" in reason and not _has_protein(recipe):
+        return False
+    if "这一顿补一道蔬菜" in reason and _has_protein(recipe):
+        return False
+    if "这一顿补一碗汤" in reason and recipe.category != "汤":
+        return False
+    return not any(text in reason for text in ("营养搭配均衡", "滋润暖胃"))
 
 
 def _jaccard(plans_a, plans_b) -> float:
@@ -108,12 +169,22 @@ def _jaccard(plans_a, plans_b) -> float:
     return round(len(a & b) / len(union), 4) if union else 1.0
 
 
+def _next_week_constraints(constraints: UserConstraints, plans) -> UserConstraints:
+    """把第一周实际排出的菜视作已吃过，模拟下一周的真实反馈。"""
+    seen = dict(getattr(constraints, "dish_last_seen", None) or {})
+    for plan in plans:
+        for dish in plan.dishes:
+            seen[dish.recipe_id] = 3
+    return constraints.model_copy(update={"dish_last_seen": seen})
+
+
 def evaluate(db=None) -> dict:
     db = db or _load_json_db()
     rows: dict[str, dict] = {}
     for name, constraints in _scenarios().items():
         candidates, plans, warnings, issues = _plan_once(db, constraints)
-        _candidates_2, plans_2, _warnings_2, _issues_2 = _plan_once(db, constraints)
+        next_constraints = _next_week_constraints(constraints, plans)
+        candidates_2, plans_2, warnings_2, issues_2 = _plan_once(db, next_constraints)
         ids = [d.recipe_id for p in plans for d in p.dishes]
         slots = [p for p in plans if not p.skipped and p.dishes]
         goal_slots = [
@@ -125,10 +196,17 @@ def evaluate(db=None) -> dict:
         budget_total = (constraints.budget_per_person_day * constraints.people * constraints.days
                         if constraints.budget_per_person_day is not None else None)
         cost = _cost(plans, db, constraints)
+        expected_slots = constraints.days * sum(
+            constraints.dishes_for(meal) for meal in constraints.active_meals())
+        shortage = len(ids) < expected_slots or len(
+            [d.recipe_id for p in plans_2 for d in p.dishes]) < expected_slots
+        budget_overage = round(max(0.0, cost - budget_total), 2) if budget_total is not None else 0.0
         rows[name] = {
             "candidate_count": len(candidates),
-            "hard_violations": sum(1 for i in issues if i.level == "error"),
-            "warning_count": len(warnings) + sum(1 for i in issues if i.level == "warning"),
+            "candidate_shortage": shortage,
+            "hard_violations": sum(1 for i in issues + issues_2 if i.level == "error"),
+            "warning_count": (len(warnings) + len(warnings_2)
+                               + sum(1 for i in issues + issues_2 if i.level == "warning")),
             "weekly_duplicate_count": len(ids) - len(set(ids)),
             "structure": _structure(plans, db),
             "cross_week_jaccard": _jaccard(plans, plans_2),
@@ -137,8 +215,9 @@ def evaluate(db=None) -> dict:
             ),
             "estimated_cost_yuan": cost,
             "budget_total_yuan": round(budget_total, 2) if budget_total is not None else None,
-            "budget_overage_yuan": round(max(0.0, cost - budget_total), 2)
-            if budget_total is not None else None,
+            "budget_overage_yuan": budget_overage if budget_total is not None else None,
+            "budget_overage_explained": budget_overage == 0.0 or any(
+                i.code == "over_budget" for i in issues + issues_2),
             "explanation": _reason_metrics(plans, db, constraints),
         }
 
@@ -156,6 +235,10 @@ def evaluate(db=None) -> dict:
             "weekly_duplicate_count": sum(row["weekly_duplicate_count"] for row in all_rows),
             "explanation_consistency_rate": min(
                 (row["explanation"]["rate"] for row in all_rows), default=1.0
+            ),
+            "cross_week_jaccard_max": max(
+                (row["cross_week_jaccard"] for row in all_rows
+                 if not row["candidate_shortage"]), default=0.0
             ),
         },
         "scenarios": rows,
@@ -187,7 +270,7 @@ def _markdown(report: dict) -> str:
         f"- 周内重复总数：{report['summary']['weekly_duplicate_count']}",
         f"- 最低理由一致率：{report['summary']['explanation_consistency_rate']:.0%}",
         "",
-        "跨周重合率当前只记录基线；近期食用惩罚将在 R2 接入后重新比较。",
+        f"默认场景跨周重合率门槛：≤ {CROSS_WEEK_JACCARD_MAX:.0%}；候选不足的场景单独标记。",
         "",
     ]
     return "\n".join(lines)
@@ -207,10 +290,23 @@ def main(argv: list[str] | None = None) -> int:
     (args.output_dir / "report.md").write_text(_markdown(report), encoding="utf-8")
     print(json.dumps(report["summary"], ensure_ascii=False, sort_keys=True))
     print(f"Reports written to: {args.output_dir / 'report.json'} and {args.output_dir / 'report.md'}")
-    return 0 if (
-        report["summary"]["hard_violations"] == 0
-        and report["summary"]["explanation_consistency_rate"] == 1.0
-    ) else 1
+    failures = []
+    if report["summary"]["hard_violations"] != 0:
+        failures.append("hard_constraints")
+    if report["summary"]["weekly_duplicate_count"] != 0:
+        failures.append("weekly_duplicates")
+    if report["summary"]["explanation_consistency_rate"] < 1.0:
+        failures.append("independent_explanations")
+    if report["summary"]["cross_week_jaccard_max"] > CROSS_WEEK_JACCARD_MAX:
+        failures.append("cross_week_overlap")
+    for name, row in report["scenarios"].items():
+        if row["goal_direction_hit_rate"] is not None and row["goal_direction_hit_rate"] < GOAL_HIT_RATE_MIN:
+            failures.append(f"goal:{name}")
+        if not row["budget_overage_explained"]:
+            failures.append(f"budget:{name}")
+    if failures:
+        print("质量门禁失败：" + ", ".join(failures))
+    return 0 if not failures else 1
 
 
 if __name__ == "__main__":

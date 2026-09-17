@@ -81,6 +81,7 @@ async def _with_profile(payload: dict) -> dict:
     signals = preference.planning_signals(events=events, profile=profile, by_name=name2id)
     payload["dish_weights"] = signals["dish_weights"]
     payload["dish_last_seen"] = signals["dish_last_seen"]
+    payload["snoozed_dishes"] = signals["snoozed_dishes"]
     return payload
 
 

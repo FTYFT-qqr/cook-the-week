@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
+from recipe_planner import events as ev
 from recipe_planner import profile as prof
 from recipe_planner.models import RecipeDB
 from recipe_planner.storage import async_adapters as data
@@ -48,20 +49,62 @@ def _undo_for(profile: dict, names: list[str]) -> dict:
     return hint
 
 
-def _profile_out(profile: dict) -> ProfileOut:
+def _profile_out(profile: dict, snoozed_dishes: list[str] | None = None) -> ProfileOut:
     history = profile.get("history") or {}
     items = [{"name": name, **dict(info or {})} for name, info in history.items()]
     items.sort(key=lambda x: str(x.get("since") or ""), reverse=True)
     return ProfileOut(liked_dishes=list(profile.get("liked_dishes") or []),
                       disliked_dishes=list(profile.get("disliked_dishes") or []),
                       ratings=dict(profile.get("ratings") or {}),
-                      history=items, signature=prof.profile_signature_of(profile))
+                      history=items, snoozed_dishes=sorted(set(snoozed_dishes or [])),
+                      signature=prof.profile_signature_of(profile))
+
+
+def preference_ids(items: list[dict]) -> set[str]:
+    """只在路由边界把事件信号转成当前临时避开集合。"""
+    from recipe_planner.preference import active_snoozes
+
+    return active_snoozes(items)
 
 
 @router.get("/profile", response_model=ProfileOut, tags=["profile"])
 async def read_profile(profile: dict = Depends(get_profile)) -> ProfileOut:
     """喜欢/不喜欢/评分/来源痕迹 + 指纹（指纹用于判断"偏好变了要不要重排"）。"""
-    return _profile_out(profile)
+    events = await data.recent_events(days=None)
+    return _profile_out(profile, preference_ids(events))
+
+
+async def _change_snooze(recipe_id: str, action: str, db: RecipeDB) -> MutationOut:
+    recipe = db.by_id(recipe_id)
+    if recipe is None:
+        raise InvalidRequestError("菜谱库里没有这道菜，不能修改临时避开。",
+                                  next_steps=[{"op": "list_recipes", "label": "看看菜谱库"}])
+    await data.record_events([{"recipe_id": recipe_id, "action": action,
+                               "source": "口味档案"}])
+    verb = "临时避开 7 天" if action == ev.SNOOZE else "恢复安排"
+    log_id = await data.add_log(None, action, f"已将「{recipe.name}」{verb}",
+                                {"recipe_id": recipe_id})
+    await _commit()
+    events = await data.recent_events(days=None)
+    return MutationOut(
+        kind=action,
+        message=(f"已将「{recipe.name}」临时避开 7 天（永久口味档案没改）。"
+                 if action == ev.SNOOZE
+                 else f"已恢复「{recipe.name}」的临时避开，后续排菜可以再次安排。"),
+        data={"recipe_id": recipe_id, "snoozed_dishes": sorted(preference_ids(events))},
+        action_log_id=log_id)
+
+
+@router.post("/profile/snooze/{recipe_id}", response_model=MutationOut, tags=["profile"])
+async def snooze_profile_recipe(recipe_id: str,
+                                db: RecipeDB = Depends(get_db)) -> MutationOut:
+    return await _change_snooze(recipe_id, ev.SNOOZE, db)
+
+
+@router.delete("/profile/snooze/{recipe_id}", response_model=MutationOut, tags=["profile"])
+async def unsnooze_profile_recipe(recipe_id: str,
+                                  db: RecipeDB = Depends(get_db)) -> MutationOut:
+    return await _change_snooze(recipe_id, ev.UNSNOOZE, db)
 
 
 @router.put("/profile", response_model=MutationOut, tags=["profile"])
@@ -189,4 +232,5 @@ async def _commit() -> None:
 @router.get("/profile/export", response_model=ProfileOut, tags=["profile"])
 async def export_profile(profile: dict = Depends(get_profile)) -> ProfileOut:
     """导出档案（I3）：可以直接存成 JSON 文件带走。"""
-    return _profile_out(profile)
+    events = await data.recent_events(days=None)
+    return _profile_out(profile, preference_ids(events))

@@ -29,6 +29,7 @@ import time
 import streamlit as st
 
 from recipe_planner import client as api
+from recipe_planner import events as ev
 from recipe_planner import preference
 from recipe_planner import profile as prof
 from recipe_planner import reporting as rep
@@ -376,6 +377,7 @@ def build_constraints(inp: dict) -> UserConstraints:
         signals = {}
     weights = signals.get("dish_weights") or {}
     last_seen = signals.get("dish_last_seen") or {}
+    snoozed = signals.get("snoozed_dishes") or []
     return UserConstraints(
         people=inp["people"], days=inp["days"], dishes_per_day=int(inp["dishes_per_day"]),
         allergens=inp.get("allergens", []), spice_level=inp.get("spice", "不辣"),
@@ -390,6 +392,7 @@ def build_constraints(inp: dict) -> UserConstraints:
         disliked_dishes=[NAME2ID[n] for n in disliked if n in NAME2ID],
         dish_weights=weights,
         dish_last_seen=last_seen,
+        snoozed_dishes=list(snoozed),
         meals=_picked_meals(inp),                      # docs/10：吃哪几顿
         dishes_per_meal=_dishes_per_meal(inp),         # 每餐几道菜
         breakfast_max_time_min=int(inp.get("breakfast_max_time", BREAKFAST_MAX_TIME_DEFAULT)),
@@ -1355,8 +1358,9 @@ def _meal_head(plan_day, db, c) -> None:
                 f"<span class='meal-meta'>{meta}</span></div>", unsafe_allow_html=True)
 
 
-def _dish_actions(plan_day: int, dish, is_loved: bool, is_hated: bool, locked: bool = False):
-    """每道菜的操作：换一道 / 定住 / 喜欢 / 不喜欢（E-02 定住，去掉 emoji）。
+def _dish_actions(plan_day: int, dish, is_loved: bool, is_hated: bool,
+                  locked: bool = False, snoozed: bool = False):
+    """每道菜的操作：换一道 / 定住 / 喜欢 / 不喜欢 / 临时避开。
 
     docs/09 待决策(1) 已裁定（2026-09-14）：**「喜欢」保持"再点一次取消"的开关语义**，
     但状态必须写在按钮上、并且把"再点一次会取消"说在说明里 ——
@@ -1366,7 +1370,7 @@ def _dish_actions(plan_day: int, dish, is_loved: bool, is_hated: bool, locked: b
     picked = None
     rid = dish.recipe_id
     with st.container(key=f"dishacts_{plan_day}_{rid}"):
-        row = st.columns(4)
+        row = st.columns(5)
         with row[0]:
             if st.button("换一道", key=f"swap_{plan_day}_{rid}", use_container_width=True,
                          help="只换今晚这道，不动口味偏好"):
@@ -1389,6 +1393,12 @@ def _dish_actions(plan_day: int, dish, is_loved: bool, is_hated: bool, locked: b
                          help="已经排除：以后不再出现。再点一次就恢复成「没表态」" if is_hated
                               else "不合口味：换掉并记住"):
                 picked = ("dislike", plan_day, rid)
+        with row[4]:
+            if st.button("恢复临时避开" if snoozed else "这周先别排",
+                         key=f"snooze_{plan_day}_{rid}", use_container_width=True,
+                         help="临时避开 7 天，不改永久口味档案" if not snoozed
+                              else "提前恢复：这道菜可以再次进入候选"):
+                picked = ("unsnooze" if snoozed else "snooze", plan_day, rid)
     return picked
 
 
@@ -1454,7 +1464,8 @@ def _plan_day_section(day_no: int, *, result, c, db, summary, start_date, today_
                 if not is_past:
                     got = _dish_actions(plan_day.day, dish, r.name in liked_now,
                                         r.name in hated_now,
-                                        dish.recipe_id in set(c.must_include_recipes))
+                                        dish.recipe_id in set(c.must_include_recipes),
+                                        dish.recipe_id in set(getattr(c, "snoozed_dishes", []) or []))
                     picked = got or picked
             order, has_slow = rep.cook_order(plan_day, db)
             if has_slow:
@@ -1654,7 +1665,7 @@ def render_plan() -> None:
     day_no = int(chosen)
 
     st.caption("换一道 = 只换这一顿这道（不动口味偏好）；喜欢 = 以后多安排；"
-               "不喜欢 = 换掉并记住，以后不再出现。")
+               "不喜欢 = 换掉并记住，以后不再出现；这周先别排 = 临时避开 7 天。")
     pending = _plan_day_section(day_no, result=result, c=c, db=db, summary=summary,
                                 start_date=start_date, today_idx=today_idx,
                                 liked_now=liked_now, hated_now=hated_now,
@@ -1748,7 +1759,40 @@ def render_plan() -> None:
             st.session_state["job"] = None
             st.rerun()
 
-        if kind == "swap":
+        if kind in ("snooze", "unsnooze"):
+            if USE_API:
+                out = api.dish_feedback(st.session_state.get("record_id"), day_no, rid,
+                                        kind, _meal)
+                fresh = store.get_record(st.session_state.get("record_id"))
+                if fresh is not None:
+                    st.session_state["result"] = fresh.result
+                text = out.get("message") or ("已恢复临时避开。" if kind == "unsnooze"
+                                               else "已临时避开 7 天。")
+                undo_profile = None
+            else:
+                active = set(getattr(c, "snoozed_dishes", None) or [])
+                if kind == "snooze":
+                    active.add(rid)
+                    temporary = c.model_copy(update={"snoozed_dishes": sorted(active)})
+                    new_days, new_recipe = swap_dish(result.days, day_no, rid, db, temporary, _meal)
+                    if new_recipe:
+                        result.days = new_days
+                        text = (f"已把「{name}」临时避开 7 天，{place}换成「{new_recipe.name}」；"
+                                "永久口味档案没改。")
+                    else:
+                        text = f"已把「{name}」临时避开 7 天（本次没有可替换的菜，其他天没动）"
+                        relax_failed = {"day": day_no, "meal": _meal, "name": name}
+                else:
+                    active.discard(rid)
+                    text = f"已恢复「{name}」的临时避开，7 天内可以再次安排（本次菜单未改）"
+                c.snoozed_dishes = sorted(active)
+                ev.record([{"recipe_id": rid,
+                            "action": ev.SNOOZE if kind == "snooze" else ev.UNSNOOZE,
+                            "meal": _meal or "", "day_no": day_no,
+                            "source": "本周计划"}],
+                          plan_id=st.session_state.get("record_id"))
+                refresh_result(result, db)
+        elif kind == "swap":
             new_days, new_recipe = swap_dish(result.days, day_no, rid, db, c, _meal)
             if new_recipe:
                 result.days = new_days
@@ -1950,6 +1994,28 @@ def render_profile() -> None:
     disliked = prof.disliked_names(KNOWN_NAMES)
     unrated = [r for r in db.recipes if r.name not in liked and r.name not in disliked]
     history, groups = _eating_overview(disliked)
+    if USE_API:
+        snoozed_ids = list(prof.load_profile().get("snoozed_dishes") or [])
+    else:
+        snoozed_ids = sorted(preference.active_snoozes())
+    snoozed_names = [_name_of(rid) for rid in snoozed_ids]
+
+    if snoozed_names:
+        st.markdown(f"**临时避开（{len(snoozed_names)}）**")
+        st.caption("这些菜只避开 7 天，不会进入永久「不喜欢」列表。")
+        for rid, name in zip(snoozed_ids, snoozed_names):
+            left, right = st.columns([4, 1])
+            with left:
+                st.markdown(f"<p class='line'>{name}</p>", unsafe_allow_html=True)
+            with right:
+                if st.button("恢复安排", key=f"unsnooze_profile_{rid}", use_container_width=True):
+                    if USE_API:
+                        api.unsnooze_recipe(rid)
+                    else:
+                        ev.record([{"recipe_id": rid, "action": ev.UNSNOOZE,
+                                    "source": "口味档案"}])
+                    ui.set_notice("info", f"已恢复「{name}」的临时避开，后续排菜可以再次安排。")
+                    st.rerun()
 
     st.markdown(
         "<div class='statrow'>"

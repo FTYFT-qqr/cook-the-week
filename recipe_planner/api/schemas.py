@@ -321,7 +321,7 @@ class DayPatchIn(BaseModel):
 
 
 class FeedbackIn(BaseModel):
-    op: Literal["like", "dislike", "lock", "unlock"]
+    op: Literal["like", "dislike", "lock", "unlock", "snooze", "unsnooze"]
     meal: Optional[str] = None            # 这道菜在哪一顿（docs/10）；不给=当天最后一顿
 
 
@@ -373,4 +373,6 @@ class ProfileOut(BaseModel):
     ratings: dict[str, Any] = {}
     # {name, since, source}（since=什么时候记的，source=在哪记的）
     history: list[dict[str, Any]] = []
+    # 当前仍有效的临时避开菜谱 id；它不是永久喜欢/不喜欢档案。
+    snoozed_dishes: list[str] = []
     signature: str = ""

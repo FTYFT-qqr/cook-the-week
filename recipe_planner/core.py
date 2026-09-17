@@ -71,7 +71,7 @@ def recipe_conflicts(r: Recipe, c: UserConstraints, meal: Optional[str] = None) 
 
 
 def _rotation_bonus(days_ago: Optional[int]) -> float:
-    """轮换加分（docs/12 阶段二 2.6）：取值与常量**只有一处** —— `preference.rotation_bonus`。
+    """轮换调整（docs/15 Q-02）：取值与常量**只有一处** —— preference。
 
     延迟导入是有意的：`preference` → `events` → 数据库后端会拉进整个 storage 栈，
     而 `storage.repositories` 又反过来 import `core`；顶层互相 import 只会炸在
@@ -79,7 +79,7 @@ def _rotation_bonus(days_ago: Optional[int]) -> float:
     """
     from recipe_planner import preference
 
-    return preference.rotation_bonus(days_ago)
+    return preference.rotation_adjustment(days_ago)
 
 
 PROTEIN_HIGH_MIN_G = 20.0
@@ -129,7 +129,8 @@ def score_parts(r: Recipe, c: UserConstraints) -> list[dict[str, object]]:
     if last_seen:
         rotation = _rotation_bonus(last_seen.get(r.id))
         if rotation:
-            parts.append({"kind": "rotation", "score": rotation, "text": "有一阵子没吃，帮你换换口味"})
+            text = "最近吃过，先换换口味" if rotation < 0 else "有一阵子没吃，帮你换换口味"
+            parts.append({"kind": "rotation", "score": rotation, "text": text})
     return parts
 
 
@@ -150,12 +151,15 @@ def retrieve_candidates(db: RecipeDB, c: UserConstraints,
     `meal=None`（默认）就是 docs/10 之前的行为：不按餐分池、用全局 `max_time_min`。
     """
     disliked = set(c.disliked_dishes)
+    snoozed = set(getattr(c, "snoozed_dishes", None) or [])
     out = []
     for r in db.recipes:
         if recipe_conflicts(r, c, meal):
             continue
         if r.id in disliked:
             continue  # 客户明确不喜欢的菜 → 硬性排除
+        if r.id in snoozed:
+            continue  # 临时避开：不改永久偏好，过期后由事件信号自动恢复
         out.append(r)
     out.sort(key=lambda r: (-recipe_score(r, c), r.time_min, r.cost_yuan))
     return out

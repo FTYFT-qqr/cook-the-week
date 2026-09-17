@@ -5402,6 +5402,1579 @@
         "倒入六十克即食燕麦，小火煮三分钟",
         "香蕉去皮切薄片，放入粥中搅匀即可"
       ]
+    },
+    {
+      "id": "r101",
+      "name": "豆角焖面",
+      "category": "主食",
+      "description": "豆角和鲜面条一锅焖熟，适合工作日晚餐",
+      "difficulty": "中等",
+      "time_min": 30,
+      "cost_yuan": 14,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "豆角",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "鲜面条",
+          "amount": "400克",
+          "category": "主食",
+          "grams": 400
+        },
+        {
+          "name": "猪肉",
+          "amount": "150克",
+          "category": "肉蛋",
+          "grams": 150
+        },
+        {
+          "name": "蒜",
+          "amount": "2瓣",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "豆角掐去两端洗净切成小段",
+        "鲜面条抖散备用，猪肉切成薄片",
+        "锅中少油炒香猪肉，加入豆角翻炒",
+        "加清水没过豆角，面条铺在上面小火焖八分钟",
+        "开盖淋少许盐油，把面条和豆角拌匀"
+      ]
+    },
+    {
+      "id": "r102",
+      "name": "香菇鸡肉焖饭",
+      "category": "主食",
+      "description": "米饭吸收鸡肉和香菇的鲜味，一锅完成主食和菜",
+      "difficulty": "简单",
+      "time_min": 45,
+      "cost_yuan": 18,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "咸鲜",
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "大米",
+          "amount": "300克",
+          "category": "主食",
+          "grams": 300
+        },
+        {
+          "name": "鸡腿肉",
+          "amount": "250克",
+          "category": "肉蛋",
+          "grams": 250
+        },
+        {
+          "name": "鲜香菇",
+          "amount": "150克",
+          "category": "菌菇",
+          "grams": 150
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "100克",
+          "category": "蔬菜",
+          "grams": 100
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "大米淘洗后浸泡十分钟，鸡腿肉切成小块",
+        "鲜香菇去蒂切片，胡萝卜切成小丁",
+        "锅中少油炒香鸡肉，放入香菇和胡萝卜翻匀",
+        "把炒好的食材铺在大米上，加水后按下煮饭键",
+        "焖饭完成后静置五分钟，撒小葱拌匀盛出"
+      ]
+    },
+    {
+      "id": "r103",
+      "name": "番茄牛肉焖饭",
+      "category": "主食",
+      "description": "番茄和牛肉同锅焖煮，酸香开胃且减少洗锅",
+      "difficulty": "简单",
+      "time_min": 45,
+      "cost_yuan": 22,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "酸甜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "大米",
+          "amount": "300克",
+          "category": "主食",
+          "grams": 300
+        },
+        {
+          "name": "牛肉",
+          "amount": "200克",
+          "category": "肉蛋",
+          "grams": 200
+        },
+        {
+          "name": "西红柿",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "洋葱",
+          "amount": "半个",
+          "category": "蔬菜",
+          "grams": 100
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "大米淘洗后放入电饭锅，牛肉切成薄片",
+        "西红柿去蒂切块，洋葱切成小丁备用",
+        "锅中少油炒香牛肉和洋葱，加入西红柿炒软",
+        "将炒好的食材铺在大米上，加水按煮饭键",
+        "米饭煮好后焖五分钟，加盐翻拌均匀"
+      ]
+    },
+    {
+      "id": "r104",
+      "name": "小米鸡丝粥",
+      "category": "主食",
+      "description": "小米煮至绵软后加入鸡丝，适合清淡晚餐",
+      "difficulty": "简单",
+      "time_min": 35,
+      "cost_yuan": 12,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "高蛋白"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "小米",
+          "amount": "100克",
+          "category": "主食",
+          "grams": 100
+        },
+        {
+          "name": "鸡胸肉",
+          "amount": "150克",
+          "category": "肉蛋",
+          "grams": 150
+        },
+        {
+          "name": "姜",
+          "amount": "3片",
+          "category": "调料",
+          "grams": 5
+        },
+        {
+          "name": "菠菜",
+          "amount": "100克",
+          "category": "蔬菜",
+          "grams": 100
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "小米淘洗干净，鸡胸肉切片后加姜片焯熟",
+        "捞出鸡胸肉晾凉，沿纹理撕成细丝",
+        "锅中加水煮开，倒入小米小火熬煮二十五分钟",
+        "放入鸡丝和菠菜碎继续煮三分钟",
+        "关火加盐调味，静置片刻后盛出"
+      ]
+    },
+    {
+      "id": "r105",
+      "name": "牛肉胡萝卜盖饭",
+      "category": "主食",
+      "description": "牛肉和胡萝卜快速炒熟，盖在米饭上即可食用",
+      "difficulty": "简单",
+      "time_min": 25,
+      "cost_yuan": 20,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "牛肉",
+          "amount": "200克",
+          "category": "肉蛋",
+          "grams": 200
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "150克",
+          "category": "蔬菜",
+          "grams": 150
+        },
+        {
+          "name": "洋葱",
+          "amount": "半个",
+          "category": "蔬菜",
+          "grams": 100
+        },
+        {
+          "name": "米饭",
+          "amount": "两碗",
+          "category": "主食",
+          "grams": 360
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "牛肉逆纹切片，胡萝卜和洋葱切成细丝",
+        "牛肉加少许油抓匀，静置五分钟入味",
+        "热锅中火炒牛肉至变色，先盛出备用",
+        "原锅炒软胡萝卜和洋葱，倒回牛肉翻匀",
+        "米饭盛入碗中，铺上炒好的牛肉和蔬菜"
+      ]
+    },
+    {
+      "id": "r106",
+      "name": "鸡丝炒米粉",
+      "category": "主食",
+      "description": "米粉配鸡丝和豆芽快炒，适合一锅解决一餐",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 13,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "米粉",
+          "amount": "300克",
+          "category": "主食",
+          "grams": 300
+        },
+        {
+          "name": "鸡胸肉",
+          "amount": "150克",
+          "category": "肉蛋",
+          "grams": 150
+        },
+        {
+          "name": "绿豆芽",
+          "amount": "200克",
+          "category": "蔬菜",
+          "grams": 200
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "80克",
+          "category": "蔬菜",
+          "grams": 80
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "米粉用温水泡软沥干，鸡胸肉切成细丝",
+        "胡萝卜切丝，绿豆芽洗净，小葱切段",
+        "热锅少油炒熟鸡丝，加入胡萝卜丝翻炒",
+        "放入米粉和绿豆芽，中火快速翻炒四分钟",
+        "撒入小葱段拌匀，关火后立即盛出"
+      ]
+    },
+    {
+      "id": "r107",
+      "name": "南瓜小米粥",
+      "category": "早餐",
+      "description": "南瓜煮化后融入小米粥，软糯清甜",
+      "difficulty": "简单",
+      "time_min": 30,
+      "cost_yuan": 6,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清淡",
+        "酸甜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "南瓜",
+          "amount": "250克",
+          "category": "蔬菜",
+          "grams": 250
+        },
+        {
+          "name": "小米",
+          "amount": "80克",
+          "category": "主食",
+          "grams": 80
+        },
+        {
+          "name": "清水",
+          "amount": "800毫升",
+          "category": "其他",
+          "grams": 800
+        }
+      ],
+      "steps": [
+        "南瓜去皮去籽切成小块，小米淘洗干净",
+        "锅中加入清水和小米，大火煮至沸腾",
+        "放入南瓜块，转小火熬煮二十分钟",
+        "南瓜煮软后用勺背压碎，搅匀粥体",
+        "继续小火煮五分钟，关火焖片刻食用"
+      ]
+    },
+    {
+      "id": "r108",
+      "name": "白菜猪肉锅贴",
+      "category": "主食",
+      "description": "白菜猪肉馅煎至底部金黄，适合周末简餐",
+      "difficulty": "中等",
+      "time_min": 35,
+      "cost_yuan": 16,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "省钱"
+      ],
+      "allergens": [
+        "麸质"
+      ],
+      "ingredients": [
+        {
+          "name": "饺子皮",
+          "amount": "二十张",
+          "category": "主食",
+          "grams": 300
+        },
+        {
+          "name": "猪肉馅",
+          "amount": "200克",
+          "category": "肉蛋",
+          "grams": 200
+        },
+        {
+          "name": "白菜",
+          "amount": "250克",
+          "category": "蔬菜",
+          "grams": 250
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "饺子皮提前回温，白菜切碎后挤去多余水分",
+        "猪肉馅加入白菜和小葱末，加盐顺时针拌匀",
+        "取一张饺子皮包入馅料，将边缘捏紧",
+        "平底锅少油摆入锅贴，中火煎至底部微黄",
+        "沿锅边加少量清水，盖盖小火焖八分钟"
+      ]
+    },
+    {
+      "id": "r109",
+      "name": "凉拌西兰花",
+      "category": "凉菜",
+      "description": "西兰花焯熟后清拌，保留脆嫩口感",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 7,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清淡",
+        "清爽"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "减脂",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "西兰花",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "50克",
+          "category": "蔬菜",
+          "grams": 50
+        },
+        {
+          "name": "蒜",
+          "amount": "2瓣",
+          "category": "调料"
+        },
+        {
+          "name": "米醋",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "半勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "西兰花掰成小朵，用清水冲洗干净",
+        "胡萝卜切成薄片，蒜瓣压成蒜泥",
+        "锅中水开后放入西兰花和胡萝卜焯两分钟",
+        "捞出蔬菜过凉水，沥干后放入大碗",
+        "加入蒜泥米醋和热油拌匀即可"
+      ]
+    },
+    {
+      "id": "r110",
+      "name": "凉拌藕片",
+      "category": "凉菜",
+      "description": "莲藕焯熟后清脆爽口，适合搭配肉菜",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 8,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清爽",
+        "酸甜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "莲藕",
+          "amount": "350克",
+          "category": "蔬菜",
+          "grams": 350
+        },
+        {
+          "name": "小葱",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 10
+        },
+        {
+          "name": "米醋",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "白糖",
+          "amount": "半勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "莲藕去皮洗净，切成薄而均匀的藕片",
+        "锅中水开后放入藕片，焯水三分钟",
+        "捞出藕片立即过凉水，沥干后装入大碗",
+        "小葱切末，和米醋白糖盐调成料汁",
+        "将料汁倒在藕片上，拌匀后静置五分钟"
+      ]
+    },
+    {
+      "id": "r111",
+      "name": "蒜泥白肉",
+      "category": "凉菜",
+      "description": "猪肉煮熟切片，配黄瓜和蒜泥清爽下饭",
+      "difficulty": "中等",
+      "time_min": 35,
+      "cost_yuan": 18,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "微辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "五花肉",
+          "amount": "250克",
+          "category": "肉蛋",
+          "grams": 250
+        },
+        {
+          "name": "黄瓜",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 150
+        },
+        {
+          "name": "蒜",
+          "amount": "4瓣",
+          "category": "调料"
+        },
+        {
+          "name": "米醋",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "辣椒油",
+          "amount": "半勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "五花肉洗净放入冷水锅，加热至水面沸腾",
+        "转小火煮二十五分钟，捞出肉块晾至温热",
+        "黄瓜洗净切成长条，蒜瓣捣成细泥",
+        "五花肉逆纹切成薄片，和黄瓜一起摆盘",
+        "蒜泥加米醋和辣椒油调匀，淋在肉片上"
+      ]
+    },
+    {
+      "id": "r112",
+      "name": "凉拌鸡丝",
+      "category": "凉菜",
+      "description": "鸡胸肉撕成细丝，和黄瓜胡萝卜拌成一盘",
+      "difficulty": "简单",
+      "time_min": 25,
+      "cost_yuan": 12,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清爽",
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "减脂"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "鸡胸肉",
+          "amount": "200克",
+          "category": "肉蛋",
+          "grams": 200
+        },
+        {
+          "name": "黄瓜",
+          "amount": "1根",
+          "category": "蔬菜",
+          "grams": 150
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "80克",
+          "category": "蔬菜",
+          "grams": 80
+        },
+        {
+          "name": "蒜",
+          "amount": "2瓣",
+          "category": "调料"
+        },
+        {
+          "name": "米醋",
+          "amount": "1勺",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "鸡胸肉冷水下锅，水开后小火煮十二分钟",
+        "捞出鸡胸肉放凉，沿着纹理撕成细丝",
+        "黄瓜和胡萝卜分别切成细长条备用",
+        "蒜泥加入米醋和少许盐调成拌汁",
+        "鸡丝和蔬菜装碗，倒入拌汁抓匀"
+      ]
+    },
+    {
+      "id": "r113",
+      "name": "芹菜拌香干",
+      "category": "凉菜",
+      "description": "芹菜和香干焯后凉拌，咸香爽口且准备快速",
+      "difficulty": "简单",
+      "time_min": 15,
+      "cost_yuan": 8,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清爽",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "省钱"
+      ],
+      "allergens": [
+        "大豆"
+      ],
+      "ingredients": [
+        {
+          "name": "芹菜",
+          "amount": "250克",
+          "category": "蔬菜",
+          "grams": 250
+        },
+        {
+          "name": "香干",
+          "amount": "150克",
+          "category": "豆制品",
+          "grams": 150
+        },
+        {
+          "name": "蒜",
+          "amount": "2瓣",
+          "category": "调料"
+        },
+        {
+          "name": "米醋",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "芹菜去叶洗净切段，香干切成细条",
+        "锅中水开后先放香干焯一分钟",
+        "加入芹菜继续焯一分钟，捞出沥干水分",
+        "蒜瓣压泥，加入米醋和盐调成料汁",
+        "芹菜和香干装碗，倒入料汁拌匀"
+      ]
+    },
+    {
+      "id": "r114",
+      "name": "凉拌紫甘蓝",
+      "category": "凉菜",
+      "description": "紫甘蓝切丝后快速拌匀，颜色清爽适合配主食",
+      "difficulty": "简单",
+      "time_min": 10,
+      "cost_yuan": 6,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清爽",
+        "酸甜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "减脂",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "紫甘蓝",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "50克",
+          "category": "蔬菜",
+          "grams": 50
+        },
+        {
+          "name": "米醋",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "白糖",
+          "amount": "半勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "紫甘蓝去掉老叶洗净，切成细丝备用",
+        "胡萝卜洗净切丝，和紫甘蓝放入大碗",
+        "加入少许盐抓匀，静置五分钟后挤去水分",
+        "米醋白糖和盐调成酸甜拌汁",
+        "倒入拌汁翻拌均匀，装盘后立即食用"
+      ]
+    },
+    {
+      "id": "r115",
+      "name": "清炒芥蓝",
+      "category": "热菜",
+      "description": "芥蓝快速炒熟，脆嫩清香且适合作为纯蔬菜配菜",
+      "difficulty": "简单",
+      "time_min": 12,
+      "cost_yuan": 7,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "减脂",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "芥蓝",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "蒜",
+          "amount": "2瓣",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "芥蓝去掉老根洗净，较粗的茎部纵向剖开",
+        "蒜瓣切片，锅中加油小火煸出香味",
+        "先放芥蓝茎部中火翻炒一分钟",
+        "加入芥蓝叶片大火翻炒至颜色变亮",
+        "加盐炒匀，保持脆嫩后立即出锅"
+      ]
+    },
+    {
+      "id": "r116",
+      "name": "西葫芦炒肉片",
+      "category": "热菜",
+      "description": "西葫芦和瘦肉片快炒，清淡下饭且食材常见",
+      "difficulty": "简单",
+      "time_min": 20,
+      "cost_yuan": 13,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "清淡"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "西葫芦",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "猪里脊",
+          "amount": "150克",
+          "category": "肉蛋",
+          "grams": 150
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "50克",
+          "category": "蔬菜",
+          "grams": 50
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "西葫芦洗净切成薄片，猪里脊切成薄片",
+        "胡萝卜切片，锅中少油先把肉片炒至变色",
+        "放入胡萝卜片翻炒半分钟，再加入西葫芦",
+        "中火翻炒三分钟，让西葫芦保持清脆",
+        "加盐调味，炒匀后立即盛出"
+      ]
+    },
+    {
+      "id": "r117",
+      "name": "南瓜蒸鸡腿",
+      "category": "热菜",
+      "description": "南瓜垫底蒸熟鸡腿，少油少锅且肉质软嫩",
+      "difficulty": "简单",
+      "time_min": 40,
+      "cost_yuan": 18,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "清淡"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "鸡腿",
+          "amount": "两只",
+          "category": "肉蛋",
+          "grams": 400
+        },
+        {
+          "name": "南瓜",
+          "amount": "250克",
+          "category": "蔬菜",
+          "grams": 250
+        },
+        {
+          "name": "姜",
+          "amount": "3片",
+          "category": "调料",
+          "grams": 5
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "鸡腿剔去多余油脂洗净，南瓜去皮切厚片",
+        "鸡腿加盐和姜片抓匀，静置十分钟入味",
+        "蒸盘铺入南瓜片，将鸡腿放在上面",
+        "蒸锅水开后中火蒸二十五分钟",
+        "关火焖五分钟，确认鸡肉熟透后切块食用"
+      ]
+    },
+    {
+      "id": "r118",
+      "name": "白灼秋葵",
+      "category": "凉菜",
+      "description": "秋葵焯熟后简单调味，适合需要纯蔬菜配菜的餐次",
+      "difficulty": "简单",
+      "time_min": 10,
+      "cost_yuan": 7,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清淡",
+        "清爽"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "减脂"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "秋葵",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "蒜",
+          "amount": "2瓣",
+          "category": "调料"
+        },
+        {
+          "name": "米醋",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "秋葵去蒂洗净，蒜瓣压成蒜泥备用",
+        "锅中水开后加入少许盐，放入秋葵焯两分钟",
+        "捞出秋葵过凉水，沥干后整齐摆盘",
+        "蒜泥加入米醋和少许盐调成蘸汁",
+        "秋葵蘸汁食用，保持清脆口感"
+      ]
+    },
+    {
+      "id": "r119",
+      "name": "胡萝卜洋葱牛肉煲",
+      "category": "热菜",
+      "description": "牛肉和根茎蔬菜慢煮入味，适合提前做好下一顿复用",
+      "difficulty": "中等",
+      "time_min": 55,
+      "cost_yuan": 22,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "咸鲜",
+        "下饭"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "牛肉",
+          "amount": "300克",
+          "category": "肉蛋",
+          "grams": 300
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "200克",
+          "category": "蔬菜",
+          "grams": 200
+        },
+        {
+          "name": "洋葱",
+          "amount": "150克",
+          "category": "蔬菜",
+          "grams": 150
+        },
+        {
+          "name": "土豆",
+          "amount": "200克",
+          "category": "蔬菜",
+          "grams": 200
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "牛肉切成大块，胡萝卜土豆和洋葱切块",
+        "锅中少油煎香牛肉表面，加入洋葱翻炒",
+        "倒入胡萝卜和土豆，加清水至食材一半",
+        "大火烧开后转小火炖煮三十五分钟",
+        "加盐调味，汤汁略收浓后盛出"
+      ]
+    },
+    {
+      "id": "r120",
+      "name": "番茄炖鸡胸",
+      "category": "热菜",
+      "description": "鸡胸肉在番茄汁中炖熟，酸甜开胃且不依赖复杂调味",
+      "difficulty": "简单",
+      "time_min": 30,
+      "cost_yuan": 15,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "酸甜",
+        "清淡"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "减脂"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "鸡胸肉",
+          "amount": "250克",
+          "category": "肉蛋",
+          "grams": 250
+        },
+        {
+          "name": "西红柿",
+          "amount": "2个",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "洋葱",
+          "amount": "半个",
+          "category": "蔬菜",
+          "grams": 100
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "鸡胸肉切成小块，西红柿去皮切丁",
+        "洋葱切丁，锅中少油炒软洋葱",
+        "加入鸡胸肉中火翻炒至表面变白",
+        "倒入西红柿丁，加少量清水小火炖十二分钟",
+        "鸡肉熟透后加盐调味，汤汁略收即可"
+      ]
+    },
+    {
+      "id": "r121",
+      "name": "清炒荷兰豆",
+      "category": "热菜",
+      "description": "荷兰豆快速炒熟，清脆少油，适合补充一盘蔬菜",
+      "difficulty": "简单",
+      "time_min": 12,
+      "cost_yuan": 8,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清淡",
+        "清爽"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "减脂"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "荷兰豆",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "50克",
+          "category": "蔬菜",
+          "grams": 50
+        },
+        {
+          "name": "蒜",
+          "amount": "2瓣",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "荷兰豆撕去两侧筋络，胡萝卜切成薄片",
+        "蒜瓣切片，锅中加油小火炒出香味",
+        "放入胡萝卜片翻炒半分钟至颜色变亮",
+        "加入荷兰豆大火翻炒两分钟",
+        "加盐炒匀，荷兰豆断生后马上出锅"
+      ]
+    },
+    {
+      "id": "r122",
+      "name": "蒜蓉娃娃菜",
+      "category": "热菜",
+      "description": "娃娃菜蒸熟后淋蒜蓉汁，口感柔软且准备简单",
+      "difficulty": "简单",
+      "time_min": 18,
+      "cost_yuan": 7,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "省钱"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "娃娃菜",
+          "amount": "两棵",
+          "category": "蔬菜",
+          "grams": 350
+        },
+        {
+          "name": "蒜",
+          "amount": "4瓣",
+          "category": "调料"
+        },
+        {
+          "name": "食用油",
+          "amount": "1勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "娃娃菜去掉根部洗净，从中间纵向切开",
+        "蒜瓣剁成蒜蓉，锅中少油炒出香味",
+        "娃娃菜摆入蒸盘，均匀铺上蒜蓉",
+        "蒸锅水开后中火蒸八分钟至菜叶变软",
+        "出锅加盐调味，连同蒸汁一起食用"
+      ]
+    },
+    {
+      "id": "r123",
+      "name": "莲藕胡萝卜排骨汤",
+      "category": "汤",
+      "description": "排骨与莲藕胡萝卜炖至软烂，适合全家共享",
+      "difficulty": "中等",
+      "time_min": 70,
+      "cost_yuan": 24,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "排骨",
+          "amount": "400克",
+          "category": "肉蛋",
+          "grams": 400
+        },
+        {
+          "name": "莲藕",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "150克",
+          "category": "蔬菜",
+          "grams": 150
+        },
+        {
+          "name": "姜",
+          "amount": "4片",
+          "category": "调料",
+          "grams": 8
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "排骨冷水下锅焯水，撇去浮沫后捞出洗净",
+        "莲藕和胡萝卜去皮切成滚刀块",
+        "砂锅加入排骨莲藕胡萝卜和姜片",
+        "加足量清水，大火煮开后小火炖五十分钟",
+        "排骨和莲藕软烂后加盐调味，温热盛出"
+      ]
+    },
+    {
+      "id": "r124",
+      "name": "南瓜小米鸡肉粥",
+      "category": "早餐",
+      "description": "南瓜小米粥加入细嫩鸡肉，适合需要软烂早餐的家庭",
+      "difficulty": "简单",
+      "time_min": 35,
+      "cost_yuan": 11,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "清淡",
+        "高蛋白"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "南瓜",
+          "amount": "200克",
+          "category": "蔬菜",
+          "grams": 200
+        },
+        {
+          "name": "小米",
+          "amount": "80克",
+          "category": "主食",
+          "grams": 80
+        },
+        {
+          "name": "鸡胸肉",
+          "amount": "100克",
+          "category": "肉蛋",
+          "grams": 100
+        },
+        {
+          "name": "姜",
+          "amount": "2片",
+          "category": "调料",
+          "grams": 4
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "南瓜去皮切块，小米淘洗干净，鸡胸肉剁成细末",
+        "锅中加水放入小米和南瓜，大火煮开",
+        "转小火熬煮二十分钟，南瓜压成泥状",
+        "加入鸡肉末和姜片，边搅拌边煮五分钟",
+        "鸡肉熟透后加盐调味，焖两分钟食用"
+      ]
+    },
+    {
+      "id": "r125",
+      "name": "鸡肉土豆泥",
+      "category": "热菜",
+      "description": "土豆蒸软压泥后拌入鸡肉和胡萝卜，适合老人和孩子",
+      "difficulty": "简单",
+      "time_min": 35,
+      "cost_yuan": 14,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "清淡"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "土豆",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "鸡胸肉",
+          "amount": "150克",
+          "category": "肉蛋",
+          "grams": 150
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "80克",
+          "category": "蔬菜",
+          "grams": 80
+        },
+        {
+          "name": "食用油",
+          "amount": "半勺",
+          "category": "调料"
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "土豆去皮切块，胡萝卜切丁，鸡胸肉剁细",
+        "土豆放入蒸锅，水开后中火蒸二十分钟",
+        "胡萝卜和鸡肉分别焯熟，沥干后切碎",
+        "土豆压成细泥，加入鸡肉胡萝卜拌匀",
+        "加盐和少量热油调味，温热盛出"
+      ]
+    },
+    {
+      "id": "r126",
+      "name": "蒸山药肉饼",
+      "category": "热菜",
+      "description": "山药泥和猪肉蒸成软嫩肉饼，适合咀嚼能力较弱的人",
+      "difficulty": "简单",
+      "time_min": 35,
+      "cost_yuan": 15,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "清淡",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白",
+        "清淡"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "山药",
+          "amount": "250克",
+          "category": "蔬菜",
+          "grams": 250
+        },
+        {
+          "name": "猪里脊",
+          "amount": "180克",
+          "category": "肉蛋",
+          "grams": 180
+        },
+        {
+          "name": "胡萝卜",
+          "amount": "50克",
+          "category": "蔬菜",
+          "grams": 50
+        },
+        {
+          "name": "姜",
+          "amount": "2片",
+          "category": "调料",
+          "grams": 4
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "山药去皮切段，猪里脊和胡萝卜切成小块",
+        "山药上锅蒸十五分钟，趁热压成细泥",
+        "猪里脊和胡萝卜剁成细馅，加入山药泥",
+        "加盐搅拌至黏稠，铺平在浅盘中",
+        "蒸锅水开后中火蒸十五分钟，切块食用"
+      ]
+    },
+    {
+      "id": "r127",
+      "name": "番茄牛肉浓汤",
+      "category": "汤",
+      "description": "番茄牛肉和土豆炖成浓汤，可搭配米饭或面包食用",
+      "difficulty": "中等",
+      "time_min": 50,
+      "cost_yuan": 21,
+      "calories": null,
+      "protein_g": null,
+      "taste_tags": [
+        "酸甜",
+        "咸鲜"
+      ],
+      "spice_level": "不辣",
+      "goal_tags": [
+        "高蛋白"
+      ],
+      "allergens": [],
+      "ingredients": [
+        {
+          "name": "番茄",
+          "amount": "300克",
+          "category": "蔬菜",
+          "grams": 300
+        },
+        {
+          "name": "牛肉",
+          "amount": "250克",
+          "category": "肉蛋",
+          "grams": 250
+        },
+        {
+          "name": "土豆",
+          "amount": "200克",
+          "category": "蔬菜",
+          "grams": 200
+        },
+        {
+          "name": "洋葱",
+          "amount": "100克",
+          "category": "蔬菜",
+          "grams": 100
+        },
+        {
+          "name": "盐",
+          "amount": "适量",
+          "category": "调料"
+        }
+      ],
+      "steps": [
+        "番茄去皮切块，牛肉切成小块后冷水焯熟",
+        "土豆去皮切块，洋葱切丁备用",
+        "锅中少油炒软洋葱，加入番茄炒出汤汁",
+        "放入牛肉和土豆，加水后小火炖三十分钟",
+        "土豆软烂后加盐调味，汤汁浓稠即可"
+      ]
     }
   ]
 }

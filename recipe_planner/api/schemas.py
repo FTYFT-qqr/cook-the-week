@@ -121,6 +121,7 @@ class IssueOut(BaseModel):
     code: str
     message: str
     day: Optional[int] = None
+    meal: Optional[str] = None
     recipe_id: Optional[str] = None
 
 
@@ -147,6 +148,7 @@ class ConstraintsOut(BaseModel):
     spice_level: str = "不辣"
     taste_tags: list[str] = []
     goal: str = "随便"
+    strategy: str = "daily_balance"
     max_time_min: int = 45
     skill: str = "随便"
     cook_start: str = ""
@@ -182,6 +184,7 @@ class PlanCreateIn(BaseModel):
     spice_level: str = "不辣"
     taste_tags: list[str] = Field(default_factory=list)
     goal: str = "随便"
+    strategy: str = "daily_balance"
     max_time_min: int = Field(default=45, ge=1, le=180)
     skill: str = "随便"
     cook_start: str = ""

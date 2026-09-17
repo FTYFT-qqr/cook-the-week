@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import math
+from itertools import combinations
 from typing import Optional
 
 from recipe_planner.db import load_db
@@ -15,6 +16,7 @@ from recipe_planner.models import (
     Recipe,
     RecipeDB,
     ShoppingItem,
+    STRATEGY_DAILY_BALANCE,
     UserConstraints,
     ValidationIssue,
 )
@@ -238,6 +240,80 @@ def _has_protein(r: Recipe) -> bool:
     )
 
 
+def _has_nonprotein_vegetable(r: Recipe) -> bool:
+    """判断是否是可作为「一荤一素」另一半的非蛋白蔬菜菜。"""
+    if _has_protein(r) or r.category == "汤":
+        return False
+    return r.category == "凉菜" or any(i.category == "蔬菜" for i in r.ingredients)
+
+
+def normalize_strategy(strategy: str | None) -> str:
+    """把老数据或未知值收敛到当前唯一支持的组合策略。"""
+    return STRATEGY_DAILY_BALANCE if strategy != STRATEGY_DAILY_BALANCE else strategy
+
+
+def meal_structure_issues(dishes: list[Recipe], c: UserConstraints,
+                          strategy: str | None = None,
+                          meal: str | None = None) -> list[str]:
+    """返回一顿饭的组合缺口，不把逐菜评分误当成结构达标。
+
+    第一版只验收 `daily_balance`：两道及以上的正餐需要至少一个蛋白来源和一个
+    非蛋白蔬菜来源。单菜餐、早餐和未知策略不在本策略的评估范围内。
+    """
+    if meal == "早餐":
+        return []
+    if normalize_strategy(strategy or getattr(c, "strategy", None)) != STRATEGY_DAILY_BALANCE:
+        return []
+    if len(dishes) < 2:
+        return []
+    issues: list[str] = []
+    if not any(_has_protein(r) for r in dishes):
+        issues.append("missing_protein")
+    if not any(_has_nonprotein_vegetable(r) for r in dishes):
+        issues.append("missing_vegetable")
+    return issues
+
+
+def meal_set_score(dishes: list[Recipe], c: UserConstraints,
+                   strategy: str | None = None) -> float:
+    """为一顿组合打分：逐菜偏好之外，给可解释的结构组合加分。
+
+    结构加分只在一顿完成「蛋白 + 非蛋白蔬菜」时生效，且刻意高于单个目标标签的
+    差异，避免「高蛋白」把两道蛋白菜排在一起。硬约束仍由候选过滤和校验负责。
+    """
+    score = sum(recipe_score(r, c) for r in dishes)
+    if normalize_strategy(strategy or getattr(c, "strategy", None)) != STRATEGY_DAILY_BALANCE:
+        return score
+    if len(dishes) < 2:
+        return score
+    has_protein = any(_has_protein(r) for r in dishes)
+    has_vegetable = any(_has_nonprotein_vegetable(r) for r in dishes)
+    if has_protein:
+        score += 2.0
+    if has_vegetable:
+        score += 2.0
+    if has_protein and has_vegetable:
+        score += 24.0
+    return score
+
+
+def _structure_rank(dishes: list[Recipe], c: UserConstraints) -> tuple[int, int, int]:
+    """选择候选组合时，先满足完整结构，再比较软评分。"""
+    has_protein = int(any(_has_protein(r) for r in dishes))
+    has_vegetable = int(any(_has_nonprotein_vegetable(r) for r in dishes))
+    complete = int(not meal_structure_issues(dishes, c))
+    return complete, has_protein, has_vegetable
+
+
+def _structure_reason_for(r: Recipe, selected: list[Recipe]) -> str | None:
+    """把组合策略实际补上的那一半写进理由。"""
+    if _has_protein(r) and not any(_has_protein(x) for x in selected):
+        return "这一顿先安排蛋白来源"
+    if _has_nonprotein_vegetable(r) and not any(_has_nonprotein_vegetable(x) for x in selected):
+        return "这一顿补一道蔬菜"
+    return None
+
+
 def _structure_reason(r: Recipe, prefer_protein: bool) -> str | None:
     """把确定性排菜的结构规则翻成可回溯的理由。"""
     if prefer_protein and _has_protein(r):
@@ -278,7 +354,7 @@ def plan_deterministic(candidates: list[Recipe], db: RecipeDB, c: UserConstraint
     docs/10 之后一天可能有早/午/晚多顿：
 
     - 候选池与单菜时长上限**按餐分开**（早餐 ≤15 分钟，池子是早餐+主食+蛋类）；
-    - 结构规则（第一道偏主菜、第二道起补蔬菜/汤）**按餐各跑一遍**，规则本身没改；
+    - `daily_balance` 组合策略对两道及以上的正餐先比较组合，再安排蛋白 + 非蛋白蔬菜；
     - 预算仍然是"每人每天"，所以 `spent` 在一天内**跨餐累加** —— 不能每顿各花一份预算。
 
     返回 (每一顿一条 DayPlan, 附带警告)。可能因候选不足而少菜——由校验层报 warning。
@@ -309,47 +385,96 @@ def plan_deterministic(candidates: list[Recipe], db: RecipeDB, c: UserConstraint
                         plan_slot.dishes.append(ChosenDish(recipe_id=r.id, reason=make_reason(r, c)))
                         spent += r.cost_yuan * c.people / 2.0
 
-            # 每一顿都从"第一道偏主菜"重新开始（结构规则按餐跑）
-            prefer_protein = not any(_has_protein(db.by_id(d.recipe_id))
-                                     for d in plan_slot.dishes if db.by_id(d.recipe_id))
             need = c.dishes_for(meal)
             pool = pool_for_meal(candidates, c, meal)
             day_used = set(plan_slot.recipe_ids())
-            for _ in range(max(need - len(plan_slot.dishes), 0)):
+            selected_recipes = [db.by_id(d.recipe_id) for d in plan_slot.dishes
+                                if db.by_id(d.recipe_id) is not None]
+            while len(plan_slot.dishes) < need:
                 feasible = [r for r in pool
                             if r.id not in day_used and r.id not in used_ids
                             and (budget_per_day is None
                                  or spent + r.cost_yuan * c.people / 2.0 <= budget_per_day + 1e-6)]
                 if not feasible:
                     break
-                # 主菜优先取评分高且含蛋白的；第二道起优先非蛋白（素/汤）追求多样性
-                def pick_key(r: Recipe):
-                    is_protein = _has_protein(r)
-                    diversity_bonus = 0.0
-                    if prefer_protein and is_protein:
-                        diversity_bonus = 3.0
-                    if not prefer_protein and not is_protein:
-                        diversity_bonus = 1.5
-                    return (-(recipe_score(r, c) + diversity_bonus), r.time_min)
 
-                feasible.sort(key=pick_key)
-                chosen = feasible[0]
+                # 两道以上且还没入菜时直接比较组合，避免「高蛋白」的逐菜标签把两道
+                # 高蛋白菜都推到前面。结构完整性优先于软评分，分数只在同一结构层内排序。
+                remaining = need - len(plan_slot.dishes)
+                if (normalize_strategy(getattr(c, "strategy", None)) == STRATEGY_DAILY_BALANCE
+                        and meal != "早餐" and not selected_recipes and remaining >= 2):
+                    pairs = [pair for pair in combinations(feasible, 2)
+                             if budget_per_day is None or
+                             spent + sum(r.cost_yuan * c.people / 2.0 for r in pair)
+                             <= budget_per_day + 1e-6]
+                    if pairs:
+                        pair = max(
+                            pairs,
+                            key=lambda pair: (
+                                _structure_rank(list(pair), c),
+                                meal_set_score(list(pair), c),
+                                -sum(r.time_min for r in pair),
+                                -sum(r.cost_yuan for r in pair),
+                                tuple(r.id for r in pair),
+                            ),
+                        )
+                        # 理由按「先蛋白、后蔬菜」的顺序写，避免用户看到两道菜都声称
+                        # 自己是结构里的第一道。
+                        pair = tuple(sorted(pair, key=lambda r: (not _has_protein(r), r.time_min, r.id)))
+                        for chosen in pair:
+                            pool.remove(chosen)
+                            used_ids.add(chosen.id)
+                            day_used.add(chosen.id)
+                            plan_slot.dishes.append(
+                                ChosenDish(recipe_id=chosen.id,
+                                           reason=make_reason(
+                                               chosen, c,
+                                               structure_reason=_structure_reason_for(
+                                                   chosen, selected_recipes))))
+                            selected_recipes.append(chosen)
+                            spent += chosen.cost_yuan * c.people / 2.0
+                        continue
+
+                def pick_key(r: Recipe):
+                    after = selected_recipes + [r]
+                    return (
+                        _structure_rank(after, c),
+                        meal_set_score(after, c),
+                        -r.time_min,
+                        -r.cost_yuan,
+                        r.id,
+                    )
+
+                chosen = max(feasible, key=pick_key)
                 pool.remove(chosen)
                 used_ids.add(chosen.id)
                 day_used.add(chosen.id)
                 plan_slot.dishes.append(
                     ChosenDish(recipe_id=chosen.id,
                                reason=make_reason(chosen, c,
-                                                 structure_reason=_structure_reason(chosen, prefer_protein))))
+                                                 structure_reason=_structure_reason_for(
+                                                     chosen, selected_recipes))))
+                selected_recipes.append(chosen)
                 spent += chosen.cost_yuan * c.people / 2.0
-                prefer_protein = not _has_protein(chosen)
 
             plans.append(plan_slot)
             if len(plan_slot.dishes) < need:
                 warnings.append(
                     ValidationIssue(level="warning", code="shortage",
                                     message=f"{_where(day_no, meal, c)}候选不足，"
-                                            f"只排了{len(plan_slot.dishes)}道菜", day=day_no)
+                                            f"只排了{len(plan_slot.dishes)}道菜",
+                                    day=day_no, meal=meal)
+                )
+            structure_missing = meal_structure_issues(selected_recipes, c, meal=meal)
+            if structure_missing and len(plan_slot.dishes) >= need:
+                names = {"missing_protein": "蛋白来源", "missing_vegetable": "非蛋白蔬菜"}
+                warnings.append(
+                    ValidationIssue(
+                        level="warning", code="structure_shortage",
+                        message=f"{_where(day_no, meal, c)}暂未满足日常搭配："
+                                + "、".join(names[x] for x in structure_missing),
+                        day=day_no, meal=meal,
+                    )
                 )
     return plans, warnings
 
@@ -375,35 +500,62 @@ def validate_plan(plans: list[DayPlan], db: RecipeDB, c: UserConstraints) -> lis
             r = db.by_id(dish.recipe_id)
             if r is None:
                 issues.append(ValidationIssue(level="error", code="unknown_recipe",
-                                              message=f"{where}引用了不存在的菜谱 {dish.recipe_id}", day=p.day))
+                                              message=f"{where}引用了不存在的菜谱 {dish.recipe_id}",
+                                              day=p.day, meal=p.meal))
                 continue
             # 过敏原
             bad = r.all_allergen_names() & set(c.allergens)
             if bad:
                 issues.append(ValidationIssue(level="error", code="allergen",
                                               message=f"{where}「{r.name}」含过敏原：{'、'.join(sorted(bad))}",
-                                              day=p.day, recipe_id=r.id))
+                                              day=p.day, meal=p.meal, recipe_id=r.id))
             if SPICE_ORDER.get(r.spice_level, 0) > SPICE_ORDER.get(c.spice_level, 0):
                 issues.append(ValidationIssue(level="error", code="spice",
-                                              message=f"{where}「{r.name}」辣度({r.spice_level})超出你的耐受", day=p.day, recipe_id=r.id))
+                                              message=f"{where}「{r.name}」辣度({r.spice_level})超出你的耐受",
+                                              day=p.day, meal=p.meal, recipe_id=r.id))
             if r.time_min > time_cap:
                 issues.append(ValidationIssue(level="error", code="over_time",
-                                              message=f"{where}「{r.name}」需{r.time_min}分钟，超出上限{time_cap}分钟", day=p.day, recipe_id=r.id))
+                                              message=f"{where}「{r.name}」需{r.time_min}分钟，超出上限{time_cap}分钟",
+                                              day=p.day, meal=p.meal, recipe_id=r.id))
             if getattr(c, "skill", "随便") == "新手" and r.difficulty == "较难":
                 issues.append(ValidationIssue(level="warning", code="difficulty",
-                                              message=f"{where}「{r.name}」对新手偏难（{r.difficulty}）", day=p.day, recipe_id=r.id))
+                                              message=f"{where}「{r.name}」对新手偏难（{r.difficulty}）",
+                                              day=p.day, meal=p.meal, recipe_id=r.id))
             # 客户明确不喜欢的菜
             if r.id in set(c.disliked_dishes):
                 issues.append(ValidationIssue(level="error", code="disliked",
-                                              message=f"{where}「{r.name}」是你明确不喜欢的菜", day=p.day, recipe_id=r.id))
+                                              message=f"{where}「{r.name}」是你明确不喜欢的菜",
+                                              day=p.day, meal=p.meal, recipe_id=r.id))
             # 重复（一周内不重样；同一天的两顿也算重复）
             if dish.recipe_id in seen:
                 was = seen[dish.recipe_id]
                 issues.append(ValidationIssue(level="error", code="duplicate",
                                               message=f"「{r.name}」在{_where(was[0], was[1], c)}和{where}重复了",
-                                              day=p.day, recipe_id=r.id))
+                                              day=p.day, meal=p.meal, recipe_id=r.id))
             else:
                 seen[dish.recipe_id] = (p.day, p.meal)
+        if not p.skipped and p.dishes:
+            chosen = [r for dish in p.dishes if (r := db.by_id(dish.recipe_id))]
+            missing = meal_structure_issues(chosen, c, meal=p.meal)
+            if missing:
+                available = pool_for_meal(retrieve_candidates(db, c, p.meal), c, p.meal)
+                labels = {"missing_protein": "蛋白来源", "missing_vegetable": "非蛋白蔬菜"}
+                details = []
+                for code in missing:
+                    label = labels[code]
+                    if (code == "missing_protein"
+                            and not any(_has_protein(r) for r in available)):
+                        details.append(f"候选池不足，无法补{label}")
+                    elif (code == "missing_vegetable"
+                          and not any(_has_nonprotein_vegetable(r) for r in available)):
+                        details.append(f"候选池不足，无法补{label}")
+                    else:
+                        details.append(f"当前组合缺少{label}")
+                issues.append(ValidationIssue(
+                    level="warning", code="structure",
+                    message=f"{where}未满足日常搭配：" + "；".join(details),
+                    day=p.day, meal=p.meal,
+                ))
         # 预算（当天合计，含当天所有餐）
         if c.budget_per_person_day is not None:
             limit = c.budget_per_person_day * people_by_day.get(p.day, c.people)
@@ -411,13 +563,14 @@ def validate_plan(plans: list[DayPlan], db: RecipeDB, c: UserConstraints) -> lis
                 issues.append(ValidationIssue(level="error", code="over_budget",
                                               message=f"{_where(p.day, p.meal, c)}当天合计约 "
                                                       f"{cost_by_day[p.day]:.1f} 元，超出当日预算 {limit:.1f} 元",
-                                              day=p.day))
+                                              day=p.day, meal=p.meal))
         # 目标覆盖（软）——「这顿不做饭」的日子不检查
         if c.goal != "随便" and p.dishes:
             day_goals = [r.goal_tags for dish in p.dishes if (r := db.by_id(dish.recipe_id))]
             if not any(c.goal in tg for tg in day_goals):
                 issues.append(ValidationIssue(level="warning", code="goal",
-                                              message=f"{where}没有契合「{c.goal}」目标的菜", day=p.day))
+                                              message=f"{where}没有契合「{c.goal}」目标的菜",
+                                              day=p.day, meal=p.meal))
     return issues
 
 
@@ -425,11 +578,92 @@ def validate_plan(plans: list[DayPlan], db: RecipeDB, c: UserConstraints) -> lis
 
 def repair_plan(plans: list[DayPlan], candidates: list[Recipe], db: RecipeDB, c: UserConstraints,
                 issues: list[ValidationIssue]) -> tuple[list[DayPlan], bool]:
-    """对硬错误做确定性修正：重新用确定性排菜保证约束，返回 (计划, 是否已无硬错)。"""
-    new_plans, warns = plan_deterministic(candidates, db, c)
-    hard = [i for i in issues if i.level == "error"]
-    # 若原计划没有未知菜谱等灾难性问题，优先保留确定性结果即可
-    return new_plans, len(hard) == 0
+    """只重排有问题的餐次，保留其余餐次的菜和状态。
+
+    结构问题与单点硬错误都带有 `(day, meal)`，因此修复不会把一周中原本合格的
+    餐次一起重排。候选不足时返回部分结果，让上层继续展示可见的 shortage/structure
+    告警，而不是为了凑满数量突破硬约束。
+    """
+    if not issues:
+        return [p.model_copy(deep=True) for p in plans], True
+
+    bad_keys: set[tuple[int, str]] = set()
+    for issue in issues:
+        if issue.day is None:
+            # 没有定位信息的旧调用方仍走安全的全量确定性兜底。
+            rebuilt, _ = plan_deterministic(candidates, db, c)
+            return rebuilt, not any(i.level == "error" for i in validate_plan(rebuilt, db, c))
+        if issue.meal:
+            bad_keys.add((issue.day, issue.meal))
+        else:
+            bad_keys.update((p.day, p.meal) for p in plans if p.day == issue.day)
+
+    fixed = [p for p in plans if (p.day, p.meal) not in bad_keys]
+    occupied = {d.recipe_id for p in fixed for d in p.dishes}
+    day_spent_by_day = {
+        day: sum(_day_total_cost(p, db, c) for p in fixed if p.day == day)
+        for day in {p.day for p in plans}
+    }
+    rebuilt_slots: dict[tuple[int, str], DayPlan] = {}
+
+    for original in plans:
+        key = (original.day, original.meal)
+        if key not in bad_keys:
+            continue
+        need = c.dishes_for(original.meal)
+        pool = pool_for_meal(candidates, c, original.meal)
+        day_spent = day_spent_by_day.get(original.day, 0.0)
+        selected: list[Recipe] = []
+        picked: list[ChosenDish] = []
+
+        while len(picked) < need:
+            feasible = [r for r in pool if r.id not in occupied and r.id not in {x.id for x in selected}
+                        and (c.budget_per_person_day is None
+                             or day_spent + sum(x.cost_yuan * c.people / 2.0 for x in selected)
+                             + r.cost_yuan * c.people / 2.0
+                             <= c.budget_per_person_day * c.people + 1e-6)]
+            if not feasible:
+                break
+            remaining = need - len(picked)
+            if (normalize_strategy(getattr(c, "strategy", None)) == STRATEGY_DAILY_BALANCE
+                    and original.meal != "早餐" and not selected and remaining >= 2):
+                pairs = [pair for pair in combinations(feasible, 2)
+                         if c.budget_per_person_day is None or
+                         day_spent + sum(x.cost_yuan * c.people / 2.0 for x in pair)
+                         <= c.budget_per_person_day * c.people + 1e-6]
+                if pairs:
+                    pair = max(pairs, key=lambda x: (_structure_rank(list(x), c),
+                                                     meal_set_score(list(x), c),
+                                                     -sum(r.time_min for r in x),
+                                                     -sum(r.cost_yuan for r in x),
+                                                     tuple(r.id for r in x)))
+                    for chosen in sorted(pair, key=lambda r: (not _has_protein(r), r.time_min, r.id)):
+                        pool.remove(chosen)
+                        selected.append(chosen)
+                        picked.append(ChosenDish(
+                            recipe_id=chosen.id,
+                            reason=make_reason(chosen, c,
+                                               structure_reason=_structure_reason_for(chosen, selected[:-1]))))
+                    continue
+            chosen = max(feasible, key=lambda r: (_structure_rank(selected + [r], c),
+                                                   meal_set_score(selected + [r], c),
+                                                   -r.time_min, -r.cost_yuan, r.id))
+            pool.remove(chosen)
+            picked.append(ChosenDish(recipe_id=chosen.id,
+                                     reason=make_reason(chosen, c,
+                                                        structure_reason=_structure_reason_for(
+                                                            chosen, selected))))
+            selected.append(chosen)
+
+        occupied.update(r.id for r in selected)
+        day_spent_by_day[original.day] = day_spent + sum(
+            r.cost_yuan * c.people / 2.0 for r in selected)
+        rebuilt_slots[key] = DayPlan(day=original.day, meal=original.meal, dishes=picked,
+                                     skipped=original.skipped, people=original.people)
+
+    repaired = [rebuilt_slots.get((p.day, p.meal), p.model_copy(deep=True)) for p in plans]
+    remaining = validate_plan(repaired, db, c)
+    return repaired, not any(i.level == "error" for i in remaining)
 
 
 # ---------------------------------------------------------------- 买菜清单

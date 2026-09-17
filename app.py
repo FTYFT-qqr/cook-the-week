@@ -303,6 +303,7 @@ ui.init_defaults()
 for _k, _v in dict(
     people=2, days=3, spice="不辣", max_time=40, goal="随便", budget_week=0.0,
     allergens=[], taste=[], pantry_list=[], dishes_per_day=2,
+    strategy="daily_balance",
     skill="随便", cook_start="18:30",
     # docs/10：默认只做晚餐 —— 与"全天菜单"之前的行为**完全一致**（回归面为零的原因）
     meals=[MEAL],
@@ -336,6 +337,7 @@ def _sync_widgets_from_inputs(inp: dict) -> None:
     st.session_state["spice"] = inp.get("spice", "不辣")
     st.session_state["taste"] = list(inp.get("taste_tags") or [])
     st.session_state["goal"] = inp.get("goal", "随便")
+    st.session_state["strategy"] = inp.get("strategy", "daily_balance")
     st.session_state["skill"] = inp.get("skill", "随便")
     st.session_state["cook_start"] = inp.get("cook_start", "18:30")
     st.session_state["max_time"] = int(inp.get("max_time_min", 40))
@@ -382,6 +384,7 @@ def build_constraints(inp: dict) -> UserConstraints:
         people=inp["people"], days=inp["days"], dishes_per_day=int(inp["dishes_per_day"]),
         allergens=inp.get("allergens", []), spice_level=inp.get("spice", "不辣"),
         taste_tags=inp.get("taste_tags", []), goal=inp.get("goal", "随便"),
+        strategy=inp.get("strategy", "daily_balance"),
         max_time_min=inp.get("max_time_min", 40),
         skill=inp.get("skill", "随便"),
         cook_start=inp.get("cook_start", ""),
@@ -1136,6 +1139,7 @@ def render_create() -> None:
             breakfast_max_time_min=int(st.session_state.get("breakfast_max_time",
                                                             BREAKFAST_MAX_TIME_DEFAULT)),
             allergens=list(allergens), spice=spice, taste_tags=list(taste), goal=goal,
+            strategy="daily_balance",
             skill=skill, cook_start=cook_start,
             max_time_min=int(max_time),
             budget_per_person_day=round(_week / (_people * _days), 2) if _week else None,
@@ -1592,7 +1596,8 @@ def render_plan() -> None:
     st.markdown("<div class='statrow'>" + "".join(
         f"<div class='stat {cls}'><div class='n'>{n}</div><div class='l'>{l}</div></div>"
         for n, l, cls in stat) + "</div>", unsafe_allow_html=True)
-    st.markdown(f"<p class='line'>结构：{rep.structure_line(result, db)}；"
+    st.markdown("<p class='line'>策略：日常搭配（正餐两道及以上尽量一荤一素）；"
+                f"结构：{rep.structure_line(result, db)}；"
                 "花费按菜谱 2 人份单价折算，实际以当地物价为准</p>", unsafe_allow_html=True)
     if boundary := rep.nutrition_boundary_text(c.goal):
         st.caption(boundary)

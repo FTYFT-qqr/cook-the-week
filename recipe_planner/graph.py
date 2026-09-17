@@ -12,6 +12,7 @@ from langgraph.graph import END, START, StateGraph
 
 from recipe_planner.core import (
     plan_deterministic,
+    repair_plan,
     retrieve_candidates,
     shopping_list,
     validate_plan,
@@ -84,7 +85,7 @@ def repair_node(state: GraphState) -> GraphState:
             return {"plans": plans, "repairs_used": used, "llm_error": None,
                     "trace": trace + [f"第 {used} 轮修正：LLM 重排"]}
         trace = trace + [f"第 {used} 轮修正 LLM 失败({err})"]
-    plans, _ = plan_deterministic(cands, db, c)
+    plans, _ = repair_plan(state["plans"], cands, db, c, state.get("issues", []))
     return {"plans": plans, "repairs_used": used,
             "trace": trace + [f"第 {used} 轮修正：确定性排菜兜底"]}
 
@@ -137,7 +138,9 @@ def _build_feedback(issues: list[ValidationIssue]) -> str:
 
 def _route_after_validate(state: GraphState) -> str:
     hard = [i for i in state.get("issues", []) if i.level == "error"]
-    if not hard:
+    structure = [i for i in state.get("issues", [])
+                 if i.level == "warning" and i.code == "structure"]
+    if not hard and not (structure and state.get("llm_used", False)):
         return "shopping"
     # 仍有硬错误但修正轮数已达上限 → 停止修正，如实输出（含问题说明）
     if state.get("repairs_used", 0) >= MAX_REPAIRS:

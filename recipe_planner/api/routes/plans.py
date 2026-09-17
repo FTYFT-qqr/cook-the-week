@@ -89,7 +89,7 @@ def _day_out(record: PlanRecord, row, db: RecipeDB, with_order: bool = False) ->
 
 def _issue_out(issue) -> IssueOut:
     return IssueOut(level=issue.level, code=issue.code, message=issue.message,
-                    day=issue.day, recipe_id=issue.recipe_id)
+                    day=issue.day, meal=issue.meal, recipe_id=issue.recipe_id)
 
 
 def _summary_out(record: PlanRecord, db: RecipeDB) -> SummaryOut:
@@ -188,7 +188,8 @@ async def plan_detail(record: PlanRecord = Depends(require_record),
         constraints=ConstraintsOut(
             people=c.people, days=c.days, dishes_per_day=c.dishes_per_day,
             allergens=c.allergens, spice_level=c.spice_level, taste_tags=c.taste_tags,
-            goal=c.goal, max_time_min=c.max_time_min, skill=c.skill, cook_start=c.cook_start,
+            goal=c.goal, strategy=c.strategy, max_time_min=c.max_time_min,
+            skill=c.skill, cook_start=c.cook_start,
             budget_per_person_day=c.budget_per_person_day, pantry_items=c.pantry_items,
             must_include_recipes=list(c.must_include_recipes or []),
             meals=list(c.active_meals()), dishes_per_meal=dict(c.dishes_per_meal or {}),

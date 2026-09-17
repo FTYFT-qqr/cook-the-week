@@ -275,6 +275,7 @@ def inputs_from_constraints(c: UserConstraints, start_date: Any = None) -> dict:
         "spice": c.spice_level,
         "taste_tags": list(c.taste_tags),
         "goal": c.goal,
+        "strategy": c.strategy,
         "max_time_min": c.max_time_min,
         "skill": c.skill,
         "cook_start": c.cook_start,

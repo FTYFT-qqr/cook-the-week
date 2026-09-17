@@ -260,6 +260,7 @@ def _record_from_detail(detail: dict) -> PlanRecord:
             spice_level=c.get("spice_level") or "不辣",
             taste_tags=list(c.get("taste_tags") or []),
             goal=c.get("goal") or "随便",
+            strategy=c.get("strategy") or "daily_balance",
             max_time_min=int(c.get("max_time_min") or 45),
             skill=c.get("skill") or "随便",
             cook_start=c.get("cook_start") or "",
@@ -284,7 +285,8 @@ def _record_from_detail(detail: dict) -> PlanRecord:
         issues=[ValidationIssue(level=i.get("level") or "warning",
                                 code=i.get("code") or "",
                                 message=i.get("message") or "",
-                                day=i.get("day"), recipe_id=i.get("recipe_id"))
+                                day=i.get("day"), meal=i.get("meal"),
+                                recipe_id=i.get("recipe_id"))
                 for i in (detail.get("issues") or [])],
         shopping=[ShoppingItem(name=s.get("name", ""),
                                category=s.get("category") or "",

@@ -98,6 +98,9 @@ def build_prompt(c: UserConstraints, candidates: list[Recipe], feedback: str | N
                      f"其余餐不超过 {c.max_time_min} 分钟")
     allergens = "、".join(c.allergens) or "无"
     disliked = "、".join(c.disliked_dishes) or "无"
+    strategy_text = ("日常搭配：午餐或晚餐计划至少两道菜时，尽量安排一个蛋白来源和一个"
+                     "非蛋白蔬菜来源；如果候选不足，不要编造菜谱。"
+                     if c.strategy == "daily_balance" else "组合策略：按当前策略字段执行，不要编造菜谱。")
 
     prompt = f"""你是一位贴心的家庭厨师规划助手。请为一户 {c.people} 人家庭{meal_intro}。
 
@@ -108,6 +111,7 @@ def build_prompt(c: UserConstraints, candidates: list[Recipe], feedback: str | N
 4. 辣度不超过：{c.spice_level}；{time_text}。
 5. 一周内不要重复同一道菜；荤素搭配、风格错开，避免连续多天都是同一种主料。
 6. 客户明确不喜欢的菜（已从候选中移除）不得出现：{disliked}。
+7. {strategy_text}
 
 【客户喜好】
 - 客户喜欢的菜（下方目录标 ❤️，标注了 id）：**优先安排，且尽量让它们分散在不同天、每周都出现**。

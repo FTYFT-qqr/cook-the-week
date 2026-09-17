@@ -18,6 +18,7 @@ TASTE_TAGS = ["清淡", "咸鲜", "酸甜", "香辣", "微辣", "下饭", "清�
 GOALS = ["随便", "减脂", "控糖", "清淡", "高蛋白", "省钱"]
 SPICE_LEVELS = ["不辣", "微辣", "辣"]
 MEAL = "晚餐"
+STRATEGY_DAILY_BALANCE = "daily_balance"
 # ---------- 餐次（docs/10）----------
 # 用户可以选只做早餐、只做晚餐，或任意组合；**默认只勾晚餐**，所以"不关心早餐"的用户
 # 与 P1 的行为完全一致（这是回归面为零的原因，不是顺带的好处）。
@@ -106,6 +107,8 @@ class UserConstraints(BaseModel):
     spice_level: str = "不辣"  # 期望辣度：不辣/微辣/辣（高于此排除）
     taste_tags: list[str] = []  # 期望口味偏好（尽量满足，软约束）
     goal: str = "随便"  # GOALS
+    # 组合策略：第一版只开放日常搭配，老方案缺字段时自然回落到该默认值。
+    strategy: str = STRATEGY_DAILY_BALANCE
     max_time_min: int = Field(default=45, ge=1, le=180)
     skill: str = "随便"  # 随便/新手/老手（D4：新手排除「较难」的菜）
     cook_start: str = ""  # 我几点开始做饭（"18:30"），用来倒推「几点能吃上」（B2）
@@ -217,6 +220,7 @@ class ValidationIssue(BaseModel):
     code: str  # allergen / duplicate / over_budget / over_time / goal / ...
     message: str
     day: Optional[int] = None
+    meal: Optional[str] = None
     recipe_id: Optional[str] = None
 
 

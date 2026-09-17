@@ -94,6 +94,7 @@ try {
     Invoke-VerificationStep 'tracked secret scan' @('scripts\scan_tracked_secrets.py')
     Invoke-VerificationStep 'pytest' @('-m', 'pytest', 'tests')
     Invoke-VerificationStep 'recommendation evaluation' @('scripts\evaluate_recommendations.py')
+    Invoke-VerificationStep 'weekly usage report' @('scripts\weekly_usage_report.py', '--output-dir', '.tmp\usage-report\verify')
     Invoke-VerificationStep 'self_check (DB)' @('scripts\self_check.py')
 
     $env:STORAGE = 'json'

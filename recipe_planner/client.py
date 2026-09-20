@@ -33,8 +33,9 @@ from typing import Any, Optional
 import httpx
 
 from recipe_planner.infra import settings
-from recipe_planner.models import (MEAL, ChosenDish, DayPlan, PlanRecord, PlanResult,
-                                   ShoppingItem, UserConstraints, ValidationIssue)
+from recipe_planner.models import (MEAL, ChosenDish, DayPlan, PlanRecord,
+                                   PlanResult, Recipe, RecipeDB, ShoppingItem,
+                                   UserConstraints, ValidationIssue)
 
 PREFIX = "/api/v1"
 
@@ -240,6 +241,21 @@ def ping() -> bool:
 
 
 # ---------------------------------------------------------------- DTO → 领域对象
+
+
+def load_recipe_db() -> RecipeDB:
+    """服务化界面的菜谱目录：只从服务端已发布数据库读取。"""
+    items: list[dict] = []
+    cursor = 0
+    while True:
+        page = _request("GET", "/recipes", params={"limit": 200, "cursor": cursor})
+        batch = page.get("items") or []
+        items.extend(batch)
+        next_cursor = page.get("next_cursor")
+        if next_cursor is None or not batch:
+            break
+        cursor = int(next_cursor)
+    return RecipeDB(recipes=[Recipe.model_validate(item) for item in items])
 
 
 def _record_from_detail(detail: dict) -> PlanRecord:

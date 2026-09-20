@@ -34,10 +34,11 @@ def main() -> int:
           f"喜欢 {len(prof.get('liked_dishes', []))} 道；"
           f"不喜欢 {len(prof.get('disliked_dishes', []))} 道")
     if unknown:
-        print("✘ 发现未知引用：")
+        print("[ERROR] 发现未知引用：")
         print("\n".join(f"  - {item}" for item in unknown))
         return 1
-    print("✅ 真实数据只读审计通过（未修改 data/）")
+    # 使用 ASCII 状态标记，普通 Windows GBK 控制台也能独立运行。
+    print("[OK] 真实数据只读审计通过（未修改 data/）")
     return 0
 
 

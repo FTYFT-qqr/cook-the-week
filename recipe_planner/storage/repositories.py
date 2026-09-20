@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+from hashlib import sha256
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import uuid4
@@ -26,6 +27,7 @@ from recipe_planner.models import (
     PlanResult,
     Recipe,
     RecipeDB,
+    RecipeReference as RecipeReferenceModel,
     ShoppingItem,
     UserConstraints,
     slot_key,
@@ -66,53 +68,159 @@ async def _profile_sig_in_session(s: AsyncSession) -> str:
 
 # ---------------------------------------------------------------- 菜谱
 
+_RECIPE_META_FIELDS = {
+    "status", "version", "content_hash", "created_at", "batch_id", "reviewed_at",
+}
+
+
+def _recipe_content_hash(recipe: Recipe) -> str:
+    """为可见菜谱内容生成稳定哈希，元数据变更不会虚增内容版本。"""
+    payload = recipe.model_dump(mode="json", exclude=_RECIPE_META_FIELDS | {"references"})
+    payload["references"] = [
+        ref.model_dump(mode="json", exclude={"id"}) for ref in recipe.references
+    ]
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return sha256(raw.encode("utf-8")).hexdigest()
+
 def _recipe_to_domain(row: orm.Recipe) -> Recipe:
     return Recipe(
         id=row.id, name=row.name, category=row.category, description=row.description,
         difficulty=row.difficulty, time_min=row.time_min, cost_yuan=float(row.cost_yuan),
         calories=row.calories, protein_g=float(row.protein_g) if row.protein_g is not None else None,
+        carbs_g=float(row.carbs_g) if row.carbs_g is not None else None,
+        fat_g=float(row.fat_g) if row.fat_g is not None else None,
         spice_level=row.spice_level, taste_tags=list(row.taste_tags or []),
         goal_tags=list(row.goal_tags or []), allergens=list(row.allergens or []),
         steps=[str(x) for x in (row.steps or [])], video_url=row.video_url or "",
         ingredients=[IngredientModel(name=i.name, amount=i.amount, category=i.category,
                                      grams=float(i.grams) if i.grams is not None else None)
                      for i in sorted(row.ingredients, key=lambda x: x.seq)],
+        status=row.status, version=row.version, source_type=row.source_type,
+        source_url=row.source_url, source_creator=row.source_creator,
+        reviewed_at=row.reviewed_at, nutrition_basis=row.nutrition_basis,
+        nutrition_source=row.nutrition_source, nutrition_estimated=row.nutrition_estimated,
+        content_hash=row.content_hash, created_at=row.created_at, batch_id=row.batch_id,
+        references=[RecipeReferenceModel(
+            id=ref.id, kind=ref.kind, platform=ref.platform, title=ref.title,
+            creator=ref.creator, url=ref.url, checked_at=ref.checked_at,
+            active=ref.active, sort_order=ref.sort_order,
+        ) for ref in sorted(row.references, key=lambda x: (x.sort_order, x.id))],
     )
 
 
 class RecipeRepo:
     @staticmethod
-    async def load_db() -> RecipeDB:
+    async def load_db(*, published_only: bool = True) -> RecipeDB:
         async with session_scope() as s:
-            rows = (await s.execute(select(orm.Recipe))).scalars().unique().all()
+            query = select(orm.Recipe)
+            if published_only:
+                query = query.where(orm.Recipe.status == "published")
+            rows = (await s.execute(query)).scalars().unique().all()
             return RecipeDB(recipes=[_recipe_to_domain(r) for r in rows])
 
     @staticmethod
-    async def upsert_many(recipes: list[Recipe]) -> int:
-        """导入/更新菜谱库（幂等：按 id 覆盖）。"""
+    async def upsert_many(recipes: list[Recipe], *, status: str | None = None,
+                          batch_id: str | None = None) -> int:
+        """导入/更新菜谱库（幂等：按 id + content_hash 更新）。
+
+        ``status`` 只由受控内容流程显式传入；历史 JSON 导入不传时保持
+        ``Recipe.status``（默认 published），因此不会把审核中的草稿意外放进候选池。
+        """
+        if status is not None and status not in {"draft", "review", "published", "archived"}:
+            raise ValueError(f"不支持的菜谱状态：{status}")
         async with session_scope() as s:
             for r in recipes:
                 row = await s.get(orm.Recipe, r.id)
                 if row is None:
                     row = orm.Recipe(id=r.id)
                     s.add(row)
+                incoming_hash = _recipe_content_hash(r)
+                if row.content_hash and row.content_hash != incoming_hash:
+                    row.version = int(row.version or 1) + 1
+                else:
+                    row.version = int(row.version or 1)
                 row.name, row.category, row.description = r.name, r.category, r.description
                 row.difficulty, row.time_min = r.difficulty, r.time_min
                 row.cost_yuan, row.calories = r.cost_yuan, r.calories
-                row.protein_g, row.spice_level = r.protein_g, r.spice_level
+                row.protein_g, row.carbs_g, row.fat_g = r.protein_g, r.carbs_g, r.fat_g
+                row.spice_level = r.spice_level
                 row.taste_tags = list(r.taste_tags)
                 row.goal_tags = list(r.goal_tags)
                 row.allergens = list(r.allergens)
                 row.steps = list(r.steps)
                 row.video_url = r.video_url
+                row.status = status or r.status
+                row.source_type, row.source_url = r.source_type, r.source_url
+                row.source_creator = r.source_creator
+                row.reviewed_at = r.reviewed_at
+                row.nutrition_basis, row.nutrition_source = r.nutrition_basis, r.nutrition_source
+                row.nutrition_estimated = r.nutrition_estimated
+                row.content_hash = incoming_hash
+                if batch_id is not None:
+                    row.batch_id = batch_id
+                elif r.batch_id:
+                    row.batch_id = r.batch_id
+                row.updated_at = datetime.now()
                 await s.flush()
                 await s.execute(delete(orm.Ingredient).where(orm.Ingredient.recipe_id == r.id))
                 await s.flush()
                 for seq, ing in enumerate(r.ingredients, start=1):
                     s.add(orm.Ingredient(recipe_id=r.id, seq=seq, name=ing.name,
                                          amount=ing.amount, category=ing.category, grams=ing.grams))
+                # 空 references 表示 seed 没有覆盖外部链接，避免普通 JSON 导入
+                # 静默抹掉人工策展；显式提供链接时才替换当前引用集合。
+                if r.references:
+                    await s.execute(delete(orm.RecipeReference).where(
+                        orm.RecipeReference.recipe_id == r.id))
+                    for ref in r.references:
+                        s.add(orm.RecipeReference(
+                            recipe_id=r.id, kind=ref.kind, platform=ref.platform,
+                            title=ref.title, creator=ref.creator, url=ref.url,
+                            checked_at=ref.checked_at, active=ref.active,
+                            sort_order=ref.sort_order,
+                        ))
             await s.flush()
             return len(recipes)
+
+    @staticmethod
+    async def publish_batch(batch_id: str) -> int:
+        """一次事务发布一个审核批次，返回实际发布数量。"""
+        async with session_scope() as s:
+            rows = (await s.execute(select(orm.Recipe).where(
+                orm.Recipe.batch_id == batch_id,
+                orm.Recipe.status.in_(("draft", "review"))))).scalars().all()
+            for row in rows:
+                row.status = "published"
+                row.reviewed_at = datetime.now()
+                row.updated_at = datetime.now()
+            await s.flush()
+            return len(rows)
+
+    @staticmethod
+    async def archive(recipe_id: str, expected_version: int | None = None) -> bool:
+        """归档菜谱但不物理删除，支持版本乐观锁。"""
+        async with session_scope() as s:
+            row = await s.get(orm.Recipe, recipe_id)
+            if row is None:
+                return False
+            if expected_version is not None and row.version != expected_version:
+                raise ValueError(f"菜谱 {recipe_id} 版本已变化：期望 {expected_version}，实际 {row.version}")
+            row.status = "archived"
+            row.updated_at = datetime.now()
+            await s.flush()
+            return True
+
+    @staticmethod
+    async def export_snapshot(*, include_archived: bool = False) -> dict:
+        """导出可读、可重新导入的数据库快照。"""
+        db = await RecipeRepo.load_db(published_only=not include_archived)
+        rows = [r.model_dump(mode="json") for r in db.recipes]
+        catalog_hash = sha256(json.dumps(
+            [(r.get("id"), r.get("content_hash"), r.get("version")) for r in rows],
+            ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8")).hexdigest()
+        return {"schema_version": 2, "catalog_version": catalog_hash,
+                "recipes": rows}
 
 
 # ---------------------------------------------------------------- 方案
@@ -498,7 +606,8 @@ def _profile_dict(rows: list[orm.Preference], ratings: list[orm.Rating],
 class ProfileRepo:
     @staticmethod
     async def _names(s: AsyncSession) -> tuple[dict[str, orm.Recipe], dict[str, str]]:
-        rows = (await s.execute(select(orm.Recipe))).scalars().unique().all()
+        rows = (await s.execute(select(orm.Recipe).where(
+            orm.Recipe.status == "published"))).scalars().unique().all()
         return {r.id: r for r in rows}, {r.name: r.id for r in rows}
 
     @staticmethod

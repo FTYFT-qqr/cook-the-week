@@ -37,7 +37,7 @@ from recipe_planner import store
 from recipe_planner import ui_state as ui
 from recipe_planner.core import (cheapest_swap, fastest_day, refresh_result,
                                  restore_day, swap_dish, where_text)
-from recipe_planner.db import load_db
+from recipe_planner.db import load_catalog
 from recipe_planner.infra.jsonfile import ArchiveBroken
 from recipe_planner.infra.settings import storage_kind as _storage_kind
 from recipe_planner.infra.settings import use_api as _use_api
@@ -257,10 +257,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-db = load_db()
-KNOWN_NAMES = {r.name for r in db.recipes}
-NAME2ID = {r.name: r.id for r in db.recipes}
-
 # ---------------------------------------------------------------- 服务端连接守卫
 # 服务化之后，界面最可能的故障不是"某个操作失败"，而是"服务端根本没起来"。
 # 那种情况下每个请求都会失败，如果放任下去客户看到的是一屏英文异常 ——
@@ -281,6 +277,12 @@ if USE_API:
         if st.button("启好了，重试", key="api_retry", type="primary"):
             st.rerun()
         st.stop()
+
+# 菜谱目录必须在连接守卫之后加载：服务不可用时，先渲染可执行的人话提示，
+# 不让目录请求把异常直接抛成 Streamlit 英文堆栈。
+db = load_catalog()
+KNOWN_NAMES = {r.name for r in db.recipes}
+NAME2ID = {r.name: r.id for r in db.recipes}
 
 # ---------------------------------------------------------------- 示例场景（三张场景卡）
 SCENES = [

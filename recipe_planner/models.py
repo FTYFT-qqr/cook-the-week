@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, Optional
 
@@ -38,6 +39,20 @@ class Ingredient(BaseModel):
     grams: Optional[float] = None  # 可换算的克数，用于预算/扣减估算；None=不可换算
 
 
+class RecipeReference(BaseModel):
+    """菜谱外部参考链接（C-02：链接是内容元数据，不参与推荐规则）。"""
+
+    id: Optional[int] = None
+    kind: Literal["video", "article", "search"] = "search"
+    platform: str = ""
+    title: str = ""
+    creator: str = ""
+    url: str
+    checked_at: Optional[datetime] = None
+    active: bool = True
+    sort_order: int = 0
+
+
 class Recipe(BaseModel):
     id: str
     name: str
@@ -62,6 +77,21 @@ class Recipe(BaseModel):
     # 而不是编一个可能 404 的地址（详见 docs/12 v7）。
     video_url: str = ""
     ingredients: list[Ingredient] = []
+    # C-02 菜谱内容生命周期元数据。默认值兼容现有 JSON seed；运行时真正
+    # 决定推荐候选的是数据库中的 status。
+    status: Literal["draft", "review", "published", "archived"] = "published"
+    version: int = Field(default=1, ge=1)
+    source_type: str = "family"
+    source_url: str = ""
+    source_creator: str = ""
+    reviewed_at: Optional[datetime] = None
+    nutrition_basis: str = "unknown"
+    nutrition_source: str = ""
+    nutrition_estimated: bool = False
+    content_hash: str = ""
+    created_at: Optional[datetime] = None
+    batch_id: str = ""
+    references: list[RecipeReference] = []
 
     @field_validator("ingredients")
     @classmethod

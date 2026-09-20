@@ -58,6 +58,33 @@ class Recipe(Base):
     cost_yuan: Mapped[float] = mapped_column(Numeric(8, 2), default=0, nullable=False)
     calories: Mapped[int | None] = mapped_column(Integer)
     protein_g: Mapped[float | None] = mapped_column(Numeric(6, 1))
+    carbs_g: Mapped[float | None] = mapped_column(Numeric(6, 1))
+    fat_g: Mapped[float | None] = mapped_column(Numeric(6, 1))
+    status: Mapped[str] = mapped_column(String(12), default="published",
+                                         server_default="published", nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+    source_type: Mapped[str] = mapped_column(String(24), default="family",
+                                             server_default="family", nullable=False)
+    source_url: Mapped[str] = mapped_column(String(500), default="", server_default="",
+                                            nullable=False)
+    source_creator: Mapped[str] = mapped_column(String(120), default="", server_default="",
+                                                nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    nutrition_basis: Mapped[str] = mapped_column(String(20), default="unknown",
+                                                 server_default="unknown", nullable=False)
+    nutrition_source: Mapped[str] = mapped_column(String(200), default="", server_default="",
+                                                  nullable=False)
+    nutrition_estimated: Mapped[bool] = mapped_column(Boolean, default=False,
+                                                       server_default=text("0"), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), default="", server_default="",
+                                              nullable=False)
+    batch_id: Mapped[str] = mapped_column(String(64), default="", server_default="",
+                                          nullable=False)
+    # SQLite 不能给已有表 ADD COLUMN 一个 CURRENT_TIMESTAMP 非字面量默认值；
+    # 迁移 0005 会回填老行，ORM 新行用 Python 默认值保证不为空。
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),
+                                                        default=datetime.now,
+                                                        nullable=True)
     spice_level: Mapped[str] = mapped_column(String(8), default="不辣", nullable=False)
     taste_tags: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     goal_tags: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
@@ -82,6 +109,40 @@ class Recipe(Base):
     ingredients: Mapped[list["Ingredient"]] = relationship(
         back_populates="recipe", cascade="all, delete-orphan",
         order_by="Ingredient.seq", lazy="selectin")
+    references: Mapped[list["RecipeReference"]] = relationship(
+        back_populates="recipe", cascade="all, delete-orphan",
+        order_by="RecipeReference.sort_order", lazy="selectin")
+
+
+class RecipeReference(Base):
+    """菜谱参考链接，替代单一 video_url 的可扩展内容元数据。"""
+
+    __tablename__ = "recipe_reference"
+
+    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"),
+                                    primary_key=True, autoincrement=True)
+    recipe_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("recipe.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), default="search",
+                                      server_default="search", nullable=False)
+    platform: Mapped[str] = mapped_column(String(32), default="", server_default="",
+                                          nullable=False)
+    title: Mapped[str] = mapped_column(String(200), default="", server_default="",
+                                       nullable=False)
+    creator: Mapped[str] = mapped_column(String(120), default="", server_default="",
+                                         nullable=False)
+    url: Mapped[str] = mapped_column(String(500), nullable=False)
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("1"),
+                                         nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0",
+                                            nullable=False)
+
+    __table_args__ = (
+        Index("recipe_reference_idx", "recipe_id", "active", "sort_order"),
+    )
+
+    recipe: Mapped["Recipe"] = relationship(back_populates="references")
 
 
 class Ingredient(Base):
@@ -411,5 +472,5 @@ class AppSetting(Base):
 __all__ = [
     "Base", "Recipe", "Ingredient", "Household", "AppUser", "Preference", "Rating",
     "Plan", "PlanDay", "PlanDish", "ShoppingItem", "ShoppingCheck",
-    "Job", "ActionLog", "IdempotencyKey", "LlmCallLog", "AppSetting",
+    "Job", "ActionLog", "IdempotencyKey", "LlmCallLog", "AppSetting", "RecipeReference",
 ]

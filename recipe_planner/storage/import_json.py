@@ -61,6 +61,17 @@ def _backup() -> Path:
     for name, src in _sources().items():
         if src.exists():
             shutil.copy2(src, dest / name)
+    # C-02：菜谱主源切换前也留一份当前 SQLite，方便逐步迁移失败时恢复。
+    db_url = settings.database_url()
+    if db_url.startswith("sqlite"):
+        raw = db_url.rsplit("///", 1)[-1]
+        db_path = Path(raw)
+        if db_path.exists():
+            shutil.copy2(db_path, dest / "app.db")
+            for suffix in ("-wal", "-shm"):
+                sidecar = Path(f"{db_path}{suffix}")
+                if sidecar.exists():
+                    shutil.copy2(sidecar, dest / f"app.db{suffix}")
     return dest
 
 

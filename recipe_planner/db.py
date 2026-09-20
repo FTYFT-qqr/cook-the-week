@@ -49,3 +49,19 @@ def load_db(path: Path | str | None = None) -> RecipeDB:
 
             return sync_bridge.run(RecipeRepo.load_db())
     return _load_json_db(path)
+
+
+def load_catalog() -> RecipeDB:
+    """返回当前运行时菜谱目录。
+
+    Streamlit 界面在 API 模式下通过服务端读取已发布数据库；API worker 自己
+    仍使用 ``load_db()`` 读取服务端数据库，避免服务端反过来请求自己。
+    ``STORAGE=json`` 仍是显式的本地降级/fixture 开关。
+    """
+    from recipe_planner.infra import settings
+
+    if settings.use_api():
+        from recipe_planner.client import load_recipe_db
+
+        return load_recipe_db()
+    return load_db()

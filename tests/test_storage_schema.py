@@ -35,6 +35,7 @@ from recipe_planner.storage.orm import (
     Preference,
     Rating,
     Recipe,
+    RecipeReference,
     ShoppingCheck,
     ShoppingItem,
 )
@@ -43,7 +44,7 @@ EXPECTED_TABLES = {
     "recipe", "ingredient", "household", "app_user", "preference", "rating",
     "plan", "plan_day", "plan_dish", "shopping_item", "shopping_check",
     "job", "action_log", "idempotency_key", "llm_call_log", "app_setting",
-    "dish_event",
+    "dish_event", "recipe_reference",
 }
 
 # 注意：不用 pytest 的 tmp_path（它落在系统 TEMP 上，本项目环境对该目录无写权限）
@@ -111,7 +112,10 @@ async def test_recipe_columns_and_json_roundtrip(db):
     async with engine.connect() as conn:
         cols = await conn.run_sync(lambda sc: {c["name"] for c in inspect(sc).get_columns("recipe")})
     assert {"id", "name", "category", "difficulty", "time_min", "cost_yuan",
-            "taste_tags", "goal_tags", "allergens"} <= cols
+            "taste_tags", "goal_tags", "allergens", "carbs_g", "fat_g", "status",
+            "version", "source_type", "source_url", "source_creator", "reviewed_at",
+            "nutrition_basis", "nutrition_source", "nutrition_estimated", "content_hash",
+            "batch_id", "created_at"} <= cols
     # 做法与视频链接（docs/12 阶段三，迁移 0004）：两列都是"有默认值"的，老库升级上来不会 NULL
     assert {"steps", "video_url"} <= cols, cols
 
@@ -132,6 +136,19 @@ async def test_recipe_columns_and_json_roundtrip(db):
         assert float(r.cost_yuan) == 8.5
         ing = (await s.execute(select(Ingredient).where(Ingredient.recipe_id == "r01"))).scalar_one()
         assert ing.grams == 300
+
+
+async def test_recipe_reference_roundtrip(db):
+    async with db() as s:
+        s.add(Recipe(id="r-ref", name="参考菜", time_min=15, cost_yuan=8))
+        s.add(RecipeReference(recipe_id="r-ref", kind="video", platform="B站",
+                              title="家常做法", url="https://example.com/video"))
+        await s.commit()
+
+    async with db() as s:
+        ref = await s.get(RecipeReference, 1)
+        assert ref is not None
+        assert ref.recipe_id == "r-ref" and ref.active is True
 
 
 async def test_preference_is_mutually_exclusive(db):

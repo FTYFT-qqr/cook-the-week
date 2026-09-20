@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -51,6 +52,19 @@ class IngredientOut(BaseModel):
     name: str
     amount: str = ""
     category: str = "其他"
+    grams: Optional[float] = None
+
+
+class RecipeReferenceOut(BaseModel):
+    id: Optional[int] = None
+    kind: Literal["video", "article", "search"] = "search"
+    platform: str = ""
+    title: str = ""
+    creator: str = ""
+    url: str
+    checked_at: Optional[datetime] = None
+    active: bool = True
+    sort_order: int = 0
 
 
 class RecipeOut(BaseModel):
@@ -63,11 +77,17 @@ class RecipeOut(BaseModel):
     cost_yuan: float
     calories: Optional[int] = None
     protein_g: Optional[float] = None
+    carbs_g: Optional[float] = None
+    fat_g: Optional[float] = None
     spice_level: str = "不辣"
     taste_tags: list[str] = []
     goal_tags: list[str] = []
     allergens: list[str] = []
+    steps: list[str] = []
+    video_url: str = ""
     ingredients: list[IngredientOut] = []
+    references: list[RecipeReferenceOut] = []
+    version: int = 1
     liked: bool = False
     disliked: bool = False
 

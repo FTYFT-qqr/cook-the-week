@@ -59,7 +59,10 @@ python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\activ
 pip install -r requirements.txt
 
 cp .env.example .env                              # 填上 DEEPSEEK_API_KEY（不填也能跑，见下）
-python -m recipe_planner.storage.import_json      # 建库 + 导入 127 道菜谱（首次执行一次）
+python -m recipe_planner.storage.migrate           # 建库/升级到当前 Alembic head
+python -m recipe_planner.content.seed --file data/recipes.json  # 初始化已发布菜谱
+# 兼容旧的一次性迁移（同时导入方案、档案）：
+python -m recipe_planner.storage.import_json
 
 streamlit run app.py                              # 打开 http://localhost:8501
 ```
@@ -118,7 +121,8 @@ recipe_planner/
   client.py                 `USE_API=1` 时走 HTTP 的客户端
   api/                      FastAPI 服务：27 个接口、任务队列、SSE 进度、中间件栈
   storage/                  SQLAlchemy 2.0 async + Alembic 迁移 + 仓储层
-data/recipes.json           菜谱库：127 道（含 3–5 步做法）
+  content/                  菜谱批次导入、审核发布、归档与数据库快照
+data/recipes.json           菜谱 seed/审查快照：127 道（运行时主源为 SQLite published 菜谱）
 data/                       你的数据（app.db / 档案 / 方案）—— **已被 .gitignore 排除**
 docs/                       编号设计、交接、体检与实施文档
 tests/ scripts/             自动化测试与自测脚本

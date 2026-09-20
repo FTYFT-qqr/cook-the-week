@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from recipe_planner.models import Recipe, RecipeDB
 
 from ..deps import get_db, get_profile
-from ..schemas import IngredientOut, RecipeListOut, RecipeOut
+from ..schemas import IngredientOut, RecipeListOut, RecipeOut, RecipeReferenceOut
 
 router = APIRouter()
 
@@ -30,10 +30,15 @@ def _to_out(recipe: Recipe, liked: set[str], disliked: set[str]) -> RecipeOut:
         description=recipe.description, difficulty=recipe.difficulty,
         time_min=recipe.time_min, cost_yuan=recipe.cost_yuan,
         calories=recipe.calories, protein_g=recipe.protein_g,
+        carbs_g=recipe.carbs_g, fat_g=recipe.fat_g,
         spice_level=recipe.spice_level, taste_tags=recipe.taste_tags,
         goal_tags=recipe.goal_tags, allergens=recipe.allergens,
-        ingredients=[IngredientOut(name=i.name, amount=i.amount, category=i.category)
+        steps=recipe.steps, video_url=recipe.video_url,
+        ingredients=[IngredientOut(name=i.name, amount=i.amount, category=i.category,
+                                   grams=i.grams)
                      for i in recipe.ingredients],
+        references=[RecipeReferenceOut(**ref.model_dump()) for ref in recipe.references],
+        version=recipe.version,
         liked=recipe.name in liked, disliked=recipe.name in disliked)
 
 

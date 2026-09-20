@@ -26,6 +26,7 @@ JSON 实现是同一个套路），所以 `app.py` 里读写数据的那几百�
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 import threading
 import uuid
 from typing import Any, Optional
@@ -334,23 +335,23 @@ def list_plans() -> list[dict]:
     global _list_cache
     with _lock:
         if _list_cache is not None:
-            return list(_list_cache)
+            return deepcopy(_list_cache)
     data = _request("GET", "/plans")
     items = list(data.get("items") or [])
     with _lock:
-        _list_cache = items
-    return list(items)
+        _list_cache = deepcopy(items)
+    return deepcopy(items)
 
 
 def _detail(plan_id: str) -> PlanRecord:
     with _lock:
         hit = _record_cache.get(plan_id)
     if hit is not None:
-        return hit
+        return deepcopy(hit)
     rec = _record_from_detail(_request("GET", f"/plans/{plan_id}"))
     with _lock:
-        _record_cache[plan_id] = rec
-    return rec
+        _record_cache[plan_id] = deepcopy(rec)
+    return deepcopy(rec)
 
 
 def load_records() -> list[PlanRecord]:
@@ -619,7 +620,7 @@ def load_profile() -> dict:
     global _profile_cache
     with _lock:
         if _profile_cache is not None:
-            return dict(_profile_cache)
+            return deepcopy(_profile_cache)
     data = _request("GET", "/profile")
     # 服务端把来源痕迹给成列表（对前端友好），这里换回 JSON 后端同形状的字典：
     # 界面会把 load_profile() 的结果直接导成 JSON 文件给人，两边必须一模一样
@@ -634,8 +635,8 @@ def load_profile() -> dict:
         "snoozed_dishes": list(data.get("snoozed_dishes") or []),
     }
     with _lock:
-        _profile_cache = profile
-    return dict(profile)
+        _profile_cache = deepcopy(profile)
+    return deepcopy(profile)
 
 
 def save_profile(profile: dict) -> None:
@@ -763,6 +764,9 @@ class PlanJob:
         self.next_steps: list[dict] = []
         self.done: bool = False
         self.cancelled: bool = False
+        # 一次用户操作只生成一个幂等键；若提交请求需要重试，必须复用它，
+        # 不能让网络抖动变成两份排菜任务（B-01）。
+        self.idempotency_key = uuid.uuid4().hex
 
         self._cancel = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -789,7 +793,8 @@ class PlanJob:
             self.previous = latest_record()        # 必须在提交之前读，否则读到的是新这一版
             note = self.change_note or ("重新排了一版" if self.previous else "首次生成")
             accepted = create_plan(self.constraints, start_date=self.start_date,
-                                   change_note=note)
+                                   change_note=note,
+                                   idempotency_key=self.idempotency_key)
             self.job_id = accepted.get("job_id") or ""
             self.stage = accepted.get("message") or self.stage
             self._consume_events(int(accepted.get("timeout_sec") or 120))
@@ -840,8 +845,51 @@ class PlanJob:
                 elif line.startswith("data:"):
                     data_lines.append(line[5:].strip())
             if not self.done:                            # 流被对面关掉了却没给终态
-                self.error = self.error or "连接被中断了，这次排菜没有结果。"
-                self.error_code = self.error_code or "stream_closed"
+                self._reconcile_after_stream_close()
+
+    def _reconcile_after_stream_close(self) -> None:
+        """SSE 断流后回查服务端终态（B-04）。
+
+        断流只说明事件通道断了，不代表任务失败。服务端可能已经完成并落库，
+        所以先回查一次；只有仍在 queued/running 时才把错误归因为 stream_closed。
+        """
+        try:
+            snapshot = job_status(self.job_id or "")
+        except ClientError:
+            snapshot = None
+        if snapshot and snapshot.get("status") in ("succeeded", "failed", "cancelled"):
+            self._handle_job_snapshot(snapshot)
+            return
+        self.error = self.error or "连接被中断了，这次排菜没有结果。"
+        self.error_code = self.error_code or "stream_closed"
+
+    def _handle_job_snapshot(self, snapshot: dict) -> None:
+        """把 HTTP 任务状态转换成与 SSE 终态相同的客户端状态。"""
+        status = snapshot.get("status")
+        if status == "succeeded":
+            self.plan_id = snapshot.get("plan_id")
+            _invalidate()
+            if self.plan_id:
+                try:
+                    self.record = get_record(self.plan_id)
+                except ClientError as exc:
+                    self.error = exc.message
+                    self.error_code = exc.code
+                    self.stage = "这次没排好"
+                    self.done = True
+                    return
+                self.result = self.record.result if self.record else None
+            self.progress = 1.0
+            self.stage = "排好了"
+            self.done = True
+            return
+        error = snapshot.get("error") or {}
+        self.error = snapshot.get("message") or error.get("message") or "这次没排出来。"
+        self.error_code = snapshot.get("error_code") or error.get("code") or status or "failed"
+        self.next_steps = list(snapshot.get("next_steps") or error.get("next_steps") or [])
+        self.stage = "已停止" if self.error_code == "cancelled" else "这次没排好"
+        self.cancelled = self.error_code == "cancelled"
+        self.done = True
 
     def _handle(self, event: str, raw: str) -> None:
         try:
@@ -861,22 +909,10 @@ class PlanJob:
             except (TypeError, ValueError):
                 pass
         elif event == "done":
-            self.plan_id = data.get("plan_id")
             self.message = data.get("message") or ""
-            # 服务端刚存了一版新的：先把缓存清掉，否则"以前的方案"还是旧的列表
-            _invalidate()
-            if self.plan_id:
-                try:
-                    self.record = get_record(self.plan_id)
-                except ClientError as exc:
-                    self.error = exc.message
-                    self.error_code = exc.code
-                    self.stage = "这次没排好"
-                    return
-                self.result = self.record.result if self.record else None
-            self.progress = 1.0
-            self.stage = "排好了"
-            self.done = True
+            self._handle_job_snapshot({"status": "succeeded",
+                                       "plan_id": data.get("plan_id"),
+                                       "message": self.message})
         elif event == "error":
             self.error = data.get("message") or "这次没排出来。"
             self.error_code = data.get("code") or ""
@@ -899,7 +935,7 @@ class PlanJob:
 
 
 def create_plan(constraints: UserConstraints, *, start_date: Any = None,
-                change_note: str = "") -> dict:
+                change_note: str = "", idempotency_key: Optional[str] = None) -> dict:
     """提交排菜任务（返回 202 的 `job_id`）。
 
     带上 `Idempotency-Key`：网络抖动重试时不会排出两份一模一样的方案
@@ -911,7 +947,7 @@ def create_plan(constraints: UserConstraints, *, start_date: Any = None,
     body["start_date"] = _iso_date(start_date) if start_date else None
     body["change_note"] = change_note
     return _request("POST", "/plans", body=body,
-                    headers={"Idempotency-Key": uuid.uuid4().hex})
+                    headers={"Idempotency-Key": idempotency_key or uuid.uuid4().hex})
 
 
 def cancel_job(job_id: str) -> dict:

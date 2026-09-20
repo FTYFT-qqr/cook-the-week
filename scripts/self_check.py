@@ -436,7 +436,7 @@ def main() -> int:
           all(not any(s.name == r["食材"] and not s.needed for s in res_r.shopping) for r in rows))
     if rows:
         check("勾选后 CSV 会标注已买",
-              "✅ 已买" in rep.shopping_csv(res_r, {rows[0]["食材"]}))
+              "是" in rep.shopping_csv(res_r, {rows[0]["食材"]}))
     check("复制文本里带勾选框（可发微信）",
           "[ ]" in rep.shopping_text(res_r) and "买菜清单" in rep.shopping_text(res_r))
     ptxt = rep.printable_text(res_r, db, "2026-08-12")

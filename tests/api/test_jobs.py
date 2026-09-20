@@ -316,6 +316,22 @@ async def test_job_error_column_is_json():
     assert load_error("老的纯文本错误")["message"] == "老的纯文本错误"
 
 
+async def test_startup_reaps_orphaned_jobs(api):
+    """服务重启后 queued/running 不能永久转圈，必须落成明确终态。"""
+    queued = await JobRepo.create(request={"days": 3})
+    running = await JobRepo.create(request={"days": 4})
+    await JobRepo.set_status(running["id"], "running", stage="plan", progress=0.4)
+
+    assert await JobRepo.reap_orphans() == 2
+    for job_id in (queued["id"], running["id"]):
+        row = await JobRepo.get(job_id)
+        assert row["status"] == "failed"
+        assert row["stage"] == "restarted"
+        error = load_error(row["error"])
+        assert error["code"] == "server_restarted"
+        assert error["next_steps"][0]["op"] == "retry"
+
+
 # ---------------------------------------------------------------- 幂等与限流
 
 async def test_same_idempotency_key_creates_one_job(api, client, fast_runner):

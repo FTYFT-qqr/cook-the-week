@@ -764,6 +764,25 @@ class JobRepo:
             return int((await s.execute(q)).scalar() or 0)
 
     @staticmethod
+    async def reap_orphans() -> int:
+        """服务启动时把上一个进程遗留的活动任务落成明确终态（B-03）。"""
+        error = json.dumps({
+            "code": "server_restarted",
+            "message": "服务重启时发现这项排菜还没有完成，已结束这次任务；可以重新排一次。",
+            "next_steps": [{"op": "retry", "label": "重新排一次"}],
+        }, ensure_ascii=False)
+        async with session_scope() as s:
+            rows = (await s.execute(select(orm.Job).where(
+                orm.Job.status.in_(ACTIVE_STATUSES)))).scalars().all()
+            now = _now()
+            for row in rows:
+                row.status = "failed"
+                row.stage = "restarted"
+                row.error = error
+                row.finished_at = now
+            return len(rows)
+
+    @staticmethod
     async def set_status(job_id: str, status: str, *, stage: Optional[str] = None,
                          progress: Optional[float] = None,
                          plan_id: Optional[str] = None,

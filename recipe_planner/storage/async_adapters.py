@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import json
 from typing import Optional
 
 from recipe_planner.infra.settings import storage_kind
@@ -210,6 +211,24 @@ class MemoryJobRepo:
         return len([r for r in MemoryJobRepo._rows.values()
                     if r["kind"] == kind and r["status"] in ("queued", "running")
                     and (not household_id or r["household_id"] == household_id)])
+
+    @staticmethod
+    async def reap_orphans() -> int:
+        """内存后端重启后同样把遗留活动任务落成终态。"""
+        count = 0
+        for row in MemoryJobRepo._rows.values():
+            if row["status"] not in ("queued", "running"):
+                continue
+            row["status"] = "failed"
+            row["stage"] = "restarted"
+            row["error"] = json.dumps({
+                "code": "server_restarted",
+                "message": "服务重启时发现这项排菜还没有完成，已结束这次任务；可以重新排一次。",
+                "next_steps": [{"op": "retry", "label": "重新排一次"}],
+            }, ensure_ascii=False)
+            row["finished_at"] = MemoryJobRepo._now()
+            count += 1
+        return count
 
     @staticmethod
     async def set_status(job_id: str, status: str, *, stage: Optional[str] = None,

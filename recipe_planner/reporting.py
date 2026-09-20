@@ -204,7 +204,9 @@ def shopping_rows(result: PlanResult, checked: set[str] | None = None) -> list[d
             "分类": it.category,
             "食材": it.name,
             "数量": it.amount,
-            "是否已买": "✅ 已买" if it.name in checked else "",
+            # 导出是给 Excel/备忘录带走的纯数据，不混入 UI emoji；
+            # 文本和打印出口仍会按真值渲染 [x] / 方框。
+            "是否已买": "是" if it.name in checked else "",
             "用于": "、".join(it.for_recipes),
         })
     return rows

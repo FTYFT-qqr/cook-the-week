@@ -61,10 +61,16 @@ def route_class(method: str, path: str) -> str:
 
 
 def identity_of(scope: Scope) -> str:
-    """按 API Key 分桶；没有 Key 就按来源 IP。"""
-    for key, value in scope.get("headers") or []:
-        if key == b"x-api-key":
-            return "key:" + value.decode("latin-1").strip()[:16]
+    """按**已启用认证的** API Key 分桶，否则按来源 IP。
+
+    AUTH_MODE=off 时，任意请求头都不是可信身份；不能让调用方随便换一个
+    ``X-API-Key`` 就绕开同一来源的限流（B-02）。认证模式下请求先经过
+    ``AuthMiddleware``，到这里的 key 已经通过校验。
+    """
+    if settings.auth_mode() == "apikey":
+        for key, value in scope.get("headers") or []:
+            if key == b"x-api-key":
+                return "key:" + value.decode("latin-1").strip()[:16]
     client = scope.get("client") or ("unknown", 0)
     return "ip:" + str(client[0])
 

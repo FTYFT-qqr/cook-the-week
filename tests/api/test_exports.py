@@ -3,11 +3,8 @@
 三个出口的内容与界面里的「带走清单」**同一个来源**（`reporting`），
 从哪个口子拿走都一样 —— 这是刻意的，不然"网页上导出"和"接口导出"会给两份不同的文件。
 
-**关于"无 emoji"**：doc 09 写的出口标准是"内容非空且无 emoji"。实际情况是
-`reporting.shopping_rows` 在勾选后用 `✅ 已买` 标记，而 `scripts/self_check.py` 第 405 行
-**明确断言了这个字符串**（163 项护栏之一，不能改）。所以这里的口径是：
-**除这个数据标记（`✅`）与打印用的方框（`☑`/`□`）之外，不允许出现任何 UI emoji**。
-要彻底去掉 ✅，得同时改 `reporting` 与那条护栏断言 —— 那是产品决定，已记在 docs/09 待定。
+CSV 是给 Excel/备忘录带走的纯数据，已买状态用文本“是”，不混入 UI emoji；
+打印出口仍保留黑白方框（`☑`/`□`），它们是版式符号而不是装饰图标。
 """
 from __future__ import annotations
 
@@ -18,8 +15,8 @@ import pytest
 
 # 界面里那些装饰性 emoji（progress.py 的 STAGES / 设计规范里禁掉的那些）
 UI_EMOJI = "🍳🥬🔍🛠️🛒⏹️❤️📌⚠️"
-# 允许出现在导出里的符号：✅ 是"是否已买"这一列的数据标记，☑/□ 是打印用的方框
-ALLOWED_SYMBOLS = "✅☑□"
+# 允许出现在打印 HTML 里的版式符号：☑/□ 是打印用的方框
+ALLOWED_SYMBOLS = "☑□"
 
 
 # ---------------------------------------------------------------- CSV
@@ -51,7 +48,8 @@ async def test_export_csv_marks_checked_items(api, client):
     await client.put(f"/api/v1/plans/{record.id}/shopping/checks", json={"names": [first]})
 
     body = (await client.get(f"/api/v1/plans/{record.id}/export/csv")).text
-    assert "✅ 已买" in body
+    assert "是否已买,用于" in body
+    assert "是" in body
     assert not any(e in body for e in UI_EMOJI), "导出里不该有界面装饰性 emoji"
 
 

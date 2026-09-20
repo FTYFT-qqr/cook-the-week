@@ -18,6 +18,7 @@ from __future__ import annotations
 from fastapi import APIRouter, FastAPI
 
 from recipe_planner.infra.logging import setup_logging
+from recipe_planner.storage import async_adapters as data
 
 from .errors import install_error_handlers
 from .middleware import (AccessLogMiddleware, AuthMiddleware, IdempotencyMiddleware,
@@ -58,6 +59,13 @@ def create_app() -> FastAPI:
     api.include_router(jobs.router)              # POST /plans、/jobs/{id}
     api.include_router(profile.router)
     app.include_router(api)
+
+    @app.on_event("startup")
+    async def _reap_orphan_jobs() -> None:
+        # 进程内 worker 无法跨重启续跑；先把上一进程遗留的 queued/running
+        # 任务落成可解释的 failed，避免用户看到永久转圈（B-03）。
+        await data.job_repo().reap_orphans()
+
     return app
 
 

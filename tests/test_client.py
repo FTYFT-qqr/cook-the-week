@@ -140,6 +140,27 @@ def test_连不上时给的是人话(monkeypatch):
         client.reset()
 
 
+def test_plan_job_holds_one_idempotency_key():
+    """一次界面排菜操作拥有稳定 key，重试提交时不会凭空生成第二份任务。"""
+    job = client.PlanJob(_constraints())
+    key = job.idempotency_key
+    assert key and job.idempotency_key == key
+
+
+def test_sse断流后以服务端终态为准(monkeypatch):
+    job = client.PlanJob(_constraints())
+    job.job_id = "job-closed"
+    monkeypatch.setattr(client, "job_status", lambda _job_id: {
+        "status": "failed", "error_code": "server_restarted",
+        "message": "服务已重启", "next_steps": [{"op": "retry"}],
+    })
+    job._reconcile_after_stream_close()
+    assert job.done is True
+    assert job.error_code == "server_restarted"
+    assert job.error == "服务已重启"
+    assert job.next_steps == [{"op": "retry"}]
+
+
 # ---------------------------------------------------------------- 排菜任务（SSE）
 
 

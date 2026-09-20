@@ -10,7 +10,7 @@ import httpx
 from fastapi import APIRouter
 
 from recipe_planner.api.main import create_app
-from recipe_planner.api.middleware.ratelimit import TokenBucket, route_class
+from recipe_planner.api.middleware.ratelimit import TokenBucket, identity_of, route_class
 
 PROBLEM = "application/problem+json"
 
@@ -51,6 +51,15 @@ def test_route_classification():
     assert route_class("POST", "/api/v1/plans") == "expensive"
     assert route_class("GET", "/api/v1/plans") == "normal"
     assert route_class("POST", "/api/v1/plans/abc/save-money") == "normal"
+
+
+def test_只有认证模式才信任_api_key作为限流身份(monkeypatch):
+    scope = {"client": ("127.0.0.1", 1),
+             "headers": [(b"x-api-key", b"family-a")]}
+    monkeypatch.setenv("AUTH_MODE", "off")
+    assert identity_of(scope) == "ip:127.0.0.1"
+    monkeypatch.setenv("AUTH_MODE", "apikey")
+    assert identity_of(scope) == "key:family-a"
 
 
 # ---------------------------------------------------------------- 贵接口
@@ -98,7 +107,7 @@ async def test_probes_are_not_rate_limited(api, monkeypatch):
             assert (await c.get("/ready")).status_code == 200
 
 
-async def test_identities_get_their_own_buckets(api, monkeypatch):
+async def test_未认证时伪造_api_key不能切换限流桶(api, monkeypatch):
     monkeypatch.setenv("RATE_LIMIT", "on")
     monkeypatch.setenv("RATE_LIMIT_PER_MIN", "2")
     async with await _client(_app_with_plan_route()) as c:
@@ -107,8 +116,8 @@ async def test_identities_get_their_own_buckets(api, monkeypatch):
         assert (await c.get("/api/v1/recipes", headers=a)).status_code == 200
         assert (await c.get("/api/v1/recipes", headers=a)).status_code == 200
         assert (await c.get("/api/v1/recipes", headers=a)).status_code == 429
-        # 另一家不受影响
-        assert (await c.get("/api/v1/recipes", headers=b)).status_code == 200
+        # AUTH_MODE=off 时请求头不是可信身份，换 key 仍然命中同一个来源 IP 桶。
+        assert (await c.get("/api/v1/recipes", headers=b)).status_code == 429
 
 
 async def test_rate_limit_can_be_switched_off(api, fast_runner, monkeypatch):

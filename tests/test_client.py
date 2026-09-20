@@ -292,8 +292,8 @@ def test_整周改动只动变了的那些天(live):
     spare = next(r.id for r in _load_json_db().recipes if r.id not in used)
 
     before = [[d.recipe_id for d in day.dishes] for day in result.days]
-    result.days[0].dishes[-1] = ChosenDish(recipe_id=spare, reason="测试换的")
-    live.update_result(record.id, result)
+    target_ids = [d.recipe_id for d in result.days[0].dishes[:-1]] + [spare]
+    live.replace_day(record.id, 1, target_ids)
 
     after = live.get_record(record.id)
     assert [d.recipe_id for d in after.result.days[0].dishes][-1] == spare
@@ -353,85 +353,6 @@ def test_档案_打分与评分一起回来(live):
     live.save_profile(before)                       # 撤销打分
     assert live.rating_of(a) == {}, "评分必须一起回滚 —— 只回滚喜欢不回滚评分就是假撤销"
     assert a not in live.liked_names()
-
-
-# ---------------------------------------------------------------- 纯函数：逐天比对
-
-
-def _record(days: list[DayPlan]) -> PlanRecord:
-    return PlanRecord(id="p1", start_date="2026-09-14", label="9/14–9/20",
-                      result=PlanResult(constraints=_constraints(), candidate_count=0,
-                                        days=days, final=True))
-
-
-def test_比对_没变就不发请求():
-    days = [DayPlan(day=1, dishes=[ChosenDish(recipe_id="r1")]),
-            DayPlan(day=2, dishes=[ChosenDish(recipe_id="r2")])]
-    server = _record(days)
-    same = _record([d.model_copy(deep=True) for d in days])
-    assert client._day_patches(server, same.result) == []
-
-
-def test_比对_换菜发整组替换():
-    server = _record([DayPlan(day=1, dishes=[ChosenDish(recipe_id="r1")])])
-    local = _record([DayPlan(day=1, dishes=[ChosenDish(recipe_id="r9")])])
-    assert client._day_patches(server, local.result) == [(1, {"op": "replace_day",
-                                                             "recipe_ids": ["r9"]})]
-
-
-def test_比对_只改人数就只发人数():
-    server = _record([DayPlan(day=1, dishes=[ChosenDish(recipe_id="r1")])])
-    local = _record([DayPlan(day=1, dishes=[ChosenDish(recipe_id="r1")], people=4)])
-    assert client._day_patches(server, local.result) == [(1, {"op": "people", "people": 4})]
-
-
-def test_比对_不做饭与改回来():
-    server = _record([DayPlan(day=1, dishes=[ChosenDish(recipe_id="r1")])])
-    skipped = _record([DayPlan(day=1, dishes=[], skipped=True)])
-    assert client._day_patches(server, skipped.result) == [(1, {"op": "skip"})]
-    assert client._day_patches(skipped, server.result) == [(1, {"op": "restore"})]
-
-
-# ---- docs/10：一天多顿时必须**按 (天, 餐) 比对**，并且发出去的意图要点名那一顿 ----
-
-
-def _multi(days: list[DayPlan]) -> PlanRecord:
-    return PlanRecord(
-        id="p2", start_date="2026-09-14", label="9/14–9/20",
-        result=PlanResult(
-            constraints=UserConstraints(people=2, days=1, dishes_per_day=2,
-                                        meals=["早餐", "午餐", "晚餐"],
-                                        dishes_per_meal={"早餐": 1, "午餐": 1, "晚餐": 1}),
-            candidate_count=0, days=days, final=True))
-
-
-def test_比对_多餐时按顿比对且带上餐次():
-    """把早餐少排一道，只能生成"早餐"那一条 —— 以前会退化成"改晚餐"。"""
-    server = _multi([DayPlan(day=1, meal="早餐", dishes=[ChosenDish(recipe_id="r1")]),
-                     DayPlan(day=1, meal="午餐", dishes=[ChosenDish(recipe_id="r2")]),
-                     DayPlan(day=1, meal="晚餐", dishes=[ChosenDish(recipe_id="r3")])])
-    local = _multi([DayPlan(day=1, meal="早餐", dishes=[ChosenDish(recipe_id="r9")]),
-                    DayPlan(day=1, meal="午餐", dishes=[ChosenDish(recipe_id="r2")]),
-                    DayPlan(day=1, meal="晚餐", dishes=[ChosenDish(recipe_id="r3")])])
-    assert client._day_patches(server, local.result) == [
-        (1, {"op": "replace_day", "recipe_ids": ["r9"], "meal": "早餐"})]
-
-
-def test_比对_多餐时只改一顿的人数():
-    server = _multi([DayPlan(day=1, meal="早餐", dishes=[ChosenDish(recipe_id="r1")]),
-                     DayPlan(day=1, meal="晚餐", dishes=[ChosenDish(recipe_id="r3")])])
-    local = _multi([DayPlan(day=1, meal="早餐", dishes=[ChosenDish(recipe_id="r1")]),
-                    DayPlan(day=1, meal="晚餐", dishes=[ChosenDish(recipe_id="r3")], people=4)])
-    assert client._day_patches(server, local.result) == [
-        (1, {"op": "people", "people": 4, "meal": "晚餐"})]
-
-
-def test_比对_多餐时不做饭只关那一顿():
-    server = _multi([DayPlan(day=1, meal="早餐", dishes=[ChosenDish(recipe_id="r1")]),
-                     DayPlan(day=1, meal="晚餐", dishes=[ChosenDish(recipe_id="r3")])])
-    local = _multi([DayPlan(day=1, meal="早餐", dishes=[ChosenDish(recipe_id="r1")]),
-                    DayPlan(day=1, meal="晚餐", dishes=[], skipped=True)])
-    assert client._day_patches(server, local.result) == [(1, {"op": "skip", "meal": "晚餐"})]
 
 
 def test_服务端详情转成领域对象时三餐各归各位():

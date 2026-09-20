@@ -437,17 +437,22 @@ def _load_record(rec: store.PlanRecord) -> None:
     st.session_state["check_epoch"] += 1
 
 
-def _commit_plan() -> None:
+def _persist_local_result() -> None:
+    """本机模式把界面内的领域结果落盘；API 模式禁止整周回写。"""
     rid = st.session_state.get("record_id")
     result = st.session_state.get("result")
-    if not (rid and result is not None):
+    if USE_API or not (rid and result is not None):
         return
-    rec = store.update_result(rid, result)
-    # 服务化模式下服务端才是权威：清单、花费、忌口冲突、下锅顺序都是它重算的，
-    # 所以把会话里这一份换成它刚算好的那一份，免得"界面一套、库里一套"。
-    # 本地/DB 模式**不换**：界面手里那一份信息更全（候选数、耗时、trace），换了反而是净损失。
-    if USE_API and rec is not None and rec.result is not None:
-        st.session_state["result"] = rec.result
+    store.update_result(rid, result)
+
+
+def _sync_api_record() -> None:
+    """写入服务端意图后只回读权威方案，不提交本地整周快照。"""
+    if not USE_API:
+        return
+    fresh = store.get_record(st.session_state.get("record_id"))
+    if fresh is not None:
+        st.session_state["result"] = fresh.result
 
 
 def _archive_broken_page(exc: ArchiveBroken) -> None:
@@ -550,10 +555,13 @@ def _notice_block(result) -> None:
                                help="可以连续点，最多回退 5 步"):
             entry = ui.pop_undo()
             if entry:
-                if entry.get("days"):
+                if entry.get("api_undo"):
+                    api.apply_undo(entry["api_undo"])
+                    _sync_api_record()
+                elif entry.get("days"):
                     result.days = [p.model_copy(deep=True) for p in entry["days"]]
                     refresh_result(result, db)
-                    _commit_plan()
+                    _persist_local_result()
                 if entry.get("profile") is not None:
                     prof.save_profile(entry["profile"])
                 ui.set_notice("undo", f"已撤销：{entry['text']}")
@@ -613,11 +621,25 @@ def _drop_a_dish(day_no: int, meal: str | None = None) -> None:
     if day is None or len(day.dishes) <= 1:
         return
     place = where_text(day_no, day.meal if c.is_multi_meal() else None, c)
+    if USE_API:
+        rid = st.session_state.get("record_id")
+        if not rid:
+            return
+        out = api.replace_day(rid, day_no, [d.recipe_id for d in day.dishes[:-1]],
+                              meal=day.meal)
+        _sync_api_record()
+        text = out.get("message") or f"{place}已少排一道菜，其余各天未改动。"
+        ui.set_notice("swap", text)
+        ui.push_undo(text, record_id=rid, api_undo=out.get("undo_hint"))
+        ui.push_history(text)
+        st.session_state["relax"] = None
+        st.session_state["stale"] = False
+        return
     prev_days = [p.model_copy(deep=True) for p in result.days]
     dropped = _name_of(day.dishes[-1].recipe_id)
     day.dishes = day.dishes[:-1]
     refresh_result(result, db)
-    _commit_plan()
+    _persist_local_result()
     st.session_state["relax"] = None
     st.session_state["stale"] = False
     ui.set_notice("swap", f"{place}已去掉「{dropped}」，其余各天未改动。")
@@ -705,6 +727,18 @@ def _quick_faster(day_no: int, meal: str | None = None) -> None:
     c = result.constraints
     slot = result.slot(day_no, meal)
     meal = slot.meal if slot is not None else meal
+    if USE_API:
+        rid = st.session_state.get("record_id")
+        if not rid:
+            return
+        out = api.patch_day(rid, day_no, "faster", meal=meal)
+        _sync_api_record()
+        text = out.get("message") or "已换成快手组合，其他天没动。"
+        ui.set_notice("swap", text)
+        ui.push_undo(text, record_id=rid, api_undo=out.get("undo_hint"))
+        ui.push_history(text)
+        st.session_state["tonight_relax"] = None
+        st.rerun()
     prev_days = [p.model_copy(deep=True) for p in result.days]
     got = fastest_day(result.days, day_no, db, c, meal=meal)
     if got is None:
@@ -714,7 +748,7 @@ def _quick_faster(day_no: int, meal: str | None = None) -> None:
     new_plans, recipes = got
     result.days = new_plans
     refresh_result(result, db)
-    _commit_plan()
+    _persist_local_result()
     names = "、".join(r.name for r in recipes)
     minutes = sum(r.time_min for r in recipes)
     text = f"已把今晚换成快手组合：「{names}」，约 {minutes} 分钟就能上桌，其他六天没动。"
@@ -731,12 +765,24 @@ def _quick_guests(day_no: int, extra: int, meal: str | None = None) -> None:
     day = result.slot(day_no, meal)          # 不能用 p.day == X（多餐时会取到早餐）
     if day is None:
         return
+    if USE_API:
+        rid = st.session_state.get("record_id")
+        if not rid:
+            return
+        out = api.patch_day(rid, day_no, "people", meal=day.meal, people=result.constraints.people + extra)
+        _sync_api_record()
+        text = out.get("message") or f"已按 {result.constraints.people + extra} 人算，其他天不变。"
+        ui.set_notice("swap", text)
+        ui.push_undo(text, record_id=rid, api_undo=out.get("undo_hint"))
+        ui.push_history(text)
+        st.session_state["guests_for"] = None
+        st.rerun()
     prev_days = [p.model_copy(deep=True) for p in result.days]
     base = result.constraints.people
     day.people = base + extra
     extra_items = _extra_shopping(day, db, extra)
     refresh_result(result, db)
-    _commit_plan()
+    _persist_local_result()
     text = (f"今晚按 {base + extra} 人算（多 {extra} 人），其他天不变。"
             + ("临时要补买：" + "、".join(extra_items) + "。" if extra_items else ""))
     ui.set_notice("swap", text)
@@ -781,7 +827,7 @@ def _tonight_week_over(view) -> None:
         goto("plan")
 
 
-def _tonight_slot(view, result, c, db, multi: bool = False) -> bool:
+def _tonight_slot(view, result, c, db, multi: bool = False, slot_index: int = 0) -> bool:
     """画「今天」里的**一顿**：主角卡 + 每道菜 + 这一顿的快改。
 
     单餐时这一页只有一顿，行为与以前一字不差（控件 key 也一模一样）；
@@ -792,7 +838,7 @@ def _tonight_slot(view, result, c, db, multi: bool = False) -> bool:
     """
     day_plan = result.slot(view.day, view.meal) or result.days[0]
     # 多餐时同一页有三个"做完了"，不区分餐次 Streamlit 会直接报控件 key 重复
-    k = "" if not multi else f"_{view.meal}"
+    k = "" if not multi else f"_{view.day}_{view.meal}_{slot_index}"
     _hero(view)
     tag = _slot_tag(view.day, view.meal)
 
@@ -802,9 +848,18 @@ def _tonight_slot(view, result, c, db, multi: bool = False) -> bool:
         with b1:
             if st.button("改回来做", key=f"unskip_{view.day}{k}", type="primary",
                          use_container_width=True):
+                if USE_API:
+                    rid = st.session_state.get("record_id")
+                    out = api.patch_day(rid, view.day, "restore", meal=view.meal)
+                    _sync_api_record()
+                    text = out.get("message") or f"{where_text(view.day, view.meal, c)}恢复做饭，其他天没动。"
+                    ui.set_notice("swap", text)
+                    ui.push_undo(text, record_id=rid, api_undo=out.get("undo_hint"))
+                    ui.push_history(text)
+                    st.rerun()
                 result.days = restore_day(result.days, view.day, db, c, meal=view.meal)
                 refresh_result(result, db)
-                _commit_plan()
+                _persist_local_result()
                 ui.set_notice("swap", f"{where_text(view.day, view.meal, c)}恢复做饭，其他天没动。")
                 st.rerun()
         with b2:
@@ -840,7 +895,7 @@ def _tonight_slot(view, result, c, db, multi: bool = False) -> bool:
     place = where_text(view.day, view.meal, c)
 
     # 每道菜一行：菜名 + 这道不想吃（05 M1-3）
-    for dish in day_plan.dishes:
+    for dish_index, dish in enumerate(day_plan.dishes):
         r = db.by_id(dish.recipe_id)
         if r is None:
             continue
@@ -850,8 +905,17 @@ def _tonight_slot(view, result, c, db, multi: bool = False) -> bool:
                         f"<span class='line'>{r.time_min} 分钟 · {r.difficulty}</span></p>",
                         unsafe_allow_html=True)
         with d2:
-            if st.button("这道不吃", key=f"tonight_dislike_{r.id}{k}", use_container_width=True,
+            if st.button("这道不吃", key=f"tonight_dislike_{r.id}_{dish_index}{k}", use_container_width=True,
                          help="只换这一道，并记进口味档案"):
+                if USE_API:
+                    rid = st.session_state.get("record_id")
+                    out = api.dish_feedback(rid, view.day, r.id, "dislike", view.meal)
+                    _sync_api_record()
+                    text = out.get("message") or f"已记住你不想吃「{r.name}」。"
+                    ui.set_notice("dislike", text)
+                    ui.push_undo(text, record_id=rid, api_undo=out.get("undo_hint"))
+                    ui.push_history(text)
+                    st.rerun()
                 prev_days = [p.model_copy(deep=True) for p in result.days]
                 prev_profile = prof.load_profile()
                 prof.set_feedback(r.name, "dislike", KNOWN_NAMES, source="今晚页")
@@ -859,7 +923,7 @@ def _tonight_slot(view, result, c, db, multi: bool = False) -> bool:
                 if rep_recipe:
                     result.days = new_days
                     refresh_result(result, db)
-                    _commit_plan()
+                    _persist_local_result()
                     text = (f"已把{place}的「{r.name}」换成「{rep_recipe.name}」，"
                             "并记住你以后不想吃它（其他天没动）。")
                 else:
@@ -970,14 +1034,14 @@ def render_tonight() -> None:
 
     # 一天要画几顿：只做晚餐时就是一顿（行为与以前一字不差）；
     # 多餐时**一顿一张卡**，从早到晚排下来（05 M1 的"今天"）。
-    meals = [view.meal] if not c.is_multi_meal() else (
-        [p.meal for p in result.slots_for(view.day)] or [view.meal])
+    meals = [view.meal] if not c.is_multi_meal() else list(dict.fromkeys(
+        [p.meal for p in result.slots_for(view.day)] or [view.meal]))
     show_tail = False
-    for meal in meals:
+    for slot_index, meal in enumerate(meals):
         slot_view = view if not c.is_multi_meal() else tonight_view(
             record, db, day=view.day, meal=meal)
         show_tail = _tonight_slot(slot_view, result, c, db,
-                                 multi=c.is_multi_meal()) or show_tail
+                                 multi=c.is_multi_meal(), slot_index=slot_index) or show_tail
 
     if show_tail:
         _notice_block(result)
@@ -1453,9 +1517,18 @@ def _plan_day_section(day_no: int, *, result, c, db, summary, start_date, today_
                             unsafe_allow_html=True)
                 if not is_past and st.button("改回来做",
                                              key=f"card_unskip_{day_no}_{plan_day.meal}"):
+                    if USE_API:
+                        rid = st.session_state.get("record_id")
+                        out = api.patch_day(rid, day_no, "restore", meal=plan_day.meal)
+                        _sync_api_record()
+                        text = out.get("message") or f"{where_text(day_no, plan_day.meal, c)}恢复做饭，其他天没动。"
+                        ui.set_notice("swap", text)
+                        ui.push_undo(text, record_id=rid, api_undo=out.get("undo_hint"))
+                        ui.push_history(text)
+                        st.rerun()
                     result.days = restore_day(result.days, day_no, db, c, meal=plan_day.meal)
                     refresh_result(result, db)
-                    _commit_plan()
+                    _persist_local_result()
                     ui.set_notice("swap", f"{where_text(day_no, plan_day.meal, c)}"
                                           "恢复做饭，其他天没动。")
                     st.rerun()
@@ -1540,6 +1613,15 @@ def render_plan() -> None:
     with q1:
         if st.button("哪里能省", key="save_money_btn", use_container_width=True,
                      help="挑最贵的一道换成更便宜的，并告诉你这周省了多少"):
+            if USE_API:
+                rid = st.session_state.get("record_id")
+                out = api.save_money(rid)
+                _sync_api_record()
+                text = out.get("message") or "已换成更省的组合，其他天没动。"
+                ui.set_notice("swap", text)
+                ui.push_undo(text, record_id=rid, api_undo=out.get("undo_hint"))
+                ui.push_history(text)
+                st.rerun()
             got = cheapest_swap(result.days, db, c)
             if got is None:
                 ui.set_notice("info", "这一周已经没有明显更省的换法了。")
@@ -1548,7 +1630,7 @@ def render_plan() -> None:
             prev_days = [p.model_copy(deep=True) for p in result.days]
             result.days = new_plans
             refresh_result(result, db)
-            _commit_plan()
+            _persist_local_result()
             text = (f"把{where_text(day_no_s, meal_s, c)}的「{old_r.name}」换成「{new_r.name}」，"
                     f"这周省了约 ¥{saving:.0f}（其他天没动）。")
             ui.set_notice("swap", text)
@@ -1748,6 +1830,17 @@ def render_plan() -> None:
         undo_profile = None
         relax_failed = None
         text = ""
+        if USE_API:
+            rid_plan = st.session_state.get("record_id")
+            out = api.dish_feedback(rid_plan, day_no, rid, kind, _meal)
+            _sync_api_record()
+            text = out.get("message") or f"已完成：{name}。"
+            ui.set_notice(kind, text)
+            ui.push_undo(text, record_id=rid_plan, api_undo=out.get("undo_hint"))
+            ui.push_history(text)
+            st.session_state["relax"] = None
+            st.session_state["stale"] = False
+            st.rerun()
         if kind in ("lock", "unlock"):
             locked_now = list(c.must_include_recipes or [])
             if kind == "lock" and rid not in locked_now:
@@ -1829,7 +1922,7 @@ def render_plan() -> None:
         ui.push_history(text)
         st.session_state["relax"] = relax_failed
         st.session_state["stale"] = False
-        _commit_plan()
+        _persist_local_result()
         st.rerun()
 
 

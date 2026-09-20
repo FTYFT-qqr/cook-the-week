@@ -58,10 +58,10 @@ def clear_notice() -> None:
 
 def push_undo(text: str, *, days: Any = None, profile: Any = None,
               record_id: Optional[str] = None, inputs: Any = None,
-              constraints: Any = None) -> None:
+              constraints: Any = None, api_undo: Any = None) -> None:
     stack = list(st.session_state.get("undo_stack") or [])
     stack.append({"text": text, "days": days, "profile": profile, "record_id": record_id,
-                  "inputs": inputs, "constraints": constraints})
+                  "inputs": inputs, "constraints": constraints, "api_undo": api_undo})
     st.session_state["undo_stack"] = stack[-UNDO_LIMIT:]
 
 

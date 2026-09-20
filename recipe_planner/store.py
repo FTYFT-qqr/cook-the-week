@@ -297,7 +297,7 @@ from recipe_planner.infra import settings as _settings  # noqa: E402
 if _settings.use_api():  # pragma: no cover - 由环境变量决定
     from recipe_planner.client import (  # noqa: E402,F401,F811
         archive_summary, delete_record, get_record, latest_record, load_records,
-        previous_record, save_plan, set_checked, set_done, update_result,
+        previous_record, save_plan, set_checked, set_done,
     )
 elif _settings.storage_kind() == "db":  # pragma: no cover - 由环境变量决定
     from recipe_planner.storage.db_store import (  # noqa: E402,F401,F811

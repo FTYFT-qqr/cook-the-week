@@ -460,73 +460,35 @@ def tonight_view(record: Optional[PlanRecord] = None, db: Any = None,
 # ---------------------------------------------------------------- 写：方案
 
 
-def _patch_day(plan_id: str, day: int, op: str, **extra: Any) -> dict:
+def patch_day(plan_id: str, day: int, op: str, *, meal: Optional[str] = None,
+              **extra: Any) -> dict:
+    """直接表达一项服务端意图，不接收界面整周快照。"""
     body: dict[str, Any] = {"op": op}
     body.update({k: v for k, v in extra.items() if v is not None})
+    if meal is not None:
+        body["meal"] = meal
     out = _request("PATCH", f"/plans/{plan_id}/days/{int(day)}", body=body)
     _invalidate()
     return out
 
 
-def _day_patches(server: PlanRecord, result: PlanResult) -> list[tuple[int, dict]]:
-    """逐顿比对"服务端那一周"和"界面这一周"，返回要发的单点操作（纯函数，可单测）。
+def replace_day(record_id: str, day: int, recipe_ids: list[str],
+                meal: Optional[str] = None) -> dict:
+    """直接请求服务端替换一顿，不把整周结果回传给服务端。"""
+    return patch_day(record_id, day, "replace_day", meal=meal, recipe_ids=list(recipe_ids))
 
-    只做**事实判断**（哪几道菜不一样、人数一不一样），不做规则判断 ——
-    规则（哪些菜能换、忌口怎么校验、清单怎么合并）永远只在服务端。
 
-    docs/10：一天多顿时必须**按 (天, 餐) 比对**，而且每个操作都要带上 `meal`：
-    用 `{d.day: d}` 建索引的话，一天里的几顿会互相覆盖（只剩最后一顿），
-    于是"把早餐少排一道"会变成改晚餐。
-
-    `meal` 只在**当天真的有好几顿**时才放进请求体：只做晚餐时请求与 docs/10 之前一字不差
-    （服务端不给 `meal` 就是"当天最后一顿"，两者等价）。
-    """
-    server_slots = {(d.day, d.meal): d for d in server.result.days}
-    per_day: dict[int, int] = {}
-    for d in server.result.days:
-        per_day[d.day] = per_day.get(d.day, 0) + 1
-    out: list[tuple[int, dict]] = []
-    for plan_day in result.days:
-        old = server_slots.get((plan_day.day, plan_day.meal))
-        if old is None:
-            continue
-        where = {"meal": plan_day.meal} if per_day.get(plan_day.day, 0) > 1 else {}
-        if bool(plan_day.skipped) != bool(old.skipped):
-            # 不做饭 / 改回来：由服务端重新挑菜，本地那一版不参与
-            out.append((plan_day.day, {"op": "skip" if plan_day.skipped else "restore", **where}))
-            continue
-        ids_now = [d.recipe_id for d in plan_day.dishes]
-        ids_old = [d.recipe_id for d in old.dishes]
-        if ids_now != ids_old:
-            out.append((plan_day.day, {"op": "replace_day", "recipe_ids": ids_now, **where}))
-        elif plan_day.people != old.people:
-            # 「来客人了」只改人数不改菜：人数是绝对值，None 表示回到这一周的基础人数
-            out.append((plan_day.day, {"op": "people",
-                                       "people": plan_day.people or result.constraints.people,
-                                       **where}))
+def apply_undo(undo: Optional[dict]) -> dict:
+    """执行服务端返回的精确撤销指令。"""
+    if not undo:
+        return {}
+    method = str(undo.get("method") or "").upper()
+    path = str(undo.get("path") or "")
+    if method not in {"PATCH", "POST", "PUT", "DELETE"} or not path.startswith(PREFIX):
+        raise ClientError("这条撤销操作已经失效，请重新加载方案。", code="invalid_undo")
+    out = _request(method, path[len(PREFIX):], body=undo.get("body") or {})
+    _invalidate()
     return out
-
-
-def update_result(record_id: Optional[str], result: PlanResult,
-                  change_note: str = "") -> Optional[PlanRecord]:
-    """把界面这一次改动同步到服务端 —— **按天表达意图，不整份覆盖**。
-
-    界面在 `USE_API=1` 之前是自己算好整周、再整份存回去。服务化之后这样不行：
-    派生数据（忌口冲突、买菜清单、花费、下锅顺序）必须由服务端算，否则立刻变成两份实现。
-
-    所以这里只做一件事：逐天比对，只对**真的变了的那几天**发一个已有的单点操作
-    （不做饭 / 改回来 / 整组替换 / 改份量），然后重新读一遍服务端的权威结果返回。
-    比对用的是改动**之前**读到的服务端快照，所以多天的改动不会互相干扰。
-    """
-    if not record_id:
-        return None
-    server = get_record(record_id)
-    if server is None:
-        return None
-    for day, body in _day_patches(server, result):
-        op = body.pop("op")
-        _patch_day(record_id, day, op, **body)
-    return get_record(record_id)
 
 
 def set_done(record_id: Optional[str], day: int, done: bool = True,
@@ -537,7 +499,7 @@ def set_done(record_id: Optional[str], day: int, done: bool = True,
     """
     if not record_id:
         return None
-    _patch_day(record_id, day, "done", done=bool(done), meal=meal)
+    patch_day(record_id, day, "done", done=bool(done), meal=meal)
     return get_record(record_id)
 
 

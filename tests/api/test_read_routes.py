@@ -322,7 +322,7 @@ async def _tonight_at(client, monkeypatch, when: datetime) -> dict:
     (datetime(2026, 9, 10, 18, 0), "planned", 1, "还没开始"),     # 种子周之前
     (datetime(2026, 9, 14, 18, 0), "planned", 1, ""),             # 周一傍晚（种子周第一天）
     (datetime(2026, 9, 14, 23, 0), "planned", 2, "22:00"),        # 过了 22:00 先看明天
-    (datetime(2026, 9, 20, 18, 0), "week_over", 1, "已经吃完"),   # 种子周之后
+    (datetime(2026, 9, 20, 18, 0), "week_over", 1, "日期已过去"),   # 种子周之后
 ])
 async def test_今晚状态在日历的四种位置都对(client, monkeypatch, when, state, day, needle):
     """种子周是 **9/14–9/16**（周一排 3 天）。

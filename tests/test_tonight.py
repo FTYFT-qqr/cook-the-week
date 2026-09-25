@@ -9,7 +9,8 @@ from datetime import date, datetime
 
 from recipe_planner.models import (ChosenDish, DayPlan, PlanRecord, PlanResult, Recipe,
                                    RecipeDB, UserConstraints)
-from recipe_planner.tonight import eat_eta, tonight_view, view_day_index
+from recipe_planner.tonight import (eat_eta, plan_day_is_past, plan_is_over,
+                                    tonight_view, view_day_index)
 
 RECIPES = [
     Recipe(id="a", name="番茄炒蛋", category="热菜", difficulty="简单", time_min=15, cost_yuan=8.0),
@@ -80,9 +81,20 @@ def test_skipped_state():
 def test_week_over_state_offers_reuse():
     view = tonight_view(make_record(), DB, today=date(2026, 9, 30))
     assert view.state == "week_over"
-    assert "这一周已经吃完了" in view.kicker
+    assert "日期已过去" in view.kicker
+    assert "吃完" not in view.kicker
     ops = [s["op"] for s in view.next_steps]
-    assert ops[0] == "reuse_previous" and "create_plan" in ops
+    assert ops[0] == "reuse_current" and "create_plan" in ops
+
+
+def test_past_days_are_read_only_even_when_today_is_outside_the_plan():
+    today = date(2026, 9, 25)
+    assert plan_day_is_past(START, 1, today)
+    assert plan_day_is_past(START, 3, today)
+    assert plan_is_over(START, 3, today)
+    assert not plan_is_over("2026-09-28", 3, today)
+    assert not plan_day_is_past("2026-09-28", 1, today)
+    assert not plan_day_is_past("2026-09-25", 1, today)
 
 
 def test_future_week_hints_that_it_has_not_started():

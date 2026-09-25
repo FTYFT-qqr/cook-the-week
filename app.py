@@ -54,6 +54,7 @@ from recipe_planner.models import (
     TASTE_TAGS,
     UserConstraints,
 )
+from recipe_planner.tonight import plan_day_is_past, plan_is_over
 
 # USE_API（docs/09 P1-7）：数据源与进度来源的开关。
 # - 0（默认）：界面直连领域层，排菜在本进程的线程里跑，今晚状态在进程内算；
@@ -73,7 +74,8 @@ else:
     from recipe_planner.progress import PlanJob
     from recipe_planner.tonight import tonight_view
 
-st.set_page_config(page_title="晚餐规划 · 一周菜单与买菜清单", page_icon="🍳", layout="wide")
+st.set_page_config(page_title="晚餐规划 · 一周菜单与买菜清单", page_icon="🍳",
+                   layout="wide", initial_sidebar_state="expanded")
 
 # ---------------------------------------------------------------- 设计 token 与组件样式
 st.markdown(
@@ -111,16 +113,23 @@ st.markdown(
     div[data-testid="stWidgetLabel"] p{ font-size:14px !important; font-weight:500;
         color:var(--ink) !important; }
     /* 按钮：主=暖橙实心，次=白底描边（红只留给危险） */
-    div[data-testid="stButton"] button{ border-radius:10px; font-size:15px; min-height:2.5rem;
-        padding:.35rem .9rem; }
+    div[data-testid="stButton"] button{ border-radius:10px; font-size:15px; min-height:44px;
+        padding:.35rem .9rem; cursor:pointer;
+        transition:background-color .16s ease, border-color .16s ease, box-shadow .16s ease,
+                   transform .12s ease; }
+    div[data-testid="stButton"] button:focus-visible,
+    div[data-testid="stDownloadButton"] button:focus-visible{
+      outline:3px solid var(--brand-ink); outline-offset:2px; }
+    div[data-testid="stButton"] button:active{ transform:scale(.98); }
     div[data-testid="stButton"] button[kind="secondary"]{ background:var(--panel);
         border:1px solid var(--line); color:var(--ink); }
     div[data-testid="stButton"] button[kind="secondary"]:hover{ border-color:var(--brand-line);
         color:var(--brand-ink); }
-    div[data-testid="stButton"] button[kind="primary"]{ background:var(--brand);
-        border:1px solid var(--brand); color:#fff; font-weight:600; }
+    div[data-testid="stButton"] button[kind="primary"]{ background:var(--brand-ink);
+        border:1px solid var(--brand-ink); color:#fff; font-weight:600; }
+    div[data-testid="stButton"] button[kind="primary"] p{ color:#fff !important; }
     div[data-testid="stDownloadButton"] button{ border-radius:10px; border:1px solid var(--line);
-        background:var(--panel); color:var(--ink); min-height:2.5rem; }
+        background:var(--panel); color:var(--ink); min-height:44px; }
     /* 侧栏：只做导航（V-13 / P-02） */
     section[data-testid="stSidebar"]{ background:var(--panel); border-right:1px solid var(--line); }
     section[data-testid="stSidebar"] div[data-testid="stButton"] button{
@@ -143,9 +152,8 @@ st.markdown(
     .dish-name{ font-size:17px; font-weight:600; color:var(--ink); }
     .dish-meta{ margin-top:6px; }
     .dish-reason{ margin-top:auto; font-size:15px; line-height:1.6; color:var(--ink2);
-                  background:#FBFAF8; border-radius:8px; padding:8px 10px;
-                  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
-                  overflow:hidden; }
+                  background:var(--bg); border-radius:8px; padding:8px 10px;
+                  overflow-wrap:anywhere; }
     .state{ font-size:13px; font-weight:600; white-space:nowrap; }
     .state.loved{ color:var(--brand-ink); }
     .state.hated{ color:var(--ink2); }
@@ -181,7 +189,7 @@ st.markdown(
     .day-head.past{ opacity:.6; }
     .day-head .d{ font-size:17px; font-weight:700; color:var(--ink); }
     .day-head .m{ margin-left:auto; font-size:13px; color:var(--ink2); }
-    .day-badge{ font-size:12px; font-weight:600; color:#fff; background:var(--brand);
+    .day-badge{ font-size:13px; font-weight:600; color:#fff; background:var(--brand-ink);
                 border-radius:999px; padding:2px 9px; }
     .day-badge.past{ background:var(--soft); color:#4B5563; }
     .meal-head{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
@@ -206,6 +214,8 @@ st.markdown(
                background:linear-gradient(90deg,#F1EFEA 25%,#F7F5F1 37%,#F1EFEA 63%);
                background-size:400% 100%; animation:sk 1.4s ease infinite; }
     @keyframes sk{ 0%{background-position:100% 50%} 100%{background-position:0 50%} }
+    .stat .n{ font-variant-numeric:tabular-nums; }
+    div[data-testid="stCheckbox"] label{ min-height:44px; }
     /* A4 打印版式（4.9 / V-12） */
     .a4{ background:#fff; color:#111; border:1px solid var(--line); border-radius:12px;
          padding:22px 24px; font-size:12pt; line-height:1.5; }
@@ -230,27 +240,63 @@ st.markdown(
     }
     /* 响应式：一套组件只切换列数（4.7 / V-16） */
     .st-key-mobile_nav{ display:none; }
+    /* 桌面端记住了「收起侧栏」时，仍保留明确的五项入口。 */
+    @media (min-width:641px){
+      body:has(section[data-testid="stSidebar"][aria-expanded="false"]) .st-key-mobile_nav{
+        display:block; position:fixed; left:50%; bottom:16px; transform:translateX(-50%);
+        z-index:999; width:min(720px, calc(100vw - 32px)); padding:8px;
+        background:var(--panel); border:1px solid var(--line); border-radius:14px;
+        box-shadow:0 8px 28px rgba(31,41,55,.12); }
+      body:has(section[data-testid="stSidebar"][aria-expanded="false"]) .st-key-mobile_nav
+        div[data-testid="stHorizontalBlock"]{ flex-wrap:nowrap !important; gap:8px !important; }
+      body:has(section[data-testid="stSidebar"][aria-expanded="false"]) .st-key-mobile_nav
+        div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]{
+          flex:1 1 0 !important; min-width:0 !important; }
+      body:has(section[data-testid="stSidebar"][aria-expanded="false"]) .block-container{
+        padding-bottom:108px; }
+    }
     @media (min-width:641px) and (max-width:1024px){
-      div[data-testid="stHorizontalBlock"] > div[data-testid="column"]{
+      div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]{
         flex:1 1 45% !important; min-width:45% !important; }
-      [class*="st-key-dishacts_"] div[data-testid="stHorizontalBlock"] > div[data-testid="column"],
-      .st-key-mobile_nav div[data-testid="stHorizontalBlock"] > div[data-testid="column"]{
+      [class*="st-key-dishacts_"] div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]{
         flex:1 1 28% !important; min-width:28% !important; }
     }
     @media (max-width:640px){
       div[data-testid="stHorizontalBlock"]{ flex-wrap:wrap !important; }
-      div[data-testid="stHorizontalBlock"] > div[data-testid="column"]{
+      div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]{
         flex:1 1 100% !important; min-width:100% !important; }
-      [class*="st-key-dishacts_"] div[data-testid="stHorizontalBlock"] > div[data-testid="column"],
-      .st-key-mobile_nav div[data-testid="stHorizontalBlock"] > div[data-testid="column"]{
-        flex:1 1 30% !important; min-width:30% !important; }
-      .block-container{ padding-top:1.4rem; padding-bottom:104px; }
+      [class*="st-key-dishacts_"] div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]{
+        flex:1 1 30% !important; min-width:0 !important; }
+      .block-container{ padding-top:1.4rem;
+        padding-bottom:calc(100px + env(safe-area-inset-bottom, 0px)); }
       .day-when{ flex:1 1 100%; } .day-dishes{ flex:1 1 100%; }
       .day-meta{ flex:1 1 100%; text-align:left; }
       .statrow{ gap:18px; }
+      .line{ font-size:14px; }
       .st-key-mobile_nav{ display:block; position:fixed; left:0; right:0; bottom:0; z-index:999;
-        background:var(--panel); border-top:1px solid var(--line); padding:8px 10px 4px; }
+        background:var(--panel); border-top:1px solid var(--line);
+        padding:8px 10px calc(8px + env(safe-area-inset-bottom, 0px)); }
+      .st-key-mobile_nav div[data-testid="stHorizontalBlock"]{
+        flex-wrap:nowrap !important; gap:4px !important; }
+      .st-key-mobile_nav div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]{
+        flex:1 1 0 !important; min-width:0 !important; }
+      .st-key-mobile_nav div[data-testid="stButton"] button{
+        min-height:48px; padding:0 2px; font-size:13px; white-space:nowrap; }
+      .st-key-mobile_nav div[data-testid="stButton"] button p{ font-size:13px; white-space:nowrap; }
+      .st-key-mobile_nav div[data-testid="stButton"] button[kind="primary"]{
+        background:var(--brand-soft); border-color:var(--brand-soft); color:var(--brand-ink); }
+      .st-key-mobile_nav div[data-testid="stButton"] button[kind="primary"] p{
+        color:var(--brand-ink) !important; }
+      header[data-testid="stHeader"]{ display:none !important; }
+      section[data-testid="stSidebar"]{ display:none !important; }
+      button[data-testid="stExpandSidebarButton"],
+      button[data-testid="stCollapseSidebarButton"]{ display:none !important; }
       div[data-testid="stTabs"] [data-baseweb="tab-list"]{ overflow-x:auto; white-space:nowrap; }
+    }
+    @media (prefers-reduced-motion:reduce){
+      .skeleton{ animation:none; }
+      div[data-testid="stButton"] button{ transition:none; }
+      div[data-testid="stButton"] button:active{ transform:none; }
     }
     </style>
     """,
@@ -495,7 +541,26 @@ if st.session_state.get("page") is None:
     st.session_state["page"] = "tonight"
 
 
+def _prepare_next_week(*, generate: bool) -> None:
+    """沿用当前方案的需求，日期改成下周；是否立刻生成由入口决定。"""
+    inp = dict(st.session_state.get("plan_inputs") or {})
+    inp["start_date"] = str(store.next_monday())
+    st.session_state["plan_inputs"] = inp
+    st.session_state["pending_sync"] = inp
+    st.session_state["stale"] = generate
+    st.session_state["job"] = None
+    st.session_state["relax"] = None
+    st.session_state["revisit"] = None
+    st.session_state["page"] = "plan" if generate else "create"
+    st.rerun()
+
+
 def goto(key: str) -> None:
+    if key == "create" and st.session_state.get("result") is not None:
+        draft = st.session_state.get("plan_inputs") or {}
+        if plan_is_over(draft.get("start_date"), int(draft.get("days") or 1)):
+            _prepare_next_week(generate=False)
+            return
     st.session_state["page"] = key
     st.rerun()
 
@@ -811,19 +876,13 @@ def _tonight_week_over(view) -> None:
     _hero(view)
     w1, w2, _sp = st.columns([1, 1, 3])
     with w1:
-        if st.button("照上周", key="tonight_reuse_prev", type="primary",
-                     use_container_width=True, help="用上一版的需求重新排一版"):
-            prev_rec = store.previous_record(st.session_state.get("record_id"))
-            if prev_rec is not None:
-                _load_record(prev_rec)
-            st.session_state["stale"] = True
-            st.session_state["job"] = None
-            ui.set_notice("info", "已照上一版重新排了一版。")
-            st.rerun()
+        if st.button("照这份排", key="tonight_reuse_prev", type="primary",
+                     use_container_width=True, help="沿用正在看的这份需求，为下周排新菜单"):
+            _prepare_next_week(generate=True)
     with w2:
-        if st.button("重新排", key="tonight_replan", use_container_width=True):
-            goto("create")
-    if st.button("看这一周", key="tonight_view_week", use_container_width=True):
+        if st.button("改需求再排", key="tonight_replan", use_container_width=True):
+            _prepare_next_week(generate=False)
+    if st.button("看旧菜单", key="tonight_view_week", use_container_width=True):
         goto("plan")
 
 
@@ -1082,22 +1141,22 @@ def render_create() -> None:
             + "</p>",
             unsafe_allow_html=True)
 
-    # 快速开始：三张场景卡（首屏的图形锚点，P-05 / P-13）
-    st.markdown("### 快速开始（点一下就用这个场景）")
-    for col, (key, title, desc, vals) in zip(st.columns(3), SCENES):
-        with col:
-            with st.container(border=True, key=f"scene_{key}"):
-                st.markdown(f"**{title}**")
-                st.caption(desc)
-                if st.button("用这个场景", key=f"scene_btn_{key}", use_container_width=True):
-                    for k, v in vals.items():
-                        st.session_state[k] = v
-                    # 场景卡都是"只做晚餐、每顿 2 道"（与 docs/10 之前的表现一致）
-                    st.session_state["meals"] = [MEAL]
-                    st.session_state["dishes_per_day"] = 2
-                    for _m in MEALS:
-                        st.session_state[f"dishes_{_m}"] = 2
-                    st.rerun()
+    # 已有方案的人通常是来改需求的；场景预设保留，但别挡在表单前。
+    with st.expander("快速开始 · 选一个常用场景", expanded=st.session_state["result"] is None):
+        for col, (key, title, desc, vals) in zip(st.columns(3), SCENES):
+            with col:
+                with st.container(border=True, key=f"scene_{key}"):
+                    st.markdown(f"**{title}**")
+                    st.caption(desc)
+                    if st.button("用这个场景", key=f"scene_btn_{key}", use_container_width=True):
+                        for k, v in vals.items():
+                            st.session_state[k] = v
+                        # 场景卡都是"只做晚餐、每顿 2 道"（与 docs/10 之前的表现一致）
+                        st.session_state["meals"] = [MEAL]
+                        st.session_state["dishes_per_day"] = 2
+                        for _m in MEALS:
+                            st.session_state[f"dishes_{_m}"] = 2
+                        st.rerun()
 
     st.markdown("### 我的需求")
     with st.form("planner_form"):
@@ -1117,8 +1176,6 @@ def render_create() -> None:
                                    placeholder=f"不选＝只做{MEAL}",
                                    disabled=not MEALS_AVAILABLE)
         _picked_form = [m for m in MEALS if m in set(meals or [])] or [MEAL]
-        if len(_picked_form) > 1 and not USE_API and _storage_kind() == "db":
-            st.caption("老库要先跑一次迁移（幂等）：`python -m recipe_planner.storage.migrate`")
         for _i, _m in enumerate(_picked_form):
             with gm[_i + 1]:
                 st.select_slider(f"{_m}几个菜", list(range(1, DISH_MAX + 1)), key=f"dishes_{_m}")
@@ -1430,7 +1487,7 @@ def _meal_head(plan_day, db, c) -> None:
 
 def _dish_actions(plan_day: int, dish, is_loved: bool, is_hated: bool,
                   locked: bool = False, snoozed: bool = False):
-    """每道菜的操作：换一道 / 定住 / 喜欢 / 不喜欢 / 临时避开。
+    """常用的换菜和口味反馈直达；定住、临时避开收到次级操作里。
 
     docs/09 待决策(1) 已裁定（2026-09-14）：**「喜欢」保持"再点一次取消"的开关语义**，
     但状态必须写在按钮上、并且把"再点一次会取消"说在说明里 ——
@@ -1440,35 +1497,37 @@ def _dish_actions(plan_day: int, dish, is_loved: bool, is_hated: bool,
     picked = None
     rid = dish.recipe_id
     with st.container(key=f"dishacts_{plan_day}_{rid}"):
-        row = st.columns(5)
+        row = st.columns(3)
         with row[0]:
             if st.button("换一道", key=f"swap_{plan_day}_{rid}", use_container_width=True,
                          help="只换今晚这道，不动口味偏好"):
                 picked = ("swap", plan_day, rid)
         with row[1]:
-            if st.button("已定住" if locked else "定住", key=f"lock_{plan_day}_{rid}",
-                         use_container_width=True,
-                         help="已定住：以后重排也会保留它，再点一次取消定住" if locked
-                              else "定住这道菜：以后重排也会保留它"):
-                picked = ("unlock" if locked else "lock", plan_day, rid)
-        with row[2]:
             if st.button("已喜欢" if is_loved else "喜欢", key=f"like_{plan_day}_{rid}",
                          use_container_width=True,
                          help="已经喜欢了：以后多安排这道菜。再点一次就是取消喜欢" if is_loved
                               else "合口味：以后多安排这道菜"):
                 picked = ("like", plan_day, rid)
-        with row[3]:
+        with row[2]:
             if st.button("已排除" if is_hated else "不喜欢", key=f"hate_{plan_day}_{rid}",
                          use_container_width=True,
                          help="已经排除：以后不再出现。再点一次就恢复成「没表态」" if is_hated
                               else "不合口味：换掉并记住"):
                 picked = ("dislike", plan_day, rid)
-        with row[4]:
-            if st.button("恢复临时避开" if snoozed else "这周先别排",
-                         key=f"snooze_{plan_day}_{rid}", use_container_width=True,
-                         help="临时避开 7 天，不改永久口味档案" if not snoozed
-                              else "提前恢复：这道菜可以再次进入候选"):
-                picked = ("unsnooze" if snoozed else "snooze", plan_day, rid)
+        with st.expander("更多操作 · 定住 / 临时避开"):
+            extra = st.columns(2)
+            with extra[0]:
+                if st.button("已定住" if locked else "定住", key=f"lock_{plan_day}_{rid}",
+                             use_container_width=True,
+                             help="已定住：以后重排也会保留它，再点一次取消定住" if locked
+                                  else "定住这道菜：以后重排也会保留它"):
+                    picked = ("unlock" if locked else "lock", plan_day, rid)
+            with extra[1]:
+                if st.button("恢复临时避开" if snoozed else "这周先别排",
+                             key=f"snooze_{plan_day}_{rid}", use_container_width=True,
+                             help="临时避开 7 天，不改永久口味档案" if not snoozed
+                                  else "提前恢复：这道菜可以再次进入候选"):
+                    picked = ("unsnooze" if snoozed else "snooze", plan_day, rid)
     return picked
 
 
@@ -1484,7 +1543,7 @@ def _plan_day_section(day_no: int, *, result, c, db, summary, start_date, today_
     day_slots = result.slots_for(day_no)
     if not day_slots:
         return None
-    is_past = today_idx is not None and day_no - 1 < today_idx
+    is_past = plan_day_is_past(start_date, day_no)
     is_today = today_idx is not None and day_no - 1 == today_idx
     # 周几/日期在概览行上（DayPlan 里没有），按 (天, 餐) 取，别用"当天第一行"（多餐会串）
     head = _row_of(summary.rows, day_no, day_slots[0].meal) or summary.rows[0]
@@ -1578,24 +1637,36 @@ def render_plan() -> None:
     # 直接传会把"今天是第几天""标签页数量"全算错。
     days_span = max(p.day for p in result.days)
     today_idx = store.today_index(start_date, days_span)
+    archived = plan_is_over(start_date, days_span)
 
-    # ---- 顶部：方案名 + 日期范围 + 重排 / 改需求（05 M3）
+    # ---- 顶部：历史方案不再原地重排；沿用需求时另起下一周。
     t1, t2, t3, _sp = st.columns([3, 1, 1, 1])
     with t1:
         st.markdown(f"<p class='line'>{label} · {c.people} 人 · 共 {summary.dishes} 道菜"
                     + ("　·　上次排的那一份，已经帮你打开" if st.session_state.get("revisit") else "")
                     + "</p>", unsafe_allow_html=True)
     with t2:
-        if st.button("重排一版", key="replan_btn", use_container_width=True,
-                     help="按现在的口味与需求重新排一份（整周都会变，会存成新的一版）"):
+        if archived:
+            if st.button("照这份排", key="replan_btn", type="primary",
+                         use_container_width=True, help="沿用当前方案的需求，为下周生成新菜单；旧菜单保留"):
+                _prepare_next_week(generate=True)
+        elif st.button("重排一版", key="replan_btn", use_container_width=True,
+                       help="按现在的口味与需求重新排一份（整周都会变，会存成新的一版）"):
             st.session_state["stale"] = True
             st.session_state["job"] = None
             st.rerun()
     with t3:
-        if st.button("改需求", key="edit_inputs_btn", use_container_width=True,
-                     help="回到表单改人数、预算、忌口等"):
-            goto("create")
-    if st.session_state.get("revisit"):
+        if st.button("改需求再排" if archived else "改需求", key="edit_inputs_btn",
+                     use_container_width=True, help="回到表单改人数、预算、忌口等"):
+            if archived:
+                _prepare_next_week(generate=False)
+            else:
+                goto("create")
+    if archived:
+        st.markdown("<p class='line'>这份菜单的日期已过去，只供回看。"
+                    "继续使用请照这份需求排下周；旧菜单不会被改动。</p>",
+                    unsafe_allow_html=True)
+    if st.session_state.get("revisit") and not archived:
         b1, b2, _sp2 = st.columns([1, 1, 4])
         with b1:
             if st.button("就用这份", use_container_width=True):
@@ -1611,7 +1682,7 @@ def render_plan() -> None:
     # ---- 三个整周级动作：哪里能省（E-05）/ 都满意（E-04）/ 分享视图（E-08）
     q1, q2, q3, _spq = st.columns([1, 1, 1, 2])
     with q1:
-        if st.button("哪里能省", key="save_money_btn", use_container_width=True,
+        if not archived and st.button("哪里能省", key="save_money_btn", use_container_width=True,
                      help="挑最贵的一道换成更便宜的，并告诉你这周省了多少"):
             if USE_API:
                 rid = st.session_state.get("record_id")
@@ -1638,7 +1709,7 @@ def render_plan() -> None:
             ui.push_history(text)
             st.rerun()
     with q2:
-        if st.button("都满意", key="all_good_btn", use_container_width=True,
+        if not archived and st.button("都满意", key="all_good_btn", use_container_width=True,
                      help="把这一周的菜都记成「喜欢」，以后多安排；不满意的单独点不喜欢"):
             prev_profile = prof.load_profile()
             n_new = 0
@@ -1709,7 +1780,7 @@ def render_plan() -> None:
         for row in summary.rows:
             idx = row.day - 1                      # 按**天**算高亮，不能用行号（多餐时行号会串天）
             cls = "today" if (today_idx is not None and idx == today_idx) else (
-                "past" if (today_idx is not None and idx < today_idx) else "")
+                "past" if plan_day_is_past(start_date, row.day) else "")
             mark = ("今晚" if c.active_meals()[-1] == row.meal else "今天") if cls == "today" else (
                 "已过" if cls == "past" else "")
             when = f"第 {row.day} 天 {row.weekday} {row.date_label}"
@@ -1740,7 +1811,7 @@ def render_plan() -> None:
                 f"{store.day_date_label(start_date, day_no - 1)}")
         if today_idx is not None and day_no - 1 == today_idx:
             return f"今天 · {when}"
-        if today_idx is not None and day_no - 1 < today_idx:
+        if plan_day_is_past(start_date, day_no):
             return f"{when} · 已过"
         return when
 
@@ -1753,8 +1824,9 @@ def render_plan() -> None:
         chosen = default_day
     day_no = int(chosen)
 
-    st.caption("换一道 = 只换这一顿这道（不动口味偏好）；喜欢 = 以后多安排；"
-               "不喜欢 = 换掉并记住，以后不再出现；这周先别排 = 临时避开 7 天。")
+    if not archived:
+        st.caption("换一道 = 只换这一顿这道（不动口味偏好）；喜欢 = 以后多安排；"
+                   "不喜欢 = 换掉并记住，以后不再出现；这周先别排 = 临时避开 7 天。")
     pending = _plan_day_section(day_no, result=result, c=c, db=db, summary=summary,
                                 start_date=start_date, today_idx=today_idx,
                                 liked_now=liked_now, hated_now=hated_now,
@@ -1778,12 +1850,9 @@ def render_plan() -> None:
         with o2:
             if prev is not None and st.button("照上一版", key="reuse_prev_btn",
                                               use_container_width=True,
-                                              help="用上一版的需求重新排一版（适合这周照上周的样子）"):
+                                              help="沿用上一版的需求，为下周生成新菜单"):
                 _load_record(prev)
-                st.session_state["stale"] = True
-                st.session_state["job"] = None
-                ui.set_notice("info", "已按上一版的需求重新排了一版，旧的几版都还在存档里。")
-                st.rerun()
+                _prepare_next_week(generate=True)
         st.markdown("**本机保存的方案**")
         for rec_item in store.load_records():
             mark = "（当前）" if rec_item.id == st.session_state.get("record_id") else ""
@@ -1940,6 +2009,7 @@ def render_shopping() -> None:
 
     c = result.constraints
     start_date = st.session_state.get("plan_start") or st.session_state["start_date"]
+    archived = plan_is_over(start_date, max(p.day for p in result.days))
     label = store.week_label(start_date)
     need = [s for s in result.shopping if s.needed]
     have = [s for s in result.shopping if not s.needed]
@@ -1949,8 +2019,9 @@ def render_shopping() -> None:
     saved_checked = set(_rec.checked_items) if _rec is not None else set()
 
     st.markdown(f"<p class='line'>{label} · 已按 {c.people} 人份量折算（菜谱为 2 人份基准）"
-                "　·　买一样勾一样，已买的会沉到分类末尾；勾选会记住，明天打开还在。"
-                "</p>", unsafe_allow_html=True)
+                + ("　·　历史清单供回看，不能再勾选。" if archived else
+                   "　·　买一样勾一样，已买的会沉到分类末尾；勾选会记住，明天打开还在。")
+                + "</p>", unsafe_allow_html=True)
 
     def _is_checked(name: str) -> bool:
         key = f"chk_{epoch}_{name}"
@@ -1962,7 +2033,8 @@ def render_shopping() -> None:
         key = f"chk_{epoch}_{it.name}"
         st.session_state.setdefault(key, it.name in saved_checked)
         help_txt = f"用于：{'、'.join(it.for_recipes)}" if it.for_recipes else None
-        if st.checkbox(f"{it.name}　{it.amount}", key=key, help=help_txt):
+        if st.checkbox(f"{it.name}　{it.amount}", key=key, help=help_txt,
+                       disabled=archived):
             checked.append(it.name)
 
     if not need:
@@ -1987,7 +2059,7 @@ def render_shopping() -> None:
                             shop_row(it)
                         st.markdown("</div>", unsafe_allow_html=True)
 
-    if need and set(checked) != saved_checked and st.session_state.get("record_id"):
+    if not archived and need and set(checked) != saved_checked and st.session_state.get("record_id"):
         # 勾选写回存档：一周边买边勾，关了浏览器再打开还是这个样子（05 M4）
         store.set_checked(st.session_state["record_id"], checked)
 
@@ -2019,7 +2091,8 @@ def render_shopping() -> None:
                         f"还剩 {len(need) - len(checked)} 样</p>", unsafe_allow_html=True)
         b1, b2 = st.columns([1, 2])
         with b1:
-            if st.button("清除勾选", key="clear_checks", use_container_width=True):
+            if not archived and st.button("清除勾选", key="clear_checks",
+                                          use_container_width=True):
                 if st.session_state.get("record_id"):
                     store.set_checked(st.session_state["record_id"], [])
                 st.session_state["check_epoch"] = epoch + 1

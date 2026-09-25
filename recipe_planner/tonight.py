@@ -6,7 +6,7 @@
 
 五种状态（docs/05 M1）：
 - `no_plan`   还没有这一周的菜单
-- `week_over` 这一周已经吃完了
+- `week_over` 这一周的日期已经过去
 - `skipped`   今天标记了不做饭
 - `done`      今天已经做过了（可以打分）
 - `planned`   今天有安排（主角卡）
@@ -106,6 +106,16 @@ def view_day_index(start_date: Any, days: int, today: Optional[date] = None,
     return 1, "这一周已经过去，下面是第 1 天"
 
 
+def plan_day_is_past(start_date: Any, day_no: int, today: Optional[date] = None) -> bool:
+    """计划日期早于今天时只可回看；不依赖今天是否落在该计划周期内。"""
+    return store.normalize_start(start_date) + timedelta(days=day_no - 1) < (today or date.today())
+
+
+def plan_is_over(start_date: Any, days: int, today: Optional[date] = None) -> bool:
+    """计划周期已结束，不等于每顿都被标记为做完。"""
+    return plan_day_is_past(start_date, days, today)
+
+
 def tonight_view(record: Optional[PlanRecord], db: RecipeDB, today: Optional[date] = None,
                  now: Optional[datetime] = None, day: Optional[int] = None,
                  meal: Optional[str] = None) -> TonightView:
@@ -149,16 +159,16 @@ def tonight_view(record: Optional[PlanRecord], db: RecipeDB, today: Optional[dat
                        date_label=row.date_label, week_label=label, hint=hint,
                        minutes=row.minutes, cost=row.cost, people=day_plan.people)
 
-    week_end = store.normalize_start(start) + timedelta(days=days_span - 1)
     multi = c.is_multi_meal()
-    if week_end < (today or date.today()):
+    if plan_is_over(start, days_span, today):
         base.state = "week_over"
-        base.kicker = "这一周已经吃完了"
+        base.kicker = "这份计划的日期已过去"
         base.headline = f"{label} 的菜单在这里"
-        base.meta = "要不要照上周再来一份，或者重新排一周？"
-        base.next_steps = [_step("reuse_previous", "照上周"),
-                           _step("create_plan", "重新排"),
-                           _step("view_week", "看这一周")]
+        base.meta = "可以沿用这份需求排下周，也可以改好需求后再排。"
+        base.hint = ""
+        base.next_steps = [_step("reuse_current", "照这份排"),
+                           _step("create_plan", "改需求再排"),
+                           _step("view_week", "看旧菜单")]
         return base
 
     if day_plan.skipped:
